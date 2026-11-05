@@ -1,0 +1,61 @@
+{
+  "device_abi": "arm64-v8a",
+  "lower_bound": {
+    "cases": [
+      {
+        "key": "0x00000000",
+        "actual_index": 0,
+        "expected_index": 0,
+        "passed": true
+      },
+      {
+        "key": "0x00000007",
+        "actual_index": 1,
+        "expected_index": 1,
+        "passed": true
+      },
+      {
+        "key": "0x00000008",
+        "actual_index": 1,
+        "expected_index": 1,
+        "passed": true
+      },
+      {
+        "key": "0x00000009",
+        "actual_index": 2,
+        "expected_index": 2,
+        "passed": true
+      },
+      {
+        "key": "0x00000010",
+        "actual_index": 2,
+        "expected_index": 2,
+        "passed": true
+      },
+      {
+        "key": "0x00000018",
+        "actual_index": 3,
+        "expected_index": 3,
+        "passed": true
+      },
+      {
+        "key": "0xFFFFFFFF",
+        "actual_index": 4,
+        "expected_index": 4,
+        "passed": true
+      },
+      {
+        "key": "0xFFFFFFFE",
+        "actual_index": 4,
+        "expected_index": 4,
+        "passed": true
+      }
+    ],
+    "failed": 0
+  },
+  "array_kernel": {
+    "actual_checksum": "4AEFF165",
+    "expected_checksum": "4AEFF165",
+    "passed": true
+  }
+}

@@ -1,0 +1,1147 @@
+{
+  "executable": "C:\\Program Files (x86)\\Steam\\steamapps\\common\\Spore\\SPOREFILES\\SporeBin\\SporeApp.exe",
+  "sha256": "290703b34fe4573b242c3e271cc90568992abe6fb3fa9333a7341044a759fc74",
+  "function_rva": "0x22430",
+  "function_va": "0x422430",
+  "function_size": 122,
+  "function_bytes_sha256": "9e462a2ba95704cea43e451fb223991e23e9167f9c0d5e74d96074a2fc406947",
+  "cases": [
+    {
+      "key": "0x00000000",
+      "record_count": 0,
+      "eax": "0x00201000",
+      "emulated_index": 0,
+      "python_index": 0,
+      "passed": true
+    },
+    {
+      "key": "0x00000000",
+      "record_count": 5,
+      "eax": "0x00201000",
+      "emulated_index": 0,
+      "python_index": 0,
+      "passed": true
+    },
+    {
+      "key": "0xFFFFFFFF",
+      "record_count": 5,
+      "eax": "0x00201030",
+      "emulated_index": 4,
+      "python_index": 4,
+      "passed": true
+    },
+    {
+      "key": "0xFFFFFFFE",
+      "record_count": 5,
+      "eax": "0x00201030",
+      "emulated_index": 4,
+      "python_index": 4,
+      "passed": true
+    },
+    {
+      "key": "0x00000007",
+      "record_count": 5,
+      "eax": "0x0020100C",
+      "emulated_index": 1,
+      "python_index": 1,
+      "passed": true
+    },
+    {
+      "key": "0x00000008",
+      "record_count": 5,
+      "eax": "0x0020100C",
+      "emulated_index": 1,
+      "python_index": 1,
+      "passed": true
+    },
+    {
+      "key": "0x00000018",
+      "record_count": 5,
+      "eax": "0x00201024",
+      "emulated_index": 3,
+      "python_index": 3,
+      "passed": true
+    },
+    {
+      "key": "0xFFFFFFFF",
+      "record_count": 5,
+      "eax": "0x00201030",
+      "emulated_index": 4,
+      "python_index": 4,
+      "passed": true
+    },
+    {
+      "key": "0x00000000",
+      "record_count": 8,
+      "eax": "0x00201000",
+      "emulated_index": 0,
+      "python_index": 0,
+      "passed": true
+    },
+    {
+      "key": "0x00000001",
+      "record_count": 8,
+      "eax": "0x00201018",
+      "emulated_index": 2,
+      "python_index": 2,
+      "passed": true
+    },
+    {
+      "key": "0x00000002",
+      "record_count": 8,
+      "eax": "0x0020103C",
+      "emulated_index": 5,
+      "python_index": 5,
+      "passed": true
+    },
+    {
+      "key": "0x00000003",
+      "record_count": 8,
+      "eax": "0x00201054",
+      "emulated_index": 7,
+      "python_index": 7,
+      "passed": true
+    },
+    {
+      "key": "0x00000004",
+      "record_count": 8,
+      "eax": "0x00201060",
+      "emulated_index": 8,
+      "python_index": 8,
+      "passed": true
+    },
+    {
+      "key": "0xFFFFFFFF",
+      "record_count": 8,
+      "eax": "0x00201060",
+      "emulated_index": 8,
+      "python_index": 8,
+      "passed": true
+    },
+    {
+      "key": "0x000D4BDC",
+      "record_count": 8,
+      "eax": "0x00201054",
+      "emulated_index": 7,
+      "python_index": 7,
+      "passed": true
+    },
+    {
+      "key": "0x0000073C",
+      "record_count": 8,
+      "eax": "0x00201000",
+      "emulated_index": 0,
+      "python_index": 0,
+      "passed": true
+    },
+    {
+      "key": "0x80000000",
+      "record_count": 2,
+      "eax": "0x00201018",
+      "emulated_index": 2,
+      "python_index": 2,
+      "passed": true
+    },
+    {
+      "key": "0x0000EE33",
+      "record_count": 127,
+      "eax": "0x00201054",
+      "emulated_index": 7,
+      "python_index": 7,
+      "passed": true
+    },
+    {
+      "key": "0x0000735B",
+      "record_count": 31,
+      "eax": "0x00201000",
+      "emulated_index": 0,
+      "python_index": 0,
+      "passed": true
+    },
+    {
+      "key": "0x0007676C",
+      "record_count": 3,
+      "eax": "0x00201024",
+      "emulated_index": 3,
+      "python_index": 3,
+      "passed": true
+    },
+    {
+      "key": "0x000598A6",
+      "record_count": 3,
+      "eax": "0x0020100C",
+      "emulated_index": 1,
+      "python_index": 1,
+      "passed": true
+    },
+    {
+      "key": "0x0000A95A",
+      "record_count": 256,
+      "eax": "0x0020106C",
+      "emulated_index": 9,
+      "python_index": 9,
+      "passed": true
+    },
+    {
+      "key": "0x00006ED0",
+      "record_count": 256,
+      "eax": "0x0020100C",
+      "emulated_index": 1,
+      "python_index": 1,
+      "passed": true
+    },
+    {
+      "key": "0x0000B4AA",
+      "record_count": 31,
+      "eax": "0x00201000",
+      "emulated_index": 0,
+      "python_index": 0,
+      "passed": true
+    },
+    {
+      "key": "0xFFFFFFFF",
+      "record_count": 8,
+      "eax": "0x00201048",
+      "emulated_index": 6,
+      "python_index": 6,
+      "passed": true
+    },
+    {
+      "key": "0x000F59F9",
+      "record_count": 256,
+      "eax": "0x00201B7C",
+      "emulated_index": 245,
+      "python_index": 245,
+      "passed": true
+    },
+    {
+      "key": "0x000CC599",
+      "record_count": 127,
+      "eax": "0x002014C8",
+      "emulated_index": 102,
+      "python_index": 102,
+      "passed": true
+    },
+    {
+      "key": "0x0001C131",
+      "record_count": 1,
+      "eax": "0x00201000",
+      "emulated_index": 0,
+      "python_index": 0,
+      "passed": true
+    },
+    {
+      "key": "0x00034647",
+      "record_count": 8,
+      "eax": "0x00201000",
+      "emulated_index": 0,
+      "python_index": 0,
+      "passed": true
+    },
+    {
+      "key": "0x80000001",
+      "record_count": 2,
+      "eax": "0x00201018",
+      "emulated_index": 2,
+      "python_index": 2,
+      "passed": true
+    },
+    {
+      "key": "0x00000000",
+      "record_count": 256,
+      "eax": "0x00201000",
+      "emulated_index": 0,
+      "python_index": 0,
+      "passed": true
+    },
+    {
+      "key": "0x0000F34E",
+      "record_count": 31,
+      "eax": "0x002010C0",
+      "emulated_index": 16,
+      "python_index": 16,
+      "passed": true
+    },
+    {
+      "key": "0x000040BF",
+      "record_count": 127,
+      "eax": "0x00201030",
+      "emulated_index": 4,
+      "python_index": 4,
+      "passed": true
+    },
+    {
+      "key": "0x00005E9D",
+      "record_count": 1,
+      "eax": "0x00201000",
+      "emulated_index": 0,
+      "python_index": 0,
+      "passed": true
+    },
+    {
+      "key": "0x000004D6",
+      "record_count": 127,
+      "eax": "0x00201000",
+      "emulated_index": 0,
+      "python_index": 0,
+      "passed": true
+    },
+    {
+      "key": "0x000D10DF",
+      "record_count": 8,
+      "eax": "0x00201060",
+      "emulated_index": 8,
+      "python_index": 8,
+      "passed": true
+    },
+    {
+      "key": "0x00002338",
+      "record_count": 1,
+      "eax": "0x00201000",
+      "emulated_index": 0,
+      "python_index": 0,
+      "passed": true
+    },
+    {
+      "key": "0x00000000",
+      "record_count": 1,
+      "eax": "0x00201000",
+      "emulated_index": 0,
+      "python_index": 0,
+      "passed": true
+    },
+    {
+      "key": "0x00032050",
+      "record_count": 31,
+      "eax": "0x00201024",
+      "emulated_index": 3,
+      "python_index": 3,
+      "passed": true
+    },
+    {
+      "key": "0x00000591",
+      "record_count": 256,
+      "eax": "0x00201000",
+      "emulated_index": 0,
+      "python_index": 0,
+      "passed": true
+    },
+    {
+      "key": "0x0001958D",
+      "record_count": 8,
+      "eax": "0x00201000",
+      "emulated_index": 0,
+      "python_index": 0,
+      "passed": true
+    },
+    {
+      "key": "0x0000E61D",
+      "record_count": 1,
+      "eax": "0x0020100C",
+      "emulated_index": 1,
+      "python_index": 1,
+      "passed": true
+    },
+    {
+      "key": "0x000FD695",
+      "record_count": 64,
+      "eax": "0x00201300",
+      "emulated_index": 64,
+      "python_index": 64,
+      "passed": true
+    },
+    {
+      "key": "0x00092991",
+      "record_count": 1,
+      "eax": "0x0020100C",
+      "emulated_index": 1,
+      "python_index": 1,
+      "passed": true
+    },
+    {
+      "key": "0x0009CC16",
+      "record_count": 3,
+      "eax": "0x00201018",
+      "emulated_index": 2,
+      "python_index": 2,
+      "passed": true
+    },
+    {
+      "key": "0x0000F4E0",
+      "record_count": 8,
+      "eax": "0x0020100C",
+      "emulated_index": 1,
+      "python_index": 1,
+      "passed": true
+    },
+    {
+      "key": "0x00000001",
+      "record_count": 1,
+      "eax": "0x00201000",
+      "emulated_index": 0,
+      "python_index": 0,
+      "passed": true
+    },
+    {
+      "key": "0x00009C0D",
+      "record_count": 8,
+      "eax": "0x00201000",
+      "emulated_index": 0,
+      "python_index": 0,
+      "passed": true
+    },
+    {
+      "key": "0x00067F08",
+      "record_count": 2,
+      "eax": "0x00201018",
+      "emulated_index": 2,
+      "python_index": 2,
+      "passed": true
+    },
+    {
+      "key": "0x0000E360",
+      "record_count": 8,
+      "eax": "0x00201000",
+      "emulated_index": 0,
+      "python_index": 0,
+      "passed": true
+    },
+    {
+      "key": "0x000FF4A0",
+      "record_count": 127,
+      "eax": "0x002015F4",
+      "emulated_index": 127,
+      "python_index": 127,
+      "passed": true
+    },
+    {
+      "key": "0x0000010D",
+      "record_count": 1,
+      "eax": "0x00201000",
+      "emulated_index": 0,
+      "python_index": 0,
+      "passed": true
+    },
+    {
+      "key": "0xFFFFFFFF",
+      "record_count": 3,
+      "eax": "0x00201018",
+      "emulated_index": 2,
+      "python_index": 2,
+      "passed": true
+    },
+    {
+      "key": "0x00008CA8",
+      "record_count": 8,
+      "eax": "0x00201000",
+      "emulated_index": 0,
+      "python_index": 0,
+      "passed": true
+    },
+    {
+      "key": "0x00005BC2",
+      "record_count": 3,
+      "eax": "0x0020100C",
+      "emulated_index": 1,
+      "python_index": 1,
+      "passed": true
+    },
+    {
+      "key": "0x000504EB",
+      "record_count": 3,
+      "eax": "0x00201000",
+      "emulated_index": 0,
+      "python_index": 0,
+      "passed": true
+    },
+    {
+      "key": "0x0009B04E",
+      "record_count": 2,
+      "eax": "0x00201000",
+      "emulated_index": 0,
+      "python_index": 0,
+      "passed": true
+    },
+    {
+      "key": "0x0000A28B",
+      "record_count": 127,
+      "eax": "0x00201030",
+      "emulated_index": 4,
+      "python_index": 4,
+      "passed": true
+    },
+    {
+      "key": "0x000074A7",
+      "record_count": 8,
+      "eax": "0x00201000",
+      "emulated_index": 0,
+      "python_index": 0,
+      "passed": true
+    },
+    {
+      "key": "0x00000001",
+      "record_count": 2,
+      "eax": "0x00201000",
+      "emulated_index": 0,
+      "python_index": 0,
+      "passed": true
+    },
+    {
+      "key": "0xFFFFFFFF",
+      "record_count": 64,
+      "eax": "0x002012A0",
+      "emulated_index": 56,
+      "python_index": 56,
+      "passed": true
+    },
+    {
+      "key": "0x00002F07",
+      "record_count": 31,
+      "eax": "0x00201000",
+      "emulated_index": 0,
+      "python_index": 0,
+      "passed": true
+    },
+    {
+      "key": "0x00008588",
+      "record_count": 31,
+      "eax": "0x002010B4",
+      "emulated_index": 15,
+      "python_index": 15,
+      "passed": true
+    },
+    {
+      "key": "0x00030463",
+      "record_count": 127,
+      "eax": "0x002010E4",
+      "emulated_index": 19,
+      "python_index": 19,
+      "passed": true
+    },
+    {
+      "key": "0x000FFC94",
+      "record_count": 127,
+      "eax": "0x002015F4",
+      "emulated_index": 127,
+      "python_index": 127,
+      "passed": true
+    },
+    {
+      "key": "0x00056273",
+      "record_count": 64,
+      "eax": "0x002010E4",
+      "emulated_index": 19,
+      "python_index": 19,
+      "passed": true
+    },
+    {
+      "key": "0x000098E5",
+      "record_count": 256,
+      "eax": "0x002015DC",
+      "emulated_index": 125,
+      "python_index": 125,
+      "passed": true
+    },
+    {
+      "key": "0x000FB949",
+      "record_count": 64,
+      "eax": "0x00201300",
+      "emulated_index": 64,
+      "python_index": 64,
+      "passed": true
+    },
+    {
+      "key": "0x000E1D7E",
+      "record_count": 31,
+      "eax": "0x00201174",
+      "emulated_index": 31,
+      "python_index": 31,
+      "passed": true
+    },
+    {
+      "key": "0x000FE822",
+      "record_count": 64,
+      "eax": "0x00201300",
+      "emulated_index": 64,
+      "python_index": 64,
+      "passed": true
+    },
+    {
+      "key": "0xFFFFFFFF",
+      "record_count": 2,
+      "eax": "0x00201000",
+      "emulated_index": 0,
+      "python_index": 0,
+      "passed": true
+    },
+    {
+      "key": "0x000E2641",
+      "record_count": 2,
+      "eax": "0x00201018",
+      "emulated_index": 2,
+      "python_index": 2,
+      "passed": true
+    },
+    {
+      "key": "0x0000A749",
+      "record_count": 8,
+      "eax": "0x00201030",
+      "emulated_index": 4,
+      "python_index": 4,
+      "passed": true
+    },
+    {
+      "key": "0x00000001",
+      "record_count": 2,
+      "eax": "0x00201000",
+      "emulated_index": 0,
+      "python_index": 0,
+      "passed": true
+    },
+    {
+      "key": "0x0000C3B2",
+      "record_count": 1,
+      "eax": "0x00201000",
+      "emulated_index": 0,
+      "python_index": 0,
+      "passed": true
+    },
+    {
+      "key": "0x0000112D",
+      "record_count": 127,
+      "eax": "0x00201000",
+      "emulated_index": 0,
+      "python_index": 0,
+      "passed": true
+    },
+    {
+      "key": "0x00001BC8",
+      "record_count": 31,
+      "eax": "0x00201000",
+      "emulated_index": 0,
+      "python_index": 0,
+      "passed": true
+    },
+    {
+      "key": "0x0009DB56",
+      "record_count": 256,
+      "eax": "0x002017D4",
+      "emulated_index": 167,
+      "python_index": 167,
+      "passed": true
+    },
+    {
+      "key": "0x00000464",
+      "record_count": 256,
+      "eax": "0x00201000",
+      "emulated_index": 0,
+      "python_index": 0,
+      "passed": true
+    },
+    {
+      "key": "0x0000F45C",
+      "record_count": 256,
+      "eax": "0x00201090",
+      "emulated_index": 12,
+      "python_index": 12,
+      "passed": true
+    },
+    {
+      "key": "0x7FFFFFFF",
+      "record_count": 8,
+      "eax": "0x00201030",
+      "emulated_index": 4,
+      "python_index": 4,
+      "passed": true
+    },
+    {
+      "key": "0x000D1126",
+      "record_count": 1,
+      "eax": "0x0020100C",
+      "emulated_index": 1,
+      "python_index": 1,
+      "passed": true
+    },
+    {
+      "key": "0x00000002",
+      "record_count": 31,
+      "eax": "0x00201078",
+      "emulated_index": 10,
+      "python_index": 10,
+      "passed": true
+    },
+    {
+      "key": "0x0000B9E0",
+      "record_count": 64,
+      "eax": "0x00201144",
+      "emulated_index": 27,
+      "python_index": 27,
+      "passed": true
+    },
+    {
+      "key": "0xFFFFFFFF",
+      "record_count": 8,
+      "eax": "0x00201054",
+      "emulated_index": 7,
+      "python_index": 7,
+      "passed": true
+    },
+    {
+      "key": "0x80000000",
+      "record_count": 3,
+      "eax": "0x00201024",
+      "emulated_index": 3,
+      "python_index": 3,
+      "passed": true
+    },
+    {
+      "key": "0x0000A4F4",
+      "record_count": 64,
+      "eax": "0x00201168",
+      "emulated_index": 30,
+      "python_index": 30,
+      "passed": true
+    },
+    {
+      "key": "0x00007E15",
+      "record_count": 256,
+      "eax": "0x0020106C",
+      "emulated_index": 9,
+      "python_index": 9,
+      "passed": true
+    },
+    {
+      "key": "0xFFFFFFFF",
+      "record_count": 31,
+      "eax": "0x00201138",
+      "emulated_index": 26,
+      "python_index": 26,
+      "passed": true
+    },
+    {
+      "key": "0x0000CD49",
+      "record_count": 1,
+      "eax": "0x00201000",
+      "emulated_index": 0,
+      "python_index": 0,
+      "passed": true
+    },
+    {
+      "key": "0x000002F0",
+      "record_count": 31,
+      "eax": "0x00201000",
+      "emulated_index": 0,
+      "python_index": 0,
+      "passed": true
+    },
+    {
+      "key": "0x00099AD8",
+      "record_count": 1,
+      "eax": "0x00201000",
+      "emulated_index": 0,
+      "python_index": 0,
+      "passed": true
+    },
+    {
+      "key": "0x00031AEA",
+      "record_count": 256,
+      "eax": "0x00201288",
+      "emulated_index": 54,
+      "python_index": 54,
+      "passed": true
+    },
+    {
+      "key": "0x000EC71C",
+      "record_count": 8,
+      "eax": "0x00201060",
+      "emulated_index": 8,
+      "python_index": 8,
+      "passed": true
+    },
+    {
+      "key": "0x00045C2C",
+      "record_count": 2,
+      "eax": "0x00201018",
+      "emulated_index": 2,
+      "python_index": 2,
+      "passed": true
+    },
+    {
+      "key": "0x0000A9A7",
+      "record_count": 64,
+      "eax": "0x00201030",
+      "emulated_index": 4,
+      "python_index": 4,
+      "passed": true
+    },
+    {
+      "key": "0x00000000",
+      "record_count": 64,
+      "eax": "0x00201000",
+      "emulated_index": 0,
+      "python_index": 0,
+      "passed": true
+    },
+    {
+      "key": "0x00000000",
+      "record_count": 3,
+      "eax": "0x00201000",
+      "emulated_index": 0,
+      "python_index": 0,
+      "passed": true
+    },
+    {
+      "key": "0x000DC491",
+      "record_count": 3,
+      "eax": "0x00201018",
+      "emulated_index": 2,
+      "python_index": 2,
+      "passed": true
+    },
+    {
+      "key": "0x000070CB",
+      "record_count": 3,
+      "eax": "0x00201000",
+      "emulated_index": 0,
+      "python_index": 0,
+      "passed": true
+    },
+    {
+      "key": "0x0005299A",
+      "record_count": 2,
+      "eax": "0x00201000",
+      "emulated_index": 0,
+      "python_index": 0,
+      "passed": true
+    },
+    {
+      "key": "0x000FD8BD",
+      "record_count": 64,
+      "eax": "0x00201300",
+      "emulated_index": 64,
+      "python_index": 64,
+      "passed": true
+    },
+    {
+      "key": "0x00096F67",
+      "record_count": 2,
+      "eax": "0x00201018",
+      "emulated_index": 2,
+      "python_index": 2,
+      "passed": true
+    },
+    {
+      "key": "0x000CD785",
+      "record_count": 2,
+      "eax": "0x00201018",
+      "emulated_index": 2,
+      "python_index": 2,
+      "passed": true
+    },
+    {
+      "key": "0x00001B7A",
+      "record_count": 3,
+      "eax": "0x00201000",
+      "emulated_index": 0,
+      "python_index": 0,
+      "passed": true
+    },
+    {
+      "key": "0x00000210",
+      "record_count": 256,
+      "eax": "0x00201000",
+      "emulated_index": 0,
+      "python_index": 0,
+      "passed": true
+    },
+    {
+      "key": "0x000CB9F1",
+      "record_count": 2,
+      "eax": "0x00201018",
+      "emulated_index": 2,
+      "python_index": 2,
+      "passed": true
+    },
+    {
+      "key": "0x000E1884",
+      "record_count": 64,
+      "eax": "0x00201270",
+      "emulated_index": 52,
+      "python_index": 52,
+      "passed": true
+    },
+    {
+      "key": "0x000D26B9",
+      "record_count": 3,
+      "eax": "0x00201018",
+      "emulated_index": 2,
+      "python_index": 2,
+      "passed": true
+    },
+    {
+      "key": "0x0000030D",
+      "record_count": 256,
+      "eax": "0x0020160C",
+      "emulated_index": 129,
+      "python_index": 129,
+      "passed": true
+    },
+    {
+      "key": "0x0000D277",
+      "record_count": 3,
+      "eax": "0x00201018",
+      "emulated_index": 2,
+      "python_index": 2,
+      "passed": true
+    },
+    {
+      "key": "0x0006DAC3",
+      "record_count": 2,
+      "eax": "0x00201000",
+      "emulated_index": 0,
+      "python_index": 0,
+      "passed": true
+    },
+    {
+      "key": "0x00000000",
+      "record_count": 8,
+      "eax": "0x00201000",
+      "emulated_index": 0,
+      "python_index": 0,
+      "passed": true
+    },
+    {
+      "key": "0x000058ED",
+      "record_count": 31,
+      "eax": "0x00201000",
+      "emulated_index": 0,
+      "python_index": 0,
+      "passed": true
+    },
+    {
+      "key": "0x0000B56C",
+      "record_count": 31,
+      "eax": "0x00201090",
+      "emulated_index": 12,
+      "python_index": 12,
+      "passed": true
+    },
+    {
+      "key": "0x0000FE17",
+      "record_count": 127,
+      "eax": "0x00201084",
+      "emulated_index": 11,
+      "python_index": 11,
+      "passed": true
+    },
+    {
+      "key": "0x0003B7E4",
+      "record_count": 2,
+      "eax": "0x00201018",
+      "emulated_index": 2,
+      "python_index": 2,
+      "passed": true
+    },
+    {
+      "key": "0x00050B51",
+      "record_count": 2,
+      "eax": "0x00201000",
+      "emulated_index": 0,
+      "python_index": 0,
+      "passed": true
+    },
+    {
+      "key": "0xFFFFFFFF",
+      "record_count": 256,
+      "eax": "0x00201A80",
+      "emulated_index": 224,
+      "python_index": 224,
+      "passed": true
+    },
+    {
+      "key": "0x0008CA1C",
+      "record_count": 3,
+      "eax": "0x0020100C",
+      "emulated_index": 1,
+      "python_index": 1,
+      "passed": true
+    },
+    {
+      "key": "0x00000000",
+      "record_count": 8,
+      "eax": "0x00201000",
+      "emulated_index": 0,
+      "python_index": 0,
+      "passed": true
+    },
+    {
+      "key": "0x80000000",
+      "record_count": 256,
+      "eax": "0x002016C0",
+      "emulated_index": 144,
+      "python_index": 144,
+      "passed": true
+    },
+    {
+      "key": "0x00005A0C",
+      "record_count": 31,
+      "eax": "0x002010B4",
+      "emulated_index": 15,
+      "python_index": 15,
+      "passed": true
+    },
+    {
+      "key": "0x000398E9",
+      "record_count": 8,
+      "eax": "0x00201000",
+      "emulated_index": 0,
+      "python_index": 0,
+      "passed": true
+    },
+    {
+      "key": "0x000C7E2C",
+      "record_count": 2,
+      "eax": "0x00201018",
+      "emulated_index": 2,
+      "python_index": 2,
+      "passed": true
+    },
+    {
+      "key": "0x00006AB9",
+      "record_count": 3,
+      "eax": "0x00201000",
+      "emulated_index": 0,
+      "python_index": 0,
+      "passed": true
+    },
+    {
+      "key": "0x000F646F",
+      "record_count": 64,
+      "eax": "0x00201300",
+      "emulated_index": 64,
+      "python_index": 64,
+      "passed": true
+    },
+    {
+      "key": "0x00000000",
+      "record_count": 31,
+      "eax": "0x00201000",
+      "emulated_index": 0,
+      "python_index": 0,
+      "passed": true
+    },
+    {
+      "key": "0x000FF975",
+      "record_count": 256,
+      "eax": "0x00201C00",
+      "emulated_index": 256,
+      "python_index": 256,
+      "passed": true
+    },
+    {
+      "key": "0x000F9608",
+      "record_count": 31,
+      "eax": "0x00201174",
+      "emulated_index": 31,
+      "python_index": 31,
+      "passed": true
+    },
+    {
+      "key": "0x000017F0",
+      "record_count": 127,
+      "eax": "0x0020100C",
+      "emulated_index": 1,
+      "python_index": 1,
+      "passed": true
+    },
+    {
+      "key": "0x00001883",
+      "record_count": 3,
+      "eax": "0x00201000",
+      "emulated_index": 0,
+      "python_index": 0,
+      "passed": true
+    },
+    {
+      "key": "0x00000000",
+      "record_count": 8,
+      "eax": "0x00201000",
+      "emulated_index": 0,
+      "python_index": 0,
+      "passed": true
+    },
+    {
+      "key": "0x000933A6",
+      "record_count": 1,
+      "eax": "0x00201000",
+      "emulated_index": 0,
+      "python_index": 0,
+      "passed": true
+    },
+    {
+      "key": "0x00035FFC",
+      "record_count": 31,
+      "eax": "0x0020103C",
+      "emulated_index": 5,
+      "python_index": 5,
+      "passed": true
+    },
+    {
+      "key": "0x00000929",
+      "record_count": 64,
+      "eax": "0x00201000",
+      "emulated_index": 0,
+      "python_index": 0,
+      "passed": true
+    },
+    {
+      "key": "0x000EFF2C",
+      "record_count": 31,
+      "eax": "0x00201174",
+      "emulated_index": 31,
+      "python_index": 31,
+      "passed": true
+    },
+    {
+      "key": "0x000060F5",
+      "record_count": 3,
+      "eax": "0x00201000",
+      "emulated_index": 0,
+      "python_index": 0,
+      "passed": true
+    },
+    {
+      "key": "0x7FFFFFFF",
+      "record_count": 31,
+      "eax": "0x002010B4",
+      "emulated_index": 15,
+      "python_index": 15,
+      "passed": true
+    },
+    {
+      "key": "0x000FCFF4",
+      "record_count": 31,
+      "eax": "0x00201174",
+      "emulated_index": 31,
+      "python_index": 31,
+      "passed": true
+    },
+    {
+      "key": "0x00067DC9",
+      "record_count": 127,
+      "eax": "0x00201228",
+      "emulated_index": 46,
+      "python_index": 46,
+      "passed": true
+    },
+    {
+      "key": "0x0006F806",
+      "record_count": 3,
+      "eax": "0x00201000",
+      "emulated_index": 0,
+      "python_index": 0,
+      "passed": true
+    }
+  ],
+  "failed": 0
+}

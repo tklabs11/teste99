@@ -1,0 +1,477 @@
+diff --git a/README.md b/README.md
+--- a/README.md
++++ b/README.md
+@@ -1544,13 +1544,14 @@ the host-width D3D9 structure, and `CreateSporeDxvkDevice` performs the call.
+ and refuses an unimplemented non-null presenter instead of silently
+ substituting behavior.
+ 
+-The in-app option **“Translated Spore graphics slice (manual inputs)”** seeds
+-the guest state explicitly: `640x480` is observed in `FUN_007e7380`; adapter 0,
+-HAL, hardware vertex processing, windowed/discard, and interval-one are probe
+-choices, not recovered values from a run of the original. The SDL surface and
+-window token are also supplied by the harness. Steam, registry/configuration,
+-DDF initialization, Canvas construction, `Direct3DCreate9` initialization, and
+-the original application objects are bypassed; none is claimed to have booted.
++The in-app option **“Translated Spore graphics boundary probe (manual
++regression)”** seeds the guest state explicitly: `640x480` is passed by
++`FUN_007e7380` to Graphics slot `+0x14`; adapter 0, HAL, hardware vertex
++processing, windowed/discard, and interval-one are probe choices, not recovered
++values from a run of the original. The SDL surface and window token are also
++supplied by the harness. Steam, registry/configuration, DDF initialization,
++Canvas construction, `Direct3DCreate9` initialization, and the original
++application objects are bypassed; none is claimed to have booted.
+ 
+ Progress recorded on the connected `arm64-v8a` phone (model `2303ERA42L`):
+ 
+@@ -1566,10 +1567,107 @@ Progress recorded on the connected `arm64-v8a` phone (model `2303ERA42L`):
+ 
+ These results prove that ARM64-translated boundary code can create and present
+ through the existing bridge from explicitly prepared state. They do not prove
+-that translated original startup functions reached those calls. The next
+-increment should connect a real, already-lifted startup-side function to this
+-guest state without crossing an x86 layout with a native pointer. Revisit the
+-Steam call only if runtime tracing shows that its actual return blocks progress.
++that translated original startup functions reached those calls.
++
++## Translated window-global increment — 2026-11-05
++
++The original executable used for this increment is [SporeApp.exe](C:/Users/wesll/Downloads/SPORE-SteamRIP.com/SPORE/SporeBin/SporeApp.exe),
++SHA-256 `290703b34fe4573b242c3e271cc90568992abe6fb3fa9333a7341044a759fc74`.
++Static analysis confirms the following connected fragment:
++
++1. `FUN_0075f030` gets a window handle through Canvas/window-manager virtual
++   slot `+0x94`, then calls `FUN_011f8110(handle)`.
++2. `FUN_011f8110` is a three-byte setter that stores its 32-bit argument in
++   guest global `DAT_016f658c`.
++3. `FUN_011f8680`, the `IDirect3D9::CreateDevice` wrapper, reads
++   `DAT_016f658c` as the device window. `FUN_0075f030` reaches that wrapper in
++   the graphics initialization path.
++
++The new Android translation reproduces only this setter. The second test route
++starts from the probe state but leaves
++`SporeGuestPresentParameters32.device_window_token` unset. It passes the
++manually mapped guest window token through the translated setter, stores it in
++the 32-bit guest-global representation of `DAT_016f658c`, copies that global
++into the guest presentation structure, then calls the existing
++`CreateSporeDxvkDevice` bridge. The host `SDL_Window*` is still supplied
++separately; no ARM64 pointer is stored in x86 state. The original manual
++boundary probe remains a separate menu item and regression.
++
++### Preparation inventory
++
++“Original source” below is static evidence unless explicitly identified as
++device-observed. The table covers the manually prepared probe state and the
++Android adaptation boundary; it does not claim that the original constructors
++or boot path ran.
++
++| Manually prepared item | Original source / initializer | Dependencies and current status |
++|---|---|---|
++| Android `SDL_Window*`, Vulkan surface and drawable size | Original app creates a Win32 Canvas/window during application graphics initialization (`FUN_007e67a0` and its Canvas/window callees). | Android SDL/activity/surface. The probe creates these in its harness; the original Canvas/window chain is not connected. |
++| Guest window token `0x00010001` | Original Canvas manager virtual slot `+0x94` supplies an HWND to `FUN_0075f030`; Android has no x86 HWND. | Token-to-`SDL_Window*` mapping is a test adaptation and remains manual. Only storage into the guest global is now translated. |
++| `SporeGuestD3D9State32` object, zero initialization | Original objects are created by app/graphics constructors; `FUN_0075f030` fills a local 15-DWORD D3D setup block before `FUN_011f8680`. | Probe aggregate and lifetime are harness-created, not original object construction. x86 field offsets are asserted. |
++| `adapter_ordinal = 0` | Original `FUN_011f8680` calls the D3D9 interface using graphics setup assembled by `FUN_0075f030`. | Adapter selection/capabilities and config are not recovered in this test; 0 is a probe choice. |
++| `device_type = HAL` | Original D3D9 `CreateDevice` path in `FUN_011f8680`, reached after `FUN_0075e830` initializes the D3D9 interface. | The original argument was not runtime-captured; HAL is a probe choice. |
++| `behavior_flags = HARDWARE_VERTEXPROCESSING` | `FUN_011f8680` computes flags from global renderer settings and device capability bits. | Those globals/caps are not initialized by the translated boot path; this flag is manually selected. |
++| Present width/height `640x480` | `FUN_007e7380` passes `0x280, 0x1e0` to Graphics slot `+0x14` (`FUN_0075f030`). | These are observed call-site arguments. The full callee still reads graphics/configuration state; the probe seeds guest backbuffer fields directly and does not execute that callee. |
++| Present format `UNKNOWN`, count `1`, multisample type/quality `NONE/0`, swap effect `DISCARD`, windowed `TRUE`, auto-depth off, depth format `0`, flags `0`, refresh `0`, interval `ONE` | `FUN_0075f030` assembles configuration/renderer values and `FUN_011f8680` passes them to `IDirect3D9::CreateDevice`. | Full per-field source/value mapping depends on config, Canvas and D3D capabilities and is not translated. These values are probe choices; zero-valued fields come from aggregate initialization. |
++| `DAT_016f658c` window-global representation | Original `FUN_011f8110` writes the HWND supplied by the Canvas manager; `FUN_011f8680` consumes it for `CreateDevice`. | Setter now translated. Its input token and association with the SDL window remain manual. |
++| Guest device token, initially `0`, then `0x00010002` | Original `FUN_011f8680` obtains the COM device from `CreateDevice`. | Host device is produced by DXVK-native; the non-pointer guest token is assigned by the adapter after success. It is not a manual input. |
++| `SporeGuestFrameOwner32` zero-initialized; alternate-presenter token at `+0x18` is `0` | Original `FUN_011f8680` initializes `PTR_DAT_015d0838` to `DAT_01712480`; `FUN_007e7380` passes that object to `FUN_011f8120`. | Original object's runtime contents are not captured. Zero selects the identified null-alternate-presenter branch for this probe; the frame owner is manual. |
++| `Present(nullptr, nullptr, nullptr, nullptr)` | Original `FUN_011f8120` dispatches device `Present` on its null alternate-presenter branch. | Branch and host device are tested; the original app-owned wrapper object is not constructed. |
++| Probe clear color and frame counter | Not claimed as Spore renderer state. | Harness-only visual output, unrelated to translated game initialization. |
++
++### Steam boundary (separate from graphics)
++
++The Android graphics adapter does not invoke `SteamAPI_Init`, does not invent a
++successful result, and does not claim to reproduce Steam initialization. The
++reference PE's `FUN_00f47ed0` calls it before other app initialization and
++branches on failure, while the user reports that this PC copy launches without
++opening the Steam client. The loaded DLL, the call's actual return in that run,
++and any required initialization side effects are unknown. Treat this as a
++separate platform-adaptation question. When the Android boot runner reaches
++that boundary, determine the observed contract and implement only required
++platform behavior, recording unsupported calls explicitly; a fabricated
++success return alone is not equivalent to initialization.
++
++### Device run status
++
++The updated `arm64-v8a` APK built successfully and was installed on the
++`2303ERA42L` phone (ADB serial `PJMZAEJRX4YLFIDI`, Android 15/API 35). Tested
++APK SHA-256:
++`0bfba261b800c0435b1f8c411bd17c34f341163aa2b87a6c57ae3d962491b7bd`.
++Both the retained manual probe and the
++new window-global increment ran through `CreateDevice` and `Present`; the
++manual probe also exercised the `2177x987` to `2400x1080` reset. The original
++D3D9 bridge regression also created a device successfully; that run began at
++`2400x1080`, so it did not need a resize. The incremental results are:
++
++| Step | Result |
++|---|---|
++| x86 device-window field/global start at zero | PASS |
++| Translated `FUN_011f8110` store to guest global `0x016f658c` | PASS (`0x00010001`, supplied by the Android window-token adapter) |
++| Guest presentation window field read from the translated global | PASS |
++| Existing bridge `CreateDevice` | PASS (`640x480` guest backbuffer) |
++| Translated null-presenter branch to `Present` | PASS |
++| Original Spore boot/startup functions | NOT RUN |
++| Stop point | Probe's SDL test loop immediately after `Present`; the original application/Canvas/renderer initialization remains disconnected |
++
++Thus, this increment replaces one preparation: the presentation window token
++now comes from translated game logic. The token-to-SDL mapping, 640x480,
++adapter/type/flags, other presentation fields, and presenter state are still
++manual as listed above. Unedited filtered logcat captures are saved in:
++
++- [translated-graphics-manual-regression-2026-11-05.log](./test-logs/translated-graphics-manual-regression-2026-11-05.log)
++- [translated-window-global-increment-2026-11-05.log](./test-logs/translated-window-global-increment-2026-11-05.log)
++- [d3d9-bridge-regression-2026-11-05.log](./test-logs/d3d9-bridge-regression-2026-11-05.log)
++
++In the new increment, the value written by translated game logic is the guest
++global `DAT_016f658c`, set by translated `FUN_011f8110`. Its input
++`0x00010001` is still manually supplied by the Android window-token adapter;
++the 640x480 state, device options, remaining presentation fields, null
++alternate presenter, app objects, Canvas, and Steam behavior remain outside
++the translated path. After `Present`, execution stops in the probe's own SDL
++loop; the Spore boot path itself has not run. The next graphics increment must
++replace another prepared dependency without altering the manual regression.
+ 
+ ## Build
+ 
+diff --git a/app/src/main/cpp/spore_translated_graphics.h b/app/src/main/cpp/spore_translated_graphics.h
+--- a/app/src/main/cpp/spore_translated_graphics.h
++++ b/app/src/main/cpp/spore_translated_graphics.h
+@@ -38,6 +38,12 @@ struct SporeGuestFrameOwner32 {
+     std::uint32_t alternate_presenter_token;
+ };
+ 
++struct SporeGuestGraphicsGlobals32 {
++    std::uint32_t device_window_token;
++};
++
++constexpr std::uint32_t kSporeGuestDeviceWindowGlobalAddress = 0x016f658c;
++
+ static_assert(sizeof(SporeGuestPresentParameters32) == 0x38);
+ static_assert(offsetof(SporeGuestPresentParameters32, device_window_token) == 0x1c);
+ static_assert(offsetof(SporeGuestPresentParameters32, presentation_interval) == 0x34);
+@@ -45,8 +51,15 @@ static_assert(offsetof(SporeGuestD3D9State32, presentation) == 0x14);
+ static_assert(sizeof(SporeGuestD3D9State32) == 0x4c);
+ static_assert(offsetof(SporeGuestFrameOwner32, alternate_presenter_token) == 0x18);
+ static_assert(sizeof(SporeGuestFrameOwner32) == 0x1c);
++static_assert(sizeof(SporeGuestGraphicsGlobals32) == 4);
+ 
+ void SporePrepareTranslatedGraphicsProbe(SporeGuestD3D9State32* state);
++void SporePrepareTranslatedWindowGlobalProbe(
++    SporeGuestD3D9State32* state,
++    SporeGuestGraphicsGlobals32* globals);
++bool SporeTranslatedSetDeviceWindowGlobal(
++    SporeGuestGraphicsGlobals32* globals,
++    std::uint32_t guest_window_token);
+ 
+ HRESULT SporeTranslatedCreateDevice(
+     SporeGuestD3D9State32* state,
+@@ -55,6 +68,14 @@ HRESULT SporeTranslatedCreateDevice(
+     IDirect3D9** d3d9_out,
+     IDirect3DDevice9** device_out);
+ 
++HRESULT SporeTranslatedCreateDeviceFromWindowGlobal(
++    SporeGuestD3D9State32* state,
++    SporeGuestGraphicsGlobals32* globals,
++    SDL_Window* window,
++    D3DPRESENT_PARAMETERS* host_presentation_out,
++    IDirect3D9** d3d9_out,
++    IDirect3DDevice9** device_out);
++
+ HRESULT SporeTranslatedPresent(
+     const SporeGuestD3D9State32* state,
+     const SporeGuestFrameOwner32* frame_owner,
+diff --git a/app/src/main/cpp/spore_translated_graphics.cpp b/app/src/main/cpp/spore_translated_graphics.cpp
+--- a/app/src/main/cpp/spore_translated_graphics.cpp
++++ b/app/src/main/cpp/spore_translated_graphics.cpp
+@@ -30,13 +30,9 @@ D3DPRESENT_PARAMETERS toHostPresentationParameters(
+     return host;
+ }
+ 
+-}
+-
+-void SporePrepareTranslatedGraphicsProbe(SporeGuestD3D9State32* state) {
+-    if (state == nullptr) {
+-        return;
+-    }
+-
++void prepareTranslatedGraphicsProbeState(
++    SporeGuestD3D9State32* state,
++    bool initialize_device_window_token) {
+     *state = {};
+     state->adapter_ordinal = D3DADAPTER_DEFAULT;
+     state->device_type = D3DDEVTYPE_HAL;
+@@ -48,9 +44,43 @@ void SporePrepareTranslatedGraphicsProbe(SporeGuestD3D9State32* state) {
+     state->presentation.back_buffer_count = 1;
+     state->presentation.multi_sample_type = D3DMULTISAMPLE_NONE;
+     state->presentation.swap_effect = D3DSWAPEFFECT_DISCARD;
+-    state->presentation.device_window_token = kGuestWindowToken;
+     state->presentation.windowed = TRUE;
+     state->presentation.presentation_interval = D3DPRESENT_INTERVAL_ONE;
++    if (initialize_device_window_token) {
++        state->presentation.device_window_token = kGuestWindowToken;
++    }
++}
++
++}
++
++void SporePrepareTranslatedGraphicsProbe(SporeGuestD3D9State32* state) {
++    if (state == nullptr) {
++        return;
++    }
++
++    prepareTranslatedGraphicsProbeState(state, true);
++}
++
++void SporePrepareTranslatedWindowGlobalProbe(
++    SporeGuestD3D9State32* state,
++    SporeGuestGraphicsGlobals32* globals) {
++    if (state == nullptr || globals == nullptr) {
++        return;
++    }
++
++    prepareTranslatedGraphicsProbeState(state, false);
++    globals->device_window_token = 0;
++}
++
++bool SporeTranslatedSetDeviceWindowGlobal(
++    SporeGuestGraphicsGlobals32* globals,
++    std::uint32_t guest_window_token) {
++    if (globals == nullptr || guest_window_token == 0) {
++        return false;
++    }
++
++    globals->device_window_token = guest_window_token;
++    return true;
+ }
+ 
+ HRESULT SporeTranslatedCreateDevice(
+@@ -97,6 +127,31 @@ HRESULT SporeTranslatedCreateDevice(
+     return result;
+ }
+ 
++HRESULT SporeTranslatedCreateDeviceFromWindowGlobal(
++    SporeGuestD3D9State32* state,
++    SporeGuestGraphicsGlobals32* globals,
++    SDL_Window* window,
++    D3DPRESENT_PARAMETERS* host_presentation_out,
++    IDirect3D9** d3d9_out,
++    IDirect3DDevice9** device_out) {
++    if (state == nullptr || globals == nullptr
++            || globals->device_window_token == 0) {
++        return D3DERR_INVALIDCALL;
++    }
++
++    state->presentation.device_window_token = globals->device_window_token;
++    SDL_Log(
++        "TRANSLATED_STAGE FUN_011f8110 global=0x%08x window-token=0x%08x",
++        kSporeGuestDeviceWindowGlobalAddress,
++        globals->device_window_token);
++    return SporeTranslatedCreateDevice(
++        state,
++        window,
++        host_presentation_out,
++        d3d9_out,
++        device_out);
++}
++
+ HRESULT SporeTranslatedPresent(
+     const SporeGuestD3D9State32* state,
+     const SporeGuestFrameOwner32* frame_owner,
+diff --git a/app/src/main/cpp/sdl_d3d9_test.cpp b/app/src/main/cpp/sdl_d3d9_test.cpp
+--- a/app/src/main/cpp/sdl_d3d9_test.cpp
++++ b/app/src/main/cpp/sdl_d3d9_test.cpp
+@@ -23,7 +23,14 @@ void ReleaseD3D9(IDirect3DDevice9* device, IDirect3D9* d3d9) {
+ 
+ namespace {
+ 
+-int RunD3D9TestImpl(bool translated_graphics) {
++enum class D3D9TestMode {
++    bridge_regression,
++    manual_graphics_probe,
++    translated_window_global
++};
++
++int RunD3D9TestImpl(D3D9TestMode mode) {
++    const bool translated_graphics = mode != D3D9TestMode::bridge_regression;
+     if (SDL_Init(SDL_INIT_VIDEO) != 0) {
+         SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "SDL_Init: %s", SDL_GetError());
+         return 1;
+@@ -83,15 +90,48 @@ int RunD3D9TestImpl(bool translated_graphics) {
+     IDirect3D9* d3d9 = nullptr;
+     IDirect3DDevice9* device = nullptr;
+     SporeGuestD3D9State32 guest_graphics_state{};
++    SporeGuestGraphicsGlobals32 guest_graphics_globals{};
+     SporeGuestFrameOwner32 guest_frame_owner{};
+     HRESULT createResult;
+-    if (translated_graphics) {
++    if (mode == D3D9TestMode::manual_graphics_probe) {
+         SporePrepareTranslatedGraphicsProbe(&guest_graphics_state);
+         SDL_Log(
+-            "TRANSLATED_STAGE prepared=PASS (manual pre-boot state; "
++            "TRANSLATED_STAGE mode=manual-regression prepared=PASS "
++            "(manual pre-boot state; "
+             "640x480 from FUN_007e7380)");
+         createResult = SporeTranslatedCreateDevice(
+             &guest_graphics_state, window, &parameters, &d3d9, &device);
++    } else if (mode == D3D9TestMode::translated_window_global) {
++        SporePrepareTranslatedWindowGlobalProbe(
++            &guest_graphics_state, &guest_graphics_globals);
++        SDL_Log(
++            "TRANSLATED_STAGE mode=window-global prepared=PASS "
++            "device-window-param=0 guest-global=0 manual-window-token=0x%08x",
++            guest_graphics_state.window_token);
++        if (guest_graphics_state.presentation.device_window_token != 0
++                || guest_graphics_globals.device_window_token != 0
++                || !SporeTranslatedSetDeviceWindowGlobal(
++                    &guest_graphics_globals,
++                    guest_graphics_state.window_token)
++                || guest_graphics_globals.device_window_token
++                    != guest_graphics_state.window_token) {
++            SDL_LogError(
++                SDL_LOG_CATEGORY_APPLICATION,
++                "Translated FUN_011f8110 rejected the guest window token");
++            SDL_DestroyWindow(window);
++            SDL_Quit();
++            return 1;
++        }
++        SDL_Log(
++            "TRANSLATED_STAGE global-window=PASS address=0x%08x",
++            kSporeGuestDeviceWindowGlobalAddress);
++        createResult = SporeTranslatedCreateDeviceFromWindowGlobal(
++            &guest_graphics_state,
++            &guest_graphics_globals,
++            window,
++            &parameters,
++            &d3d9,
++            &device);
+     } else {
+         createResult = CreateSporeDxvkDevice(
+             window,
+@@ -206,9 +246,13 @@ int RunD3D9TestImpl(bool translated_graphics) {
+ }
+ 
+ int RunD3D9Test() {
+-    return RunD3D9TestImpl(false);
++    return RunD3D9TestImpl(D3D9TestMode::bridge_regression);
+ }
+ 
+ int RunTranslatedGraphicsTest() {
+-    return RunD3D9TestImpl(true);
++    return RunD3D9TestImpl(D3D9TestMode::manual_graphics_probe);
++}
++
++int RunTranslatedWindowGlobalGraphicsTest() {
++    return RunD3D9TestImpl(D3D9TestMode::translated_window_global);
+ }
+diff --git a/app/src/main/cpp/sdl_test.cpp b/app/src/main/cpp/sdl_test.cpp
+--- a/app/src/main/cpp/sdl_test.cpp
++++ b/app/src/main/cpp/sdl_test.cpp
+@@ -3,6 +3,7 @@
+ int RunVulkanTest();
+ int RunD3D9Test();
+ int RunTranslatedGraphicsTest();
++int RunTranslatedWindowGlobalGraphicsTest();
+ 
+ extern "C" int SDL_main(int argc, char** argv) {
+     if (argc > 1 && SDL_strcmp(argv[1], "--spore-vulkan-test") == 0) {
+@@ -15,6 +16,10 @@ extern "C" int SDL_main(int argc, char** argv) {
+             && SDL_strcmp(argv[1], "--spore-translated-graphics-test") == 0) {
+         return RunTranslatedGraphicsTest();
+     }
++    if (argc > 1
++            && SDL_strcmp(argv[1], "--spore-translated-window-global-test") == 0) {
++        return RunTranslatedWindowGlobalGraphicsTest();
++    }
+ 
+     if (SDL_Init(SDL_INIT_VIDEO) != 0) {
+         SDL_LogError(SDL_LOG_CATEGORY_APPLICATION, "SDL_Init: %s", SDL_GetError());
+diff --git a/app/src/main/java/dev/sporeport/cellstage/MainActivity.java b/app/src/main/java/dev/sporeport/cellstage/MainActivity.java
+--- a/app/src/main/java/dev/sporeport/cellstage/MainActivity.java
++++ b/app/src/main/java/dev/sporeport/cellstage/MainActivity.java
+@@ -174,7 +174,8 @@ public final class MainActivity extends Activity {
+                         "SDL2 + OpenGL ES",
+                         "SDL2 + Vulkan",
+                         "Direct3D 9 via DXVK-native + Vulkan",
+-                        "Translated Spore graphics slice (manual inputs)"},
++                        "Translated Spore graphics boundary probe (manual regression)",
++                        "Translated Spore window-global increment"},
+                         (dialog, which) -> {
+                             Class<?> activityClass;
+                             switch (which) {
+@@ -190,6 +191,10 @@ public final class MainActivity extends Activity {
+                                 case 3:
+                                     activityClass = SDLTranslatedGraphicsTestActivity.class;
+                                     break;
++                                case 4:
++                                    activityClass =
++                                            SDLTranslatedWindowGlobalTestActivity.class;
++                                    break;
+                                 default:
+                                     return;
+                             }
+diff --git a/app/src/main/AndroidManifest.xml b/app/src/main/AndroidManifest.xml
+--- a/app/src/main/AndroidManifest.xml
++++ b/app/src/main/AndroidManifest.xml
+@@ -48,5 +48,11 @@
+             android:exported="false"
+             android:launchMode="singleTask"
+             android:screenOrientation="sensorLandscape" />
++        <activity
++            android:name=".SDLTranslatedWindowGlobalTestActivity"
++            android:configChanges="layoutDirection|locale|orientation|uiMode|screenLayout|screenSize|smallestScreenSize|keyboard|keyboardHidden|navigation"
++            android:exported="false"
++            android:launchMode="singleTask"
++            android:screenOrientation="sensorLandscape" />
+     </application>
+ </manifest>
+diff --git a/app/src/main/java/dev/sporeport/cellstage/SDLTranslatedWindowGlobalTestActivity.java b/app/src/main/java/dev/sporeport/cellstage/SDLTranslatedWindowGlobalTestActivity.java
+new file mode 100644
+--- /dev/null
++++ b/app/src/main/java/dev/sporeport/cellstage/SDLTranslatedWindowGlobalTestActivity.java
+@@ -0,0 +1,10 @@
++package dev.sporeport.cellstage;
++
++import org.libsdl.app.SDLActivity;
++
++public final class SDLTranslatedWindowGlobalTestActivity extends SDLActivity {
++    @Override
++    protected String[] getArguments() {
++        return new String[]{"--spore-translated-window-global-test"};
++    }
++}
+diff --git a/test-logs/translated-graphics-manual-regression-2026-11-05.log b/test-logs/translated-graphics-manual-regression-2026-11-05.log
+new file mode 100644
+--- /dev/null
++++ b/test-logs/translated-graphics-manual-regression-2026-11-05.log
+@@ -0,0 +1,7 @@
++--------- beginning of main
++11-05 17:12:03.679 11332 11563 I SDL/APP : DXVK state cache path: /data/data/dev.sporeport.cellstage.dev/files/
++11-05 17:12:03.729 11332 11563 I SDL/APP : TRANSLATED_STAGE mode=manual-regression prepared=PASS (manual pre-boot state; 640x480 from FUN_007e7380)
++11-05 17:12:04.173 11332 11563 I SDL/APP : TRANSLATED_STAGE create-device=PASS guest-window=0x00010001 guest-device=0x00010002 backbuffer=640x480
++11-05 17:12:04.173 11332 11563 I SDL/APP : DXVK-native D3D9 device created (2177x987)
++11-05 17:12:04.176 11332 11563 I SDL/APP : DXVK-native D3D9 device resized (2400x1080)
++11-05 17:12:04.239 11332 11563 I SDL/APP : TRANSLATED_STAGE present=PASS
+diff --git a/test-logs/translated-window-global-increment-2026-11-05.log b/test-logs/translated-window-global-increment-2026-11-05.log
+new file mode 100644
+--- /dev/null
++++ b/test-logs/translated-window-global-increment-2026-11-05.log
+@@ -0,0 +1,9 @@
++--------- beginning of main
++11-05 17:12:14.278 11332 11669 I SDL/APP : DXVK state cache path: /data/data/dev.sporeport.cellstage.dev/files/
++11-05 17:12:14.313 11332 11669 I SDL/APP : TRANSLATED_STAGE mode=window-global prepared=PASS device-window-param=0 guest-global=0 manual-window-token=0x00010001
++11-05 17:12:14.313 11332 11669 I SDL/APP : TRANSLATED_STAGE global-window=PASS address=0x016f658c
++11-05 17:12:14.313 11332 11669 I SDL/APP : TRANSLATED_STAGE FUN_011f8110 global=0x016f658c window-token=0x00010001
++11-05 17:12:14.709 11332 11669 I SDL/APP : TRANSLATED_STAGE create-device=PASS guest-window=0x00010001 guest-device=0x00010002 backbuffer=640x480
++11-05 17:12:14.709 11332 11669 I SDL/APP : DXVK-native D3D9 device created (2177x987)
++11-05 17:12:14.712 11332 11669 I SDL/APP : DXVK-native D3D9 device resized (2400x1080)
++11-05 17:12:14.752 11332 11669 I SDL/APP : TRANSLATED_STAGE present=PASS
+diff --git a/test-logs/d3d9-bridge-regression-2026-11-05.log b/test-logs/d3d9-bridge-regression-2026-11-05.log
+new file mode 100644
+--- /dev/null
++++ b/test-logs/d3d9-bridge-regression-2026-11-05.log
+@@ -0,0 +1,3 @@
++--------- beginning of main
++11-05 17:12:25.100 11332 11749 I SDL/APP : DXVK state cache path: /data/data/dev.sporeport.cellstage.dev/files/
++11-05 17:12:25.800 11332 11749 I SDL/APP : DXVK-native D3D9 device created (2400x1080)

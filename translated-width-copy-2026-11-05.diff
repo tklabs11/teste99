@@ -1,0 +1,143 @@
+Incremental source diff for the device-global / FUN_0075f030 width-copy round.
+This builds on the token-to-device registry and guest-memory bridge from the
+preceding graphics-device-global increment; it is not a cumulative diff of the
+project's pre-existing changes. README and phone logs are maintained separately.
+
+diff --git a/app/src/main/cpp/spore_translated_graphics.h b/app/src/main/cpp/spore_translated_graphics.h
+--- a/app/src/main/cpp/spore_translated_graphics.h
++++ b/app/src/main/cpp/spore_translated_graphics.h
+@@ -66,9 +66,11 @@ public:
+     HRESULT Present(
+         std::uint32_t guest_token,
+         const SporeGuestFrameOwner32* frame_owner) const;
++    std::uint64_t PresentDispatchCount() const;
+ 
+ private:
+     mutable std::mutex mutex_;
+     std::uint32_t guest_token_ = 0;
+     IDirect3DDevice9* device_ = nullptr;
++    mutable std::uint64_t present_dispatch_count_ = 0;
+ };
+@@ -92,2 +92,5 @@ bool SporeTranslatedSetDeviceWindowGlobal(
+     SporeGuestMemory32* memory,
+     std::uint32_t guest_window_token);
++bool SporeTranslatedSetCreateDeviceBackBufferWidth(
++    SporeGuestD3D9State32* state,
++    std::uint32_t guest_width);
+
+diff --git a/app/src/main/cpp/spore_translated_graphics.cpp b/app/src/main/cpp/spore_translated_graphics.cpp
+--- a/app/src/main/cpp/spore_translated_graphics.cpp
++++ b/app/src/main/cpp/spore_translated_graphics.cpp
+@@ -158,5 +158,12 @@ HRESULT SporeNativeDeviceRegistry::Present(
+     if (guest_token_ != guest_token || device_ == nullptr) {
+         return D3DERR_INVALIDCALL;
+     }
++    ++present_dispatch_count_;
+     return device_->Present(nullptr, nullptr, nullptr, nullptr);
+ }
++
++std::uint64_t SporeNativeDeviceRegistry::PresentDispatchCount() const {
++    std::lock_guard<std::mutex> lock(mutex_);
++    return present_dispatch_count_;
++}
++
+@@ -198,3 +198,17 @@ bool SporeTranslatedSetDeviceWindowGlobal(
+     return memory->Write32(
+         kSporeGuestDeviceWindowGlobalAddress, guest_window_token);
+ }
++
++bool SporeTranslatedSetCreateDeviceBackBufferWidth(
++    SporeGuestD3D9State32* state,
++    std::uint32_t guest_width) {
++    if (state == nullptr) {
++        return false;
++    }
++
++    state->presentation.back_buffer_width = guest_width;
++    SDL_Log(
++        "TRANSLATED_STAGE FUN_0075f030 backbuffer-width=PASS width=%u",
++        guest_width);
++    return true;
++}
+
+diff --git a/app/src/main/cpp/sdl_d3d9_test.cpp b/app/src/main/cpp/sdl_d3d9_test.cpp
+--- a/app/src/main/cpp/sdl_d3d9_test.cpp
++++ b/app/src/main/cpp/sdl_d3d9_test.cpp
+@@ -150,6 +150,20 @@ int RunD3D9TestImpl(D3D9TestMode mode) {
+         if (track_device_global) {
+             SDL_Log(
+                 "TRANSLATED_STAGE mode=device-global prepared=PASS "
+                 "device-window-param=0 guest-window-global=0 "
+-                "guest-device-global=0 manual-window-token=0x%08x",
+-                guest_graphics_state.window_token);
++                "guest-device-global=0 manual-window-token=0x%08x "
++                "backbuffer-before-width-copy=%ux%u",
++                guest_graphics_state.window_token,
++                guest_graphics_state.presentation.back_buffer_width,
++                guest_graphics_state.presentation.back_buffer_height);
++            if (!SporeTranslatedSetCreateDeviceBackBufferWidth(
++                    &guest_graphics_state, 480)
++                    || guest_graphics_state.presentation.back_buffer_width != 480
++                    || guest_graphics_state.presentation.back_buffer_height != 480) {
++                SDL_LogError(
++                    SDL_LOG_CATEGORY_APPLICATION,
++                    "Translated FUN_0075f030 backbuffer width was not applied");
++                SDL_DestroyWindow(window);
++                SDL_Quit();
++                return 1;
++            }
+@@ -255,6 +269,10 @@ int RunD3D9TestImpl(D3D9TestMode mode) {
+     }
+     if (mode == D3D9TestMode::translated_device_global) {
++        const std::uint64_t dispatch_count_before_rejections =
++            device_registry.PresentDispatchCount();
+         if (!guest_memory.Write32(kSporeGuestD3DDeviceGlobalAddress, 0)
+                 || SporeTranslatedPresentFromDeviceGlobal(
+                     &guest_memory, &device_registry, &guest_frame_owner)
+-                    != D3DERR_INVALIDCALL) {
++                    != D3DERR_INVALIDCALL
++                || device_registry.PresentDispatchCount()
++                    != dispatch_count_before_rejections) {
+@@ -270,1 +287,3 @@ int RunD3D9TestImpl(D3D9TestMode mode) {
+-        SDL_Log("TRANSLATED_STAGE invalid-device-token=zero rejected=PASS");
++        SDL_Log(
++            "TRANSLATED_STAGE invalid-device-token=zero rejected=PASS "
++            "device-dispatches=0");
+@@ -280,3 +299,5 @@ int RunD3D9TestImpl(D3D9TestMode mode) {
+                 || SporeTranslatedPresentFromDeviceGlobal(
+                     &guest_memory, &device_registry, &guest_frame_owner)
+-                    != D3DERR_INVALIDCALL) {
++                    != D3DERR_INVALIDCALL
++                || device_registry.PresentDispatchCount()
++                    != dispatch_count_before_rejections) {
+@@ -288,1 +309,3 @@ int RunD3D9TestImpl(D3D9TestMode mode) {
+-        SDL_Log("TRANSLATED_STAGE invalid-device-token=unknown rejected=PASS");
++        SDL_Log(
++            "TRANSLATED_STAGE invalid-device-token=unknown "
++            "rejected=PASS device-dispatches=0");
+@@ -398,5 +421,8 @@ int RunD3D9TestImpl(D3D9TestMode mode) {
+     if (mode == D3D9TestMode::translated_device_global) {
+         std::uint32_t invalidated_token = 0;
++        const std::uint64_t dispatch_count_before_invalidation =
++            device_registry.PresentDispatchCount();
+-        if (!SporeTranslatedReleaseDeviceGlobal(
++        if (dispatch_count_before_invalidation == 0
++                || !SporeTranslatedReleaseDeviceGlobal(
+                     &guest_memory, &device_registry, &invalidated_token)
+                 || invalidated_token != registered_device_token
+@@ -410,3 +436,5 @@ int RunD3D9TestImpl(D3D9TestMode mode) {
+                 || device_registry.Present(
+                     invalidated_token, &guest_frame_owner)
+-                    != D3DERR_INVALIDCALL) {
++                    != D3DERR_INVALIDCALL
++                || device_registry.PresentDispatchCount()
++                    != dispatch_count_before_invalidation) {
+@@ -419,4 +447,6 @@ int RunD3D9TestImpl(D3D9TestMode mode) {
+             SDL_Log(
+                 "TRANSLATED_STAGE invalid-device-token=invalidated "
+-                "rejected=PASS guest-device=0x%08x",
+-                invalidated_token);
++                "rejected=PASS guest-device=0x%08x device-dispatches=%llu",
++                invalidated_token,
++                static_cast<unsigned long long>(
++                    dispatch_count_before_invalidation));

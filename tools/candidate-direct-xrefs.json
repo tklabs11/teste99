@@ -1,0 +1,32 @@
+{
+  "executable": "C:\\Program Files (x86)\\Steam\\steamapps\\common\\Spore\\SPOREFILES\\SporeBin\\SporeApp.exe",
+  "destinations": [
+    "0x422430",
+    "0x479C00",
+    "0x1158BE0"
+  ],
+  "xref_count": 3,
+  "xrefs": [
+    {
+      "source_va": "0x412B7B",
+      "destination_va": "0x422430",
+      "mnemonic": "call",
+      "operands": "0x422430",
+      "bytes": "e8b0f80000"
+    },
+    {
+      "source_va": "0x412B92",
+      "destination_va": "0x422430",
+      "mnemonic": "call",
+      "operands": "0x422430",
+      "bytes": "e899f80000"
+    },
+    {
+      "source_va": "0x461557",
+      "destination_va": "0x422430",
+      "mnemonic": "call",
+      "operands": "0x422430",
+      "bytes": "e8d40efcff"
+    }
+  ]
+}

@@ -1,0 +1,130 @@
+{
+  "executable": "C:\\Program Files (x86)\\Steam\\steamapps\\common\\Spore\\SPOREFILES\\SporeBin\\SporeApp.exe",
+  "sha256": "290703b34fe4573b242c3e271cc90568992abe6fb3fa9333a7341044a759fc74",
+  "function_rva": "0xD58BE0",
+  "function_va": "0x1158BE0",
+  "function_size": 125,
+  "function_bytes_sha256": "b6cce7942199ded10ee6c417247d8dd505897c9ce31c29720aeb6163c1ed11cb",
+  "cases": [
+    {
+      "count": 0,
+      "scalar": "0xBF357F9E",
+      "actual": [],
+      "expected": [],
+      "passed": true
+    },
+    {
+      "count": 1,
+      "scalar": "0x3EFE3DB3",
+      "actual": [
+        "0x3FE11E12"
+      ],
+      "expected": [
+        "0x3FE11E12"
+      ],
+      "passed": true
+    },
+    {
+      "count": 3,
+      "scalar": "0x3F91EEDB",
+      "actual": [
+        "0xC0B1D8D1",
+        "0x4036F741",
+        "0x3F4506E1"
+      ],
+      "expected": [
+        "0xC0B1D8D1",
+        "0x4036F741",
+        "0x3F4506E1"
+      ],
+      "passed": true
+    },
+    {
+      "count": 4,
+      "scalar": "0x3FA236FD",
+      "actual": [
+        "0x40D00E96",
+        "0x40754AC6",
+        "0xBF9B2077",
+        "0x4092B1D5"
+      ],
+      "expected": [
+        "0x40D00E96",
+        "0x40754AC6",
+        "0xBF9B2077",
+        "0x4092B1D5"
+      ],
+      "passed": true
+    },
+    {
+      "count": 5,
+      "scalar": "0xBFFE16A1",
+      "actual": [
+        "0xC0813A47",
+        "0x40764756",
+        "0xC088F1A9",
+        "0x4086AB15",
+        "0x40415BE0"
+      ],
+      "expected": [
+        "0xC0813A47",
+        "0x40764756",
+        "0xC088F1A9",
+        "0x4086AB15",
+        "0x40415BE0"
+      ],
+      "passed": true
+    },
+    {
+      "count": 7,
+      "scalar": "0x3FBF1C4C",
+      "actual": [
+        "0xC03ACFAB",
+        "0xC02F5D84",
+        "0x3FDC81A7",
+        "0xC005D74C",
+        "0x408F9C50",
+        "0xC033EFBA",
+        "0xC09A172C"
+      ],
+      "expected": [
+        "0xC03ACFAB",
+        "0xC02F5D84",
+        "0x3FDC81A7",
+        "0xC005D74C",
+        "0x408F9C50",
+        "0xC033EFBA",
+        "0xC09A172C"
+      ],
+      "passed": true
+    },
+    {
+      "count": 9,
+      "scalar": "0x3F377E3E",
+      "actual": [
+        "0xBFB0CA92",
+        "0xBF0A5343",
+        "0x3F473015",
+        "0x3DD28AAA",
+        "0xC01816C2",
+        "0xBF4B687A",
+        "0x3F16676D",
+        "0xBF20EE94",
+        "0xBFB95FB3"
+      ],
+      "expected": [
+        "0xBFB0CA92",
+        "0xBF0A5343",
+        "0x3F473015",
+        "0x3DD28AAA",
+        "0xC01816C2",
+        "0xBF4B687A",
+        "0x3F16676D",
+        "0xBF20EE94",
+        "0xBFB95FB3"
+      ],
+      "passed": true
+    }
+  ],
+  "failed": 0
+}

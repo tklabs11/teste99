@@ -1,0 +1,9 @@
+﻿11-05 18:52:04.797 I/SDL/APP (14285): DXVK state cache path: /data/data/dev.sporeport.cellstage.dev/files/
+11-05 18:52:04.827 I/SDL/APP (14285): TRANSLATED_STAGE mode=manual-regression prepared=PASS (manual pre-boot state; 640x480 from FUN_007e7380)
+11-05 18:52:05.871 I/SDL/APP (14285): TRANSLATED_STAGE create-device=PASS guest-window=0x00010001 guest-device=0x00010002 backbuffer=640x480
+11-05 18:52:05.871 I/SDL/APP (14285): TRANSLATED_STAGE FUN_011f8680 device-global=PASS address=0x016f89d0 guest-device=0x00010002
+11-05 18:52:05.871 I/SDL/APP (14285): DXVK-native D3D9 device created (2177x987)
+11-05 18:52:05.874 I/SDL/APP (14285): DXVK-native D3D9 device resized (2400x1080)
+11-05 18:52:05.926 I/SDL/APP (14285): TRANSLATED_STAGE present=PASS
+11-05 18:52:07.116 I/SDL/APP (14285): TRANSLATED_STAGE device-global invalidated address=0x016f89d0 guest-device=0x00010002
+11-05 18:52:07.240 I/SDL/APP (14285): DXVK-native D3D9 test stopped

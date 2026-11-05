@@ -1,0 +1,7 @@
+﻿11-05 17:35:21.048 I/SDL/APP (17480): DXVK state cache path: /data/data/dev.sporeport.cellstage.dev/files/
+11-05 17:35:21.076 I/SDL/APP (17480): TRANSLATED_STAGE mode=window-global prepared=PASS device-window-param=0 guest-global=0 manual-window-token=0x00010001
+11-05 17:35:21.077 I/SDL/APP (17480): TRANSLATED_STAGE global-window=PASS address=0x016f658c
+11-05 17:35:21.077 I/SDL/APP (17480): TRANSLATED_STAGE FUN_011f8110 global=0x016f658c window-token=0x00010001
+11-05 17:35:21.343 I/SDL/APP (17480): TRANSLATED_STAGE create-device=PASS guest-window=0x00010001 guest-device=0x00010002 backbuffer=640x480
+11-05 17:35:21.343 I/SDL/APP (17480): DXVK-native D3D9 device created (2177x987)
+11-05 17:35:21.383 I/SDL/APP (17480): TRANSLATED_STAGE present=PASS

@@ -1,0 +1,16 @@
+﻿11-05 18:51:57.911 I/SDL/APP (14285): DXVK state cache path: /data/data/dev.sporeport.cellstage.dev/files/
+11-05 18:51:58.186 I/SDL/APP (14285): TRANSLATED_STAGE mode=device-global prepared=PASS device-window-param=0 guest-window-global=0 guest-device-global=0 manual-window-token=0x00010001 backbuffer-before-width-copy=640x480
+11-05 18:51:58.189 I/SDL/APP (14285): TRANSLATED_STAGE FUN_0075f030 backbuffer-width=PASS width=480
+11-05 18:51:58.190 I/SDL/APP (14285): TRANSLATED_STAGE global-window=PASS address=0x016f658c
+11-05 18:51:58.190 I/SDL/APP (14285): TRANSLATED_STAGE FUN_011f8110 global=0x016f658c window-token=0x00010001
+11-05 18:51:59.572 I/SDL/APP (14285): TRANSLATED_STAGE create-device=PASS guest-window=0x00010001 guest-device=0x00010002 backbuffer=480x480
+11-05 18:51:59.572 I/SDL/APP (14285): TRANSLATED_STAGE FUN_011f8680 device-global=PASS address=0x016f89d0 guest-device=0x00010002
+11-05 18:51:59.572 I/SDL/APP (14285): TRANSLATED_STAGE invalid-device-token=zero rejected=PASS device-dispatches=0
+11-05 18:51:59.572 I/SDL/APP (14285): TRANSLATED_STAGE invalid-device-token=unknown rejected=PASS device-dispatches=0
+11-05 18:51:59.572 I/SDL/APP (14285): DXVK-native D3D9 device created (2400x1080)
+11-05 18:51:59.585 I/SDL/APP (14285): DXVK-native D3D9 device resized (2400x1080)
+11-05 18:51:59.753 I/SDL/APP (14285): TRANSLATED_STAGE FUN_011f8120 device-global=PASS address=0x016f89d0 guest-device=0x00010002
+11-05 18:51:59.753 I/SDL/APP (14285): TRANSLATED_STAGE present=PASS
+11-05 18:52:00.945 I/SDL/APP (14285): TRANSLATED_STAGE device-global invalidated address=0x016f89d0 guest-device=0x00010002
+11-05 18:52:00.945 I/SDL/APP (14285): TRANSLATED_STAGE invalid-device-token=invalidated rejected=PASS guest-device=0x00010002 device-dispatches=27
+11-05 18:52:01.121 I/SDL/APP (14285): DXVK-native D3D9 test stopped

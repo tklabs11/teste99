@@ -1,0 +1,5 @@
+﻿11-05 17:37:37.996 I/SDL/APP (18271): DXVK state cache path: /data/data/dev.sporeport.cellstage.dev/files/
+11-05 17:37:38.049 I/SDL/APP (18271): TRANSLATED_STAGE mode=manual-regression prepared=PASS (manual pre-boot state; 640x480 from FUN_007e7380)
+11-05 17:37:38.336 I/SDL/APP (18271): TRANSLATED_STAGE create-device=PASS guest-window=0x00010001 guest-device=0x00010002 backbuffer=640x480
+11-05 17:37:38.336 I/SDL/APP (18271): DXVK-native D3D9 device created (2400x1080)
+11-05 17:37:38.369 I/SDL/APP (18271): TRANSLATED_STAGE present=PASS

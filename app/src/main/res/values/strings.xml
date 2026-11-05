@@ -1,0 +1,9 @@
+<resources>
+    <string name="native_chain_button">Marco 1: executar busca real da engine</string>
+    <string name="native_chain_blocked">Cadeia nativa bloqueada: SporeApp.exe não corresponde ao SHA-256 esperado.</string>
+    <string name="native_chain_running">Marco 1: lendo a tabela do PE original e executando a recompilação ARM64...</string>
+    <string name="native_chain_failure">Falha na cadeia nativa: %1$s</string>
+    <string name="dbpf_resource_button">Hash da engine + ler cell_Eggkid</string>
+    <string name="dbpf_resource_running">Calculando o hash do nome e lendo o recurso original...</string>
+    <string name="dbpf_resource_failure">Falha ao ler recurso DBPF: %1$s</string>
+</resources>

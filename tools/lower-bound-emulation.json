@@ -1,0 +1,171 @@
+{
+  "executable": "C:\\Program Files (x86)\\Steam\\steamapps\\common\\Spore\\SPOREFILES\\SporeBin\\SporeApp.exe",
+  "sha256": "290703b34fe4573b242c3e271cc90568992abe6fb3fa9333a7341044a759fc74",
+  "function_rva": "0x22430",
+  "function_va": "0x422430",
+  "function_size": 122,
+  "function_bytes_sha256": "9e462a2ba95704cea43e451fb223991e23e9167f9c0d5e74d96074a2fc406947",
+  "cases": [
+    {
+      "key": "0x00000000",
+      "record_count": 0,
+      "eax": "0x00201000",
+      "emulated_index": 0,
+      "python_index": 0,
+      "passed": true
+    },
+    {
+      "key": "0x00000000",
+      "record_count": 5,
+      "eax": "0x00201000",
+      "emulated_index": 0,
+      "python_index": 0,
+      "passed": true
+    },
+    {
+      "key": "0xFFFFFFFF",
+      "record_count": 5,
+      "eax": "0x00201030",
+      "emulated_index": 4,
+      "python_index": 4,
+      "passed": true
+    },
+    {
+      "key": "0xFFFFFFFE",
+      "record_count": 5,
+      "eax": "0x00201030",
+      "emulated_index": 4,
+      "python_index": 4,
+      "passed": true
+    },
+    {
+      "key": "0x00000007",
+      "record_count": 5,
+      "eax": "0x0020100C",
+      "emulated_index": 1,
+      "python_index": 1,
+      "passed": true
+    },
+    {
+      "key": "0x00000008",
+      "record_count": 5,
+      "eax": "0x0020100C",
+      "emulated_index": 1,
+      "python_index": 1,
+      "passed": true
+    },
+    {
+      "key": "0x00000018",
+      "record_count": 5,
+      "eax": "0x00201024",
+      "emulated_index": 3,
+      "python_index": 3,
+      "passed": true
+    },
+    {
+      "key": "0xFFFFFFFF",
+      "record_count": 5,
+      "eax": "0x00201030",
+      "emulated_index": 4,
+      "python_index": 4,
+      "passed": true
+    },
+    {
+      "key": "0x00003BB0",
+      "record_count": 7,
+      "eax": "0x0020100C",
+      "emulated_index": 1,
+      "python_index": 1,
+      "passed": true
+    },
+    {
+      "key": "0x00004E23",
+      "record_count": 20,
+      "eax": "0x00201030",
+      "emulated_index": 4,
+      "python_index": 4,
+      "passed": true
+    },
+    {
+      "key": "0x0000826F",
+      "record_count": 19,
+      "eax": "0x00201054",
+      "emulated_index": 7,
+      "python_index": 7,
+      "passed": true
+    },
+    {
+      "key": "0x0000BF5A",
+      "record_count": 1,
+      "eax": "0x00201000",
+      "emulated_index": 0,
+      "python_index": 0,
+      "passed": true
+    },
+    {
+      "key": "0x000002D0",
+      "record_count": 16,
+      "eax": "0x00201000",
+      "emulated_index": 0,
+      "python_index": 0,
+      "passed": true
+    },
+    {
+      "key": "0x0000F046",
+      "record_count": 14,
+      "eax": "0x002010A8",
+      "emulated_index": 14,
+      "python_index": 14,
+      "passed": true
+    },
+    {
+      "key": "0x00007BC0",
+      "record_count": 4,
+      "eax": "0x00201000",
+      "emulated_index": 0,
+      "python_index": 0,
+      "passed": true
+    },
+    {
+      "key": "0x000010FA",
+      "record_count": 19,
+      "eax": "0x00201000",
+      "emulated_index": 0,
+      "python_index": 0,
+      "passed": true
+    },
+    {
+      "key": "0x0000DE81",
+      "record_count": 3,
+      "eax": "0x00201024",
+      "emulated_index": 3,
+      "python_index": 3,
+      "passed": true
+    },
+    {
+      "key": "0x0000004C",
+      "record_count": 19,
+      "eax": "0x00201000",
+      "emulated_index": 0,
+      "python_index": 0,
+      "passed": true
+    },
+    {
+      "key": "0x0000E9DE",
+      "record_count": 3,
+      "eax": "0x00201000",
+      "emulated_index": 0,
+      "python_index": 0,
+      "passed": true
+    },
+    {
+      "key": "0x0000B982",
+      "record_count": 9,
+      "eax": "0x00201060",
+      "emulated_index": 8,
+      "python_index": 8,
+      "passed": true
+    }
+  ],
+  "failed": 0
+}
