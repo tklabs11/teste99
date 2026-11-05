@@ -1,0 +1,6 @@
+test_graphics_parameter_x86_reference.cpp
+reference_pe_sha256=6aec99cb2dc7fd08851a1718e92a60f359fb3fccca3b244a890ae07e93cbe59b
+reference-function=FUN_0075f030 block-va=0x0075f25e-0x0075f28f executed-original-bytes=49
+case=wide input-width=1280 input-height=720 x86-width=1280 x86-height=720 translated-width=1280 translated-height=720
+case=portrait-shaped input-width=480 input-height=900 x86-width=480 x86-height=900 translated-width=480 translated-height=900
+x86-original-vs-translated=PASS null-output-rejection=PASS

@@ -3,6 +3,7 @@
 #include <SDL_log.h>
 
 #include "spore_d3d9_bridge.h"
+#include "spore_graphics_parameter_translation.h"
 
 namespace {
 
@@ -199,17 +200,26 @@ bool SporeTranslatedSetDeviceWindowGlobal(
         kSporeGuestDeviceWindowGlobalAddress, guest_window_token);
 }
 
-bool SporeTranslatedSetCreateDeviceBackBufferWidth(
+bool SporeTranslatedSetCreateDeviceBackBufferDimensions(
     SporeGuestD3D9State32* state,
-    std::uint32_t guest_width) {
+    std::uint32_t guest_width,
+    std::uint32_t guest_height) {
     if (state == nullptr) {
         return false;
     }
 
-    state->presentation.back_buffer_width = guest_width;
+    if (!SporeTranslatedCopyBackBufferDimensions(
+            &state->presentation.back_buffer_width,
+            &state->presentation.back_buffer_height,
+            guest_width,
+            guest_height)) {
+        return false;
+    }
     SDL_Log(
-        "TRANSLATED_STAGE FUN_0075f030 backbuffer-width=PASS width=%u",
-        guest_width);
+        "TRANSLATED_STAGE FUN_0075f030 backbuffer-dimensions=PASS "
+        "width=%u height=%u",
+        guest_width,
+        guest_height);
     return true;
 }
 
@@ -235,6 +245,29 @@ HRESULT SporeTranslatedCreateDevice(
     state->device_token = 0;
     D3DPRESENT_PARAMETERS host_parameters =
         toHostPresentationParameters(state->presentation);
+    SDL_Log(
+        "TRANSLATED_STAGE create-device-input adapter=%u device-type=%u "
+        "behavior=0x%08x window-token=0x%08x backbuffer=%ux%u "
+        "format=%u count=%u multisample=%u quality=%u swap=%u "
+        "windowed=%u depth-stencil=%u depth-format=%u flags=0x%08x "
+        "refresh=%u interval=%u",
+        state->adapter_ordinal,
+        state->device_type,
+        state->behavior_flags,
+        state->presentation.device_window_token,
+        host_parameters.BackBufferWidth,
+        host_parameters.BackBufferHeight,
+        static_cast<unsigned int>(host_parameters.BackBufferFormat),
+        host_parameters.BackBufferCount,
+        static_cast<unsigned int>(host_parameters.MultiSampleType),
+        host_parameters.MultiSampleQuality,
+        static_cast<unsigned int>(host_parameters.SwapEffect),
+        host_parameters.Windowed,
+        host_parameters.EnableAutoDepthStencil,
+        static_cast<unsigned int>(host_parameters.AutoDepthStencilFormat),
+        host_parameters.Flags,
+        host_parameters.FullScreen_RefreshRateInHz,
+        host_parameters.PresentationInterval);
     const HRESULT result = CreateSporeDxvkDevice(
         window,
         state->adapter_ordinal,
@@ -247,12 +280,20 @@ HRESULT SporeTranslatedCreateDevice(
         *host_presentation_out = host_parameters;
         state->device_token = kGuestDeviceToken;
         SDL_Log(
-            "TRANSLATED_STAGE create-device=PASS guest-window=0x%08x "
-            "guest-device=0x%08x backbuffer=%ux%u",
+            "TRANSLATED_STAGE create-device=PASS result=0x%08x "
+            "guest-window=0x%08x guest-device=0x%08x backbuffer=%ux%u",
+            static_cast<unsigned int>(result),
             state->window_token,
             state->device_token,
-            state->presentation.back_buffer_width,
-            state->presentation.back_buffer_height);
+            host_parameters.BackBufferWidth,
+            host_parameters.BackBufferHeight);
+    } else {
+        SDL_Log(
+            "TRANSLATED_STAGE create-device=FAIL result=0x%08x "
+            "backbuffer=%ux%u",
+            static_cast<unsigned int>(result),
+            host_parameters.BackBufferWidth,
+            host_parameters.BackBufferHeight);
     }
     return result;
 }

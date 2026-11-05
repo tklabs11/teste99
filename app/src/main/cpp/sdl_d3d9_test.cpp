@@ -157,13 +157,13 @@ int RunD3D9TestImpl(D3D9TestMode mode) {
                 guest_graphics_state.window_token,
                 guest_graphics_state.presentation.back_buffer_width,
                 guest_graphics_state.presentation.back_buffer_height);
-            if (!SporeTranslatedSetCreateDeviceBackBufferWidth(
-                    &guest_graphics_state, 480)
-                    || guest_graphics_state.presentation.back_buffer_width != 480
-                    || guest_graphics_state.presentation.back_buffer_height != 480) {
+            if (!SporeTranslatedSetCreateDeviceBackBufferDimensions(
+                    &guest_graphics_state, 1280, 720)
+                    || guest_graphics_state.presentation.back_buffer_width != 1280
+                    || guest_graphics_state.presentation.back_buffer_height != 720) {
                 SDL_LogError(
                     SDL_LOG_CATEGORY_APPLICATION,
-                    "Translated FUN_0075f030 backbuffer width was not applied");
+                    "Translated FUN_0075f030 backbuffer dimensions were not applied");
                 SDL_DestroyWindow(window);
                 SDL_Quit();
                 return 1;
@@ -308,6 +308,7 @@ int RunD3D9TestImpl(D3D9TestMode mode) {
     SDL_Log("DXVK-native D3D9 device created (%dx%d)", width, height);
     bool running = true;
     Uint32 frame = 0;
+    Uint32 reset_count = 0;
     bool translated_present_reported = false;
     int result = 0;
     while (running) {
@@ -335,7 +336,34 @@ int RunD3D9TestImpl(D3D9TestMode mode) {
 
                 parameters.BackBufferWidth = static_cast<UINT>(newWidth);
                 parameters.BackBufferHeight = static_cast<UINT>(newHeight);
+                ++reset_count;
+                SDL_Log(
+                    "TRANSLATED_STAGE reset[%u]-input backbuffer=%ux%u "
+                    "format=%u count=%u multisample=%u quality=%u swap=%u "
+                    "windowed=%u depth-stencil=%u depth-format=%u "
+                    "flags=0x%08x refresh=%u interval=%u",
+                    reset_count,
+                    parameters.BackBufferWidth,
+                    parameters.BackBufferHeight,
+                    static_cast<unsigned int>(parameters.BackBufferFormat),
+                    parameters.BackBufferCount,
+                    static_cast<unsigned int>(parameters.MultiSampleType),
+                    parameters.MultiSampleQuality,
+                    static_cast<unsigned int>(parameters.SwapEffect),
+                    parameters.Windowed,
+                    parameters.EnableAutoDepthStencil,
+                    static_cast<unsigned int>(parameters.AutoDepthStencilFormat),
+                    parameters.Flags,
+                    parameters.FullScreen_RefreshRateInHz,
+                    parameters.PresentationInterval);
                 const HRESULT resetResult = device->Reset(&parameters);
+                SDL_Log(
+                    "TRANSLATED_STAGE reset[%u]-result=0x%08x "
+                    "backbuffer=%ux%u",
+                    reset_count,
+                    static_cast<unsigned int>(resetResult),
+                    parameters.BackBufferWidth,
+                    parameters.BackBufferHeight);
                 if (FAILED(resetResult)) {
                     SDL_LogError(
                         SDL_LOG_CATEGORY_APPLICATION,
@@ -391,7 +419,12 @@ int RunD3D9TestImpl(D3D9TestMode mode) {
                 registered_device_token);
         }
         if (translated_graphics && !translated_present_reported) {
-            SDL_Log("TRANSLATED_STAGE present=PASS");
+            SDL_Log(
+                "TRANSLATED_STAGE first-present=PASS result=0x%08x "
+                "backbuffer=%ux%u",
+                static_cast<unsigned int>(presentResult),
+                parameters.BackBufferWidth,
+                parameters.BackBufferHeight);
             translated_present_reported = true;
         }
     }
@@ -433,6 +466,7 @@ int RunD3D9TestImpl(D3D9TestMode mode) {
         translated_graphics ? &device_registry : nullptr);
     SDL_DestroyWindow(window);
     SDL_Quit();
+    SDL_Log("TRANSLATED_STAGE reset-count=%u", reset_count);
     SDL_Log("DXVK-native D3D9 test stopped");
     return result;
 }

@@ -1,0 +1,777 @@
+diff --git a/README.md b/README.md
+index cde0f8e..8ab7639 100644
+--- a/README.md
++++ b/README.md
+@@ -1611,7 +1611,7 @@ or boot path ran.
+ | `adapter_ordinal = 0` | Original `FUN_011f8680` calls the D3D9 interface using graphics setup assembled by `FUN_0075f030`. | Adapter selection/capabilities and config are not recovered in this test; 0 is a probe choice. |
+ | `device_type = HAL` | Original D3D9 `CreateDevice` path in `FUN_011f8680`, reached after `FUN_0075e830` initializes the D3D9 interface. | The original argument was not runtime-captured; HAL is a probe choice. |
+ | `behavior_flags = HARDWARE_VERTEXPROCESSING` | `FUN_011f8680` computes flags from global renderer settings and device capability bits. | Those globals/caps are not initialized by the translated boot path; this flag is manually selected. |
+-| Present width/height | `FUN_007e7380` calls Graphics slot `+0x14` with `(640, 480, 0, 0)`. In `FUN_0075f030`, the second stack argument is copied to `local_9c[2]`; `FUN_011f8680` consumes `param_1[2]` as backbuffer width and `param_1[3]` as height. | Manual and window-global regressions still seed `640x480`. The device-global route translates only the width copy from the supplied `480` argument; height and the other 14 DWORDs remain prepared by the harness. |
++| Present width/height | `FUN_007e7380` pushes `(0, 0, 480, 640)` before calling Graphics slot `+0x14`, so the callee receives `(640, 480, 0, 0)`. `FUN_0075f030` copies its first and second stack arguments from `[ESP+0xbc]` and `[ESP+0xc0]` to structure offsets `+8` and `+0xc`; `FUN_011f8680` consumes those offsets as width and height. | The device-global route translates the connected width/height pair. The other 12 DWORDs in `SporeGuestPresentParameters32` and the other D3D state fields remain prepared by the harness. |
+ | Present format `UNKNOWN`, count `1`, multisample type/quality `NONE/0`, swap effect `DISCARD`, windowed `TRUE`, auto-depth off, depth format `0`, flags `0`, refresh `0`, interval `ONE` | `FUN_0075f030` assembles configuration/renderer values and `FUN_011f8680` passes them to `IDirect3D9::CreateDevice`. | Full per-field source/value mapping depends on config, Canvas and D3D capabilities and is not translated. These values are probe choices; zero-valued fields come from aggregate initialization. |
+ | Initial guest globals `DAT_016f658c = 0`, `DAT_016f89d0 = 0` | Original `FUN_011f8110` first writes the window global; `CreateDevice` writes the device output global. Their initial zeroing/constructor path was not observed. | `SporeGuestMemory32::Clear` starts the Android guest map at zero. The host registry starts empty; the zero seed is manual harness state. |
+ | `DAT_016f658c` window-global representation | Original `FUN_011f8110` writes the HWND supplied by the Canvas manager; `FUN_011f8680` consumes it for `CreateDevice`. | Setter now translated. Its input token and association with the SDL window remain manual. |
+@@ -1673,7 +1673,7 @@ the 640x480 state, device options, remaining presentation fields, null
+ alternate presenter, app objects, Canvas, and Steam behavior remain outside
+ the translated path in this window-global increment. After `Present`,
+ execution stops in the probe's own SDL loop; the Spore boot path itself has
+-not run. The later device-global and width-copy increment is documented below.
++not run. The later device-global and dimension-pair increment is documented below.
+ 
+ ## Translated device-global increment — 2026-11-05
+ 
+@@ -1722,64 +1722,95 @@ The phone logs for this build are:
+ The source and documentation diff for this increment is
+ [graphics-device-global-2026-11-05.diff](./graphics-device-global-2026-11-05.diff).
+ 
+-## FUN_0075f030 width-copy increment — 2026-11-05
+-
+-This is a deliberately bounded translation of one field write on the
+-CreateDevice path, not a translation of the full setup function. On the current
+-`SporeApp.exe` (SHA-256
+-`fb66afc320730dec6f80b79301c7c525689859e3d0a99616b657559e8f11a1ae`):
+-
+-- `FUN_007e7380` supplies `(640, 480, 0, 0)` to the Graphics slot that reaches
+-  `FUN_0075f030`.
+-- `FUN_0075f030` places its second 32-bit stack argument in
+-  `local_9c[2]`.
+-- `FUN_011f8680` reads `param_1[2]` as the backbuffer width and
+-  `param_1[3]` as the height. The direct assembly for
+-  `FUN_011f8340(2)` initializes 1024x768, but the caller later replaces the
+-  width and obtains the height from configuration.
+-
+-The Android slice copies only that second argument (`480`) into the guest
+-backbuffer-width field immediately before the existing translated
+-CreateDevice/registry path. The probe begins with width `640`, so the log
+-demonstrates the value transition to `480`; height remains the manually
+-prepared `480`. This does **not** translate the configuration lookup for
+-height, the remaining 14 DWORDs assembled by `FUN_0075f030`, or its other
+-dependencies. The caller arguments are test inputs, not values produced by
+-executing `FUN_007e7380`. The translated helper uses the 32-bit guest value;
+-it does not reinterpret or store an ARM64 pointer.
+-
+-Static evidence for this mapping is retained as `ev_f5e1c39d...`
+-(`FUN_007e7380`), `ev_2c3d011c...` (`FUN_0075f030`),
+-`ev_a5d4430b...` (`FUN_011f8680`), and `ev_5e20afcd...`
+-(`FUN_011f8340` assembly), all for the executable digest above. Static
+-analysis establishes instruction/data flow only; it does not establish that
+-the original game executed these functions.
+-
+-The phone run used the final `arm64-v8a` debug APK with SHA-256
+-`BEB0ED76BA03B655E42ED037302C55AE00426E9AA525930D99710A4DC668E1EB` on
+-the `2303ERA42L` (ADB serial `PJMZAEJRX4YLFIDI`, Android 15/API 35):
+-
+-| Step | Result |
+-|---|---|
+-| Translated width copy, input `480` | PASS (`640` prepared width -> `480`; height remains manual `480`) |
+-| Bridge CreateDevice and guest token registration | PASS (`480x480` guest parameters; token `0x00010002`) |
+-| Guest `DAT_016f89d0` token drives `Present` | PASS |
+-| Token zero / unknown rejected | PASS; host-device dispatch count remained `0` |
+-| Token invalidated at release | PASS; later guest and registry `Present` rejected without increasing the `27` prior positive dispatches |
+-| Manual graphics, window-global and D3D9 bridge regressions | PASS |
+-| Original Spore startup / full `FUN_0075f030` | NOT RUN |
+-| First unimplemented dependency | Height from configuration (`FUN_006a2660(0x5c97448)`), then the remaining setup fields and startup objects |
+-| Stop point | Probe SDL loop after `Present`; no claim of Spore boot or game rendering |
+-
+-Focused phone logs are saved in:
+-
+-- [translated-device-global-increment-2026-11-05.log](./test-logs/translated-device-global-increment-2026-11-05.log)
+-- [translated-graphics-manual-regression-2026-11-05.log](./test-logs/translated-graphics-manual-regression-2026-11-05.log)
+-- [translated-window-global-increment-2026-11-05.log](./test-logs/translated-window-global-increment-2026-11-05.log)
+-- [d3d9-bridge-regression-2026-11-05.log](./test-logs/d3d9-bridge-regression-2026-11-05.log)
+-
+-The source delta for the width-copy increment is
+-[translated-width-copy-2026-11-05.diff](./translated-width-copy-2026-11-05.diff).
++## FUN_0075f030 dimension-pair increment — 2026-11-05
++
++The earlier width-only probe incorrectly copied the second argument into the
++width field. Its `480x480` test values concealed the inversion. That increment
++is superseded; its dated source/log artifacts are preserved as historical
++regressions, not evidence that the old field mapping was correct.
++
++This pass checked the assembly of the current installed `SporeApp.exe`
++(SHA-256
++`6aec99cb2dc7fd08851a1718e92a60f359fb3fccca3b244a890ae07e93cbe59b`):
++
++- In `FUN_007e7380`, instructions `0x7e73bf`–`0x7e73d0` push `0, 0, 0x1e0,
++  0x280` in right-to-left order before the virtual call at `+0x14`. The callee
++  therefore receives width `640`, height `480`, and two zero arguments.
++- `FUN_0075f030` reserves `0x9c` bytes in its prologue (`SUB ESP, 0x9c`) and
++  calls `FUN_011f8340(2)` with the local structure at `[ESP+0x34]`. The
++  initializer writes default dimensions at structure offsets `+8/+0xc`
++  (`1024x768`). After that call, instructions `0x75f25e`–`0x75f28e` read
++  width from `[ESP+0xbc]` and height from `[ESP+0xc0]`, then write those
++  values to `[ESP+0x3c]` and `[ESP+0x40]`, the same structure's `+8/+0xc`.
++- `FUN_011f8680` consumes width from `[ESI+8]` and height from `[ESI+0xc]`
++  (instructions `0x11f879c` and `0x11f8792`, respectively). The x86 guest
++  structure remains 32-bit; Android stores no ARM64 pointer in these fields.
++- Before `CreateDevice`, `FUN_011f8680` calls `FUN_011f7d00` with this
++  structure. `FUN_011f7d00` copies offsets `+8/+0xc` into
++  `DAT_016f8b9c/DAT_016f8ba0` (width/height), replacing either zero with one.
++  `FUN_011f8680` passes `&DAT_016f8b9c` to the D3D9 `CreateDevice` vtable call.
++  The selected nonzero test dimensions therefore traverse both the connected
++  structure fields and the device-creation presentation-parameter globals.
++
++The connected translated block now copies both arguments together into
++`back_buffer_width` and `back_buffer_height` immediately before the existing
++CreateDevice/registry path. Its inputs are explicit harness values, not the
++result of executing the complete `FUN_007e7380` call chain. The other 12 DWORDs
++in `SporeGuestPresentParameters32`, other D3D state fields, window adaptation,
++and D3D options remain manual.
++
++For a differential check, `tools/test_graphics_parameter_x86_reference.cpp`
++extracts and executes the original 49 x86 instruction bytes from
++`FUN_0075f030` at `0x75f25e`–`0x75f28e` in a Windows x86 process. The shared
++dimension-copy helper is compared with those reference outputs for `1280x720`
++and `480x900`. This executes that original parameter-copy block only; it does
++not run the game or claim a full Spore runtime observation. Run it with
++`tools/test_graphics_parameter_x86_reference.ps1`.
++
++The Android device-global probe now uses `1280x720` so width/height inversion
++is observable. On the `2303ERA42L` phone (ADB serial `PJMZAEJRX4YLFIDI`,
++Android 15/API 35; tested APK SHA-256
++`8da9a118e04e0e25be9a34726d5d3b9c8d7f034f80ce3fa80dfc177c8404aeb1`), the
++translated pair reached `CreateDevice` as `1280x720`. The first successful
++`Present` followed a successful `Reset` to the phone's drawable size
++`2400x1080`. A temporary display override produced a successful
++`2400x1200` Reset; restoring the display size produced another successful
++`2400x1080` Reset. The physical display size was restored to `1080x2400`.
++Thus, the CreateDevice dimensions, each Reset input/result, and the first
++successful Present are distinct observations; the phone-size Reset occurs
++before the first Present.
++
++The same device run rejected zero, unknown, and invalidated guest tokens
++without dispatching Present to the device; it recorded 245 valid dispatches
++before invalidation and three successful Resets. Regressions were rerun
++separately: the D3D9 bridge smoke test, the manual translated graphics probe,
++and the prior window-global translated probe all passed.
++
++Static REA Evidence for this round, all for the executable digest above:
++`ev_692aba3c06cdcc46ee18f3f7f09990fbab19a7aae35e9cc3ec470f88bd49793b`
++(`FUN_007e7380`),
++`ev_e7803d79515551d1e03f65ff7025438645655190c27e97d914cbea0edb4de433`
++(`FUN_0075f030`),
++`ev_d3fefb821720552103b691042b299ab439ba3a3a1e382164c332de8d5dae9e9f`
++(`FUN_011f8680`), and
++`ev_4cb21b0d6393e11826a3f9404530fddf1bdf89dff199b692189148b6df5b3b41`
++(`FUN_011f8340`), plus
++`ev_c5b9cbf94d9ffee7afe43919aa70a63218141e2973fcec3fd52fea4de6da0ae1`
++(`FUN_011f7d00`). This is static mapping plus execution of the isolated
++original x86 instruction block, not execution of the original game's startup.
++
++The reproducible x86 differential log is
++[translated-graphics-x86-reference-2026-11-05.log](./test-logs/translated-graphics-x86-reference-2026-11-05.log).
++The phone device-global run and separate regressions are recorded in:
++
++- [translated-device-global-dimensions-2026-11-05.log](./test-logs/translated-device-global-dimensions-2026-11-05.log)
++- [d3d9-bridge-regression-after-dimension-pair-2026-11-05.log](./test-logs/d3d9-bridge-regression-after-dimension-pair-2026-11-05.log)
++- [translated-graphics-manual-regression-after-dimension-pair-2026-11-05.log](./test-logs/translated-graphics-manual-regression-after-dimension-pair-2026-11-05.log)
++- [translated-window-global-increment-after-dimension-pair-2026-11-05.log](./test-logs/translated-window-global-increment-after-dimension-pair-2026-11-05.log)
++
++The earlier ADB blocker remains as historical context in
++[translated-graphics-device-run-blocked-2026-11-05.log](./test-logs/translated-graphics-device-run-blocked-2026-11-05.log); it is superseded by
++the successful device run above.
+ 
+ ## Build
+ 
+diff --git a/app/src/main/cpp/sdl_d3d9_test.cpp b/app/src/main/cpp/sdl_d3d9_test.cpp
+index 3f77215..fe228dc 100644
+--- a/app/src/main/cpp/sdl_d3d9_test.cpp
++++ b/app/src/main/cpp/sdl_d3d9_test.cpp
+@@ -157,13 +157,13 @@ int RunD3D9TestImpl(D3D9TestMode mode) {
+                 guest_graphics_state.window_token,
+                 guest_graphics_state.presentation.back_buffer_width,
+                 guest_graphics_state.presentation.back_buffer_height);
+-            if (!SporeTranslatedSetCreateDeviceBackBufferWidth(
+-                    &guest_graphics_state, 480)
+-                    || guest_graphics_state.presentation.back_buffer_width != 480
+-                    || guest_graphics_state.presentation.back_buffer_height != 480) {
++            if (!SporeTranslatedSetCreateDeviceBackBufferDimensions(
++                    &guest_graphics_state, 1280, 720)
++                    || guest_graphics_state.presentation.back_buffer_width != 1280
++                    || guest_graphics_state.presentation.back_buffer_height != 720) {
+                 SDL_LogError(
+                     SDL_LOG_CATEGORY_APPLICATION,
+-                    "Translated FUN_0075f030 backbuffer width was not applied");
++                    "Translated FUN_0075f030 backbuffer dimensions were not applied");
+                 SDL_DestroyWindow(window);
+                 SDL_Quit();
+                 return 1;
+@@ -308,6 +308,7 @@ int RunD3D9TestImpl(D3D9TestMode mode) {
+     SDL_Log("DXVK-native D3D9 device created (%dx%d)", width, height);
+     bool running = true;
+     Uint32 frame = 0;
++    Uint32 reset_count = 0;
+     bool translated_present_reported = false;
+     int result = 0;
+     while (running) {
+@@ -335,7 +336,34 @@ int RunD3D9TestImpl(D3D9TestMode mode) {
+ 
+                 parameters.BackBufferWidth = static_cast<UINT>(newWidth);
+                 parameters.BackBufferHeight = static_cast<UINT>(newHeight);
++                ++reset_count;
++                SDL_Log(
++                    "TRANSLATED_STAGE reset[%u]-input backbuffer=%ux%u "
++                    "format=%u count=%u multisample=%u quality=%u swap=%u "
++                    "windowed=%u depth-stencil=%u depth-format=%u "
++                    "flags=0x%08x refresh=%u interval=%u",
++                    reset_count,
++                    parameters.BackBufferWidth,
++                    parameters.BackBufferHeight,
++                    static_cast<unsigned int>(parameters.BackBufferFormat),
++                    parameters.BackBufferCount,
++                    static_cast<unsigned int>(parameters.MultiSampleType),
++                    parameters.MultiSampleQuality,
++                    static_cast<unsigned int>(parameters.SwapEffect),
++                    parameters.Windowed,
++                    parameters.EnableAutoDepthStencil,
++                    static_cast<unsigned int>(parameters.AutoDepthStencilFormat),
++                    parameters.Flags,
++                    parameters.FullScreen_RefreshRateInHz,
++                    parameters.PresentationInterval);
+                 const HRESULT resetResult = device->Reset(&parameters);
++                SDL_Log(
++                    "TRANSLATED_STAGE reset[%u]-result=0x%08x "
++                    "backbuffer=%ux%u",
++                    reset_count,
++                    static_cast<unsigned int>(resetResult),
++                    parameters.BackBufferWidth,
++                    parameters.BackBufferHeight);
+                 if (FAILED(resetResult)) {
+                     SDL_LogError(
+                         SDL_LOG_CATEGORY_APPLICATION,
+@@ -391,7 +419,12 @@ int RunD3D9TestImpl(D3D9TestMode mode) {
+                 registered_device_token);
+         }
+         if (translated_graphics && !translated_present_reported) {
+-            SDL_Log("TRANSLATED_STAGE present=PASS");
++            SDL_Log(
++                "TRANSLATED_STAGE first-present=PASS result=0x%08x "
++                "backbuffer=%ux%u",
++                static_cast<unsigned int>(presentResult),
++                parameters.BackBufferWidth,
++                parameters.BackBufferHeight);
+             translated_present_reported = true;
+         }
+     }
+@@ -433,6 +466,7 @@ int RunD3D9TestImpl(D3D9TestMode mode) {
+         translated_graphics ? &device_registry : nullptr);
+     SDL_DestroyWindow(window);
+     SDL_Quit();
++    SDL_Log("TRANSLATED_STAGE reset-count=%u", reset_count);
+     SDL_Log("DXVK-native D3D9 test stopped");
+     return result;
+ }
+diff --git a/app/src/main/cpp/spore_d3d9_bridge.cpp b/app/src/main/cpp/spore_d3d9_bridge.cpp
+index 3095cab..7e47c75 100644
+--- a/app/src/main/cpp/spore_d3d9_bridge.cpp
++++ b/app/src/main/cpp/spore_d3d9_bridge.cpp
+@@ -31,6 +31,31 @@ HRESULT CreateSporeDxvkDevice(
+     const HWND sdl_window_handle = reinterpret_cast<HWND>(sdl_window);
+     presentation_parameters->hDeviceWindow = sdl_window_handle;
+ 
++    SDL_Log(
++        "D3D9_CALL CreateDevice input adapter=%u device-type=%u "
++        "behavior=0x%08x window-handle-present=%u backbuffer=%ux%u "
++        "format=%u count=%u multisample=%u quality=%u swap=%u "
++        "windowed=%u depth-stencil=%u depth-format=%u flags=0x%08x "
++        "refresh=%u interval=%u",
++        adapter,
++        static_cast<unsigned int>(device_type),
++        behavior_flags,
++        sdl_window_handle != nullptr,
++        presentation_parameters->BackBufferWidth,
++        presentation_parameters->BackBufferHeight,
++        static_cast<unsigned int>(presentation_parameters->BackBufferFormat),
++        presentation_parameters->BackBufferCount,
++        static_cast<unsigned int>(presentation_parameters->MultiSampleType),
++        presentation_parameters->MultiSampleQuality,
++        static_cast<unsigned int>(presentation_parameters->SwapEffect),
++        presentation_parameters->Windowed,
++        presentation_parameters->EnableAutoDepthStencil,
++        static_cast<unsigned int>(
++            presentation_parameters->AutoDepthStencilFormat),
++        presentation_parameters->Flags,
++        presentation_parameters->FullScreen_RefreshRateInHz,
++        presentation_parameters->PresentationInterval);
++
+     IDirect3D9* d3d9 = Direct3DCreate9(D3D_SDK_VERSION);
+     if (d3d9 == nullptr) {
+         SDL_LogError(
+diff --git a/app/src/main/cpp/spore_translated_graphics.cpp b/app/src/main/cpp/spore_translated_graphics.cpp
+index 1ab47c6..891eb36 100644
+--- a/app/src/main/cpp/spore_translated_graphics.cpp
++++ b/app/src/main/cpp/spore_translated_graphics.cpp
+@@ -3,6 +3,7 @@
+ #include <SDL_log.h>
+ 
+ #include "spore_d3d9_bridge.h"
++#include "spore_graphics_parameter_translation.h"
+ 
+ namespace {
+ 
+@@ -199,17 +200,26 @@ bool SporeTranslatedSetDeviceWindowGlobal(
+         kSporeGuestDeviceWindowGlobalAddress, guest_window_token);
+ }
+ 
+-bool SporeTranslatedSetCreateDeviceBackBufferWidth(
++bool SporeTranslatedSetCreateDeviceBackBufferDimensions(
+     SporeGuestD3D9State32* state,
+-    std::uint32_t guest_width) {
++    std::uint32_t guest_width,
++    std::uint32_t guest_height) {
+     if (state == nullptr) {
+         return false;
+     }
+ 
+-    state->presentation.back_buffer_width = guest_width;
++    if (!SporeTranslatedCopyBackBufferDimensions(
++            &state->presentation.back_buffer_width,
++            &state->presentation.back_buffer_height,
++            guest_width,
++            guest_height)) {
++        return false;
++    }
+     SDL_Log(
+-        "TRANSLATED_STAGE FUN_0075f030 backbuffer-width=PASS width=%u",
+-        guest_width);
++        "TRANSLATED_STAGE FUN_0075f030 backbuffer-dimensions=PASS "
++        "width=%u height=%u",
++        guest_width,
++        guest_height);
+     return true;
+ }
+ 
+@@ -235,6 +245,29 @@ HRESULT SporeTranslatedCreateDevice(
+     state->device_token = 0;
+     D3DPRESENT_PARAMETERS host_parameters =
+         toHostPresentationParameters(state->presentation);
++    SDL_Log(
++        "TRANSLATED_STAGE create-device-input adapter=%u device-type=%u "
++        "behavior=0x%08x window-token=0x%08x backbuffer=%ux%u "
++        "format=%u count=%u multisample=%u quality=%u swap=%u "
++        "windowed=%u depth-stencil=%u depth-format=%u flags=0x%08x "
++        "refresh=%u interval=%u",
++        state->adapter_ordinal,
++        state->device_type,
++        state->behavior_flags,
++        state->presentation.device_window_token,
++        host_parameters.BackBufferWidth,
++        host_parameters.BackBufferHeight,
++        static_cast<unsigned int>(host_parameters.BackBufferFormat),
++        host_parameters.BackBufferCount,
++        static_cast<unsigned int>(host_parameters.MultiSampleType),
++        host_parameters.MultiSampleQuality,
++        static_cast<unsigned int>(host_parameters.SwapEffect),
++        host_parameters.Windowed,
++        host_parameters.EnableAutoDepthStencil,
++        static_cast<unsigned int>(host_parameters.AutoDepthStencilFormat),
++        host_parameters.Flags,
++        host_parameters.FullScreen_RefreshRateInHz,
++        host_parameters.PresentationInterval);
+     const HRESULT result = CreateSporeDxvkDevice(
+         window,
+         state->adapter_ordinal,
+@@ -247,12 +280,20 @@ HRESULT SporeTranslatedCreateDevice(
+         *host_presentation_out = host_parameters;
+         state->device_token = kGuestDeviceToken;
+         SDL_Log(
+-            "TRANSLATED_STAGE create-device=PASS guest-window=0x%08x "
+-            "guest-device=0x%08x backbuffer=%ux%u",
++            "TRANSLATED_STAGE create-device=PASS result=0x%08x "
++            "guest-window=0x%08x guest-device=0x%08x backbuffer=%ux%u",
++            static_cast<unsigned int>(result),
+             state->window_token,
+             state->device_token,
+-            state->presentation.back_buffer_width,
+-            state->presentation.back_buffer_height);
++            host_parameters.BackBufferWidth,
++            host_parameters.BackBufferHeight);
++    } else {
++        SDL_Log(
++            "TRANSLATED_STAGE create-device=FAIL result=0x%08x "
++            "backbuffer=%ux%u",
++            static_cast<unsigned int>(result),
++            host_parameters.BackBufferWidth,
++            host_parameters.BackBufferHeight);
+     }
+     return result;
+ }
+diff --git a/app/src/main/cpp/spore_translated_graphics.h b/app/src/main/cpp/spore_translated_graphics.h
+index 3b913ee..a0c022b 100644
+--- a/app/src/main/cpp/spore_translated_graphics.h
++++ b/app/src/main/cpp/spore_translated_graphics.h
+@@ -91,9 +91,10 @@ void SporePrepareTranslatedWindowGlobalProbe(
+ bool SporeTranslatedSetDeviceWindowGlobal(
+     SporeGuestMemory32* memory,
+     std::uint32_t guest_window_token);
+-bool SporeTranslatedSetCreateDeviceBackBufferWidth(
++bool SporeTranslatedSetCreateDeviceBackBufferDimensions(
+     SporeGuestD3D9State32* state,
+-    std::uint32_t guest_width);
++    std::uint32_t guest_width,
++    std::uint32_t guest_height);
+ 
+ HRESULT SporeTranslatedCreateDevice(
+     SporeGuestD3D9State32* state,
+diff --git a/app/src/main/cpp/spore_graphics_parameter_translation.h b/app/src/main/cpp/spore_graphics_parameter_translation.h
+new file mode 100644
+index 0000000..61ffccf
+--- /dev/null
++++ b/app/src/main/cpp/spore_graphics_parameter_translation.h
+@@ -0,0 +1,21 @@
++#ifndef SPORE_GRAPHICS_PARAMETER_TRANSLATION_H
++#define SPORE_GRAPHICS_PARAMETER_TRANSLATION_H
++
++#include <cstdint>
++
++inline bool SporeTranslatedCopyBackBufferDimensions(
++    std::uint32_t* guest_width_out,
++    std::uint32_t* guest_height_out,
++    std::uint32_t guest_width,
++    std::uint32_t guest_height) {
++    if (guest_width_out == nullptr || guest_height_out == nullptr
++            || guest_width_out == guest_height_out) {
++        return false;
++    }
++
++    *guest_width_out = guest_width;
++    *guest_height_out = guest_height;
++    return true;
++}
++
++#endif
+diff --git a/tools/test_graphics_parameter_x86_reference.cpp b/tools/test_graphics_parameter_x86_reference.cpp
+new file mode 100644
+index 0000000..7b6f245
+--- /dev/null
++++ b/tools/test_graphics_parameter_x86_reference.cpp
+@@ -0,0 +1,272 @@
++#define NOMINMAX
++#include <windows.h>
++
++#include <algorithm>
++#include <array>
++#include <cstdint>
++#include <cstdio>
++#include <cstring>
++#include <fstream>
++#include <iterator>
++#include <limits>
++#include <string>
++#include <vector>
++
++#include "..\app\src\main\cpp\spore_graphics_parameter_translation.h"
++
++#if !defined(_M_IX86)
++#error This reference harness must be built as x86.
++#endif
++
++namespace {
++
++constexpr std::uint32_t kWidthArgumentOffset = 0xbc;
++constexpr std::uint32_t kHeightArgumentOffset = 0xc0;
++constexpr std::uint32_t kWidthFieldOffset = 0x3c;
++constexpr std::uint32_t kHeightFieldOffset = 0x40;
++constexpr std::uint32_t kConfigByteOffset = 0xc4;
++constexpr std::uint32_t kReferenceBlockVa = 0x75f25e;
++constexpr std::uint32_t kReferenceBlockEndVa = 0x75f28f;
++
++std::uint32_t g_saved_stack_pointer = 0;
++void* g_reference_block = nullptr;
++
++__declspec(naked) void RestoreCallerStack() {
++    __asm {
++        mov esp, dword ptr [g_saved_stack_pointer]
++        ret
++    }
++}
++
++__declspec(naked) void ExecuteReferenceBlock(std::uint32_t*) {
++    __asm {
++        mov eax, esp
++        mov dword ptr [g_saved_stack_pointer], eax
++        mov esp, dword ptr [esp + 4]
++        jmp dword ptr [g_reference_block]
++    }
++}
++
++bool readImage(const std::wstring& path, std::vector<std::uint8_t>* image) {
++    std::ifstream input(path, std::ios::binary);
++    if (!input) {
++        std::fwprintf(stderr, L"Could not open reference PE: %ls\n", path.c_str());
++        return false;
++    }
++
++    image->assign(
++        std::istreambuf_iterator<char>(input),
++        std::istreambuf_iterator<char>());
++    if (input.bad() || image->empty()) {
++        std::fwprintf(stderr, L"Could not read reference PE: %ls\n", path.c_str());
++        return false;
++    }
++    return true;
++}
++
++bool extractReferenceBlock(
++    const std::vector<std::uint8_t>& image,
++    std::vector<std::uint8_t>* block) {
++    IMAGE_DOS_HEADER dos_header{};
++    if (image.size() < sizeof(dos_header)) {
++        std::fprintf(stderr, "Reference PE is shorter than its DOS header\n");
++        return false;
++    }
++    std::memcpy(&dos_header, image.data(), sizeof(dos_header));
++    if (dos_header.e_magic != IMAGE_DOS_SIGNATURE
++            || dos_header.e_lfanew < 0
++            || static_cast<std::size_t>(dos_header.e_lfanew)
++                > image.size() - sizeof(DWORD) - sizeof(IMAGE_FILE_HEADER)) {
++        std::fprintf(stderr, "Reference PE has an invalid DOS header\n");
++        return false;
++    }
++
++    const std::size_t nt_offset =
++        static_cast<std::size_t>(dos_header.e_lfanew);
++    DWORD signature = 0;
++    IMAGE_FILE_HEADER file_header{};
++    std::memcpy(&signature, image.data() + nt_offset, sizeof(signature));
++    std::memcpy(
++        &file_header,
++        image.data() + nt_offset + sizeof(signature),
++        sizeof(file_header));
++    if (signature != IMAGE_NT_SIGNATURE
++            || file_header.Machine != IMAGE_FILE_MACHINE_I386
++            || file_header.SizeOfOptionalHeader < sizeof(IMAGE_OPTIONAL_HEADER32)) {
++        std::fprintf(stderr, "Reference PE is not a supported PE32 x86 image\n");
++        return false;
++    }
++
++    IMAGE_OPTIONAL_HEADER32 optional_header{};
++    const std::size_t optional_offset =
++        nt_offset + sizeof(signature) + sizeof(file_header);
++    if (optional_offset > image.size()
++            || sizeof(optional_header) > image.size() - optional_offset) {
++        std::fprintf(stderr, "Reference PE has a truncated optional header\n");
++        return false;
++    }
++    std::memcpy(
++        &optional_header,
++        image.data() + optional_offset,
++        sizeof(optional_header));
++    if (optional_header.Magic != IMAGE_NT_OPTIONAL_HDR32_MAGIC) {
++        std::fprintf(stderr, "Reference PE optional header is not PE32\n");
++        return false;
++    }
++    if (kReferenceBlockVa < optional_header.ImageBase
++            || kReferenceBlockEndVa < optional_header.ImageBase) {
++        std::fprintf(stderr, "Reference function VA is below the PE image base\n");
++        return false;
++    }
++
++    const std::size_t section_offset =
++        optional_offset + file_header.SizeOfOptionalHeader;
++    if (file_header.NumberOfSections
++            > (std::numeric_limits<std::size_t>::max() - section_offset)
++                / sizeof(IMAGE_SECTION_HEADER)
++            || section_offset
++                + file_header.NumberOfSections * sizeof(IMAGE_SECTION_HEADER)
++                > image.size()) {
++        std::fprintf(stderr, "Reference PE has a truncated section table\n");
++        return false;
++    }
++
++    const std::uint32_t block_size =
++        kReferenceBlockEndVa - kReferenceBlockVa;
++    const std::uint64_t block_begin =
++        kReferenceBlockVa - optional_header.ImageBase;
++    for (WORD i = 0; i < file_header.NumberOfSections; ++i) {
++        IMAGE_SECTION_HEADER section{};
++        std::memcpy(
++            &section,
++            image.data() + section_offset + i * sizeof(section),
++            sizeof(section));
++        const std::uint64_t section_begin = section.VirtualAddress;
++        const std::uint64_t section_end =
++            section_begin + section.SizeOfRawData;
++        const std::uint64_t block_end = block_begin + block_size;
++        if (block_begin < section_begin || block_end > section_end) {
++            continue;
++        }
++
++        const std::uint64_t file_offset =
++            static_cast<std::uint64_t>(section.PointerToRawData)
++            + (block_begin - section_begin);
++        if (file_offset > image.size()
++                || block_size > image.size() - file_offset) {
++            break;
++        }
++
++        block->assign(
++            image.begin() + static_cast<std::size_t>(file_offset),
++            image.begin() + static_cast<std::size_t>(file_offset + block_size));
++        return true;
++    }
++
++    std::fprintf(stderr, "Could not map the reference block RVA to PE bytes\n");
++    return false;
++}
++
++bool runComparison(
++    const char* case_name,
++    std::uint32_t width,
++    std::uint32_t height) {
++    constexpr std::size_t kFrameWords = 0xd0 / sizeof(std::uint32_t);
++    std::array<std::uint32_t, kFrameWords> frame{};
++    frame[0] = static_cast<std::uint32_t>(
++        reinterpret_cast<std::uintptr_t>(&RestoreCallerStack));
++    frame[kWidthArgumentOffset / sizeof(std::uint32_t)] = width;
++    frame[kHeightArgumentOffset / sizeof(std::uint32_t)] = height;
++    frame[kConfigByteOffset / sizeof(std::uint32_t)] = 1;
++    frame[kWidthFieldOffset / sizeof(std::uint32_t)] = 0xaaaaaaaa;
++    frame[kHeightFieldOffset / sizeof(std::uint32_t)] = 0xbbbbbbbb;
++
++    ExecuteReferenceBlock(frame.data());
++    const std::uint32_t reference_width =
++        frame[kWidthFieldOffset / sizeof(std::uint32_t)];
++    const std::uint32_t reference_height =
++        frame[kHeightFieldOffset / sizeof(std::uint32_t)];
++
++    std::uint32_t translated_width = 0;
++    std::uint32_t translated_height = 0;
++    if (!SporeTranslatedCopyBackBufferDimensions(
++            &translated_width,
++            &translated_height,
++            reference_width,
++            reference_height)) {
++        std::fprintf(stderr, "%s: translated helper rejected valid outputs\n", case_name);
++        return false;
++    }
++
++    std::printf(
++        "case=%s input-width=%u input-height=%u "
++        "x86-width=%u x86-height=%u translated-width=%u translated-height=%u\n",
++        case_name,
++        width,
++        height,
++        reference_width,
++        reference_height,
++        translated_width,
++        translated_height);
++    return reference_width == width
++        && reference_height == height
++        && translated_width == reference_width
++        && translated_height == reference_height;
++}
++
++}
++
++int wmain(int argc, wchar_t** argv) {
++    if (argc != 2) {
++        std::fwprintf(stderr, L"Usage: %ls <SporeApp.exe>\n", argv[0]);
++        return 2;
++    }
++
++    std::vector<std::uint8_t> image;
++    std::vector<std::uint8_t> reference_bytes;
++    if (!readImage(argv[1], &image)
++            || !extractReferenceBlock(image, &reference_bytes)) {
++        return 1;
++    }
++
++    auto* executable_block = static_cast<std::uint8_t*>(VirtualAlloc(
++        nullptr,
++        reference_bytes.size() + 1,
++        MEM_COMMIT | MEM_RESERVE,
++        PAGE_EXECUTE_READWRITE));
++    if (executable_block == nullptr) {
++        std::fprintf(stderr, "VirtualAlloc failed: %lu\n", GetLastError());
++        return 1;
++    }
++    std::memcpy(executable_block, reference_bytes.data(), reference_bytes.size());
++    executable_block[reference_bytes.size()] = 0xc3;
++    g_reference_block = executable_block;
++
++    std::printf(
++        "reference-function=FUN_0075f030 block-va=0x%08x-0x%08x "
++        "executed-original-bytes=%zu\n",
++        kReferenceBlockVa,
++        kReferenceBlockEndVa,
++        reference_bytes.size());
++
++    const bool first = runComparison("wide", 1280, 720);
++    const bool second = runComparison("portrait-shaped", 480, 900);
++    std::uint32_t unused_width = 0;
++    const bool null_rejected =
++        !SporeTranslatedCopyBackBufferDimensions(
++            nullptr, &unused_width, 1, 2)
++        && !SporeTranslatedCopyBackBufferDimensions(
++            &unused_width, nullptr, 1, 2)
++        && !SporeTranslatedCopyBackBufferDimensions(
++            &unused_width, &unused_width, 1, 2);
++
++    VirtualFree(executable_block, 0, MEM_RELEASE);
++    g_reference_block = nullptr;
++
++    if (!first || !second || !null_rejected) {
++        std::fprintf(stderr, "x86 reference comparison: FAIL\n");
++        return 1;
++    }
++    std::printf("x86-original-vs-translated=PASS null-output-rejection=PASS\n");
++    return 0;
++}
+diff --git a/tools/test_graphics_parameter_x86_reference.ps1 b/tools/test_graphics_parameter_x86_reference.ps1
+new file mode 100644
+index 0000000..161d4f4
+--- /dev/null
++++ b/tools/test_graphics_parameter_x86_reference.ps1
+@@ -0,0 +1,50 @@
++param(
++    [string]$PePath = "C:\Program Files (x86)\Steam\steamapps\common\Spore\SPOREFILES\SporeBin\SporeApp.exe"
++)
++
++$ErrorActionPreference = "Stop"
++
++$expectedSha256 = "6aec99cb2dc7fd08851a1718e92a60f359fb3fccca3b244a890ae07e93cbe59b"
++if (-not (Test-Path -LiteralPath $PePath)) {
++    throw "Reference PE not found: $PePath"
++}
++$actualSha256 = (Get-FileHash -LiteralPath $PePath -Algorithm SHA256).Hash.ToLowerInvariant()
++if ($actualSha256 -ne $expectedSha256) {
++    throw "Unexpected reference PE SHA-256: $actualSha256"
++}
++
++$vswhere = Join-Path ${env:ProgramFiles(x86)} "Microsoft Visual Studio\Installer\vswhere.exe"
++if (-not (Test-Path -LiteralPath $vswhere)) {
++    throw "Visual Studio locator not found: $vswhere"
++}
++$vsInstall = & $vswhere -latest -products "*" -property installationPath
++if ($LASTEXITCODE -ne 0 -or -not $vsInstall) {
++    throw "Could not locate Visual Studio Build Tools"
++}
++$vsDevCmd = Join-Path $vsInstall "Common7\Tools\VsDevCmd.bat"
++if (-not (Test-Path -LiteralPath $vsDevCmd)) {
++    throw "Visual Studio environment script not found: $vsDevCmd"
++}
++
++$buildDirectory = Join-Path $env:TEMP ("spore-graphics-x86-reference-" + [Guid]::NewGuid().ToString("N"))
++New-Item -ItemType Directory -Path $buildDirectory | Out-Null
++$executable = Join-Path $buildDirectory "graphics_parameter_x86_reference.exe"
++
++try {
++    $buildCommand = 'call "' + $vsDevCmd +
++        '" -no_logo -arch=x86 -host_arch=x64 && pushd "' + $buildDirectory +
++        '" && cl /nologo /std:c++17 /EHsc /O2 /W4 /Fe:"' + $executable +
++        '" "' + (Join-Path $PSScriptRoot "test_graphics_parameter_x86_reference.cpp") + '"'
++    & $env:ComSpec /d /s /c $buildCommand
++    if ($LASTEXITCODE -ne 0) {
++        throw "x86 graphics reference harness build failed"
++    }
++
++    Write-Output "reference_pe_sha256=$actualSha256"
++    & $executable $PePath
++    if ($LASTEXITCODE -ne 0) {
++        throw "x86 graphics parameter comparison failed"
++    }
++} finally {
++    Remove-Item -LiteralPath $buildDirectory -Recurse -Force
++}

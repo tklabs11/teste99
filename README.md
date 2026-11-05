@@ -1611,7 +1611,7 @@ or boot path ran.
 | `adapter_ordinal = 0` | Original `FUN_011f8680` calls the D3D9 interface using graphics setup assembled by `FUN_0075f030`. | Adapter selection/capabilities and config are not recovered in this test; 0 is a probe choice. |
 | `device_type = HAL` | Original D3D9 `CreateDevice` path in `FUN_011f8680`, reached after `FUN_0075e830` initializes the D3D9 interface. | The original argument was not runtime-captured; HAL is a probe choice. |
 | `behavior_flags = HARDWARE_VERTEXPROCESSING` | `FUN_011f8680` computes flags from global renderer settings and device capability bits. | Those globals/caps are not initialized by the translated boot path; this flag is manually selected. |
-| Present width/height | `FUN_007e7380` calls Graphics slot `+0x14` with `(640, 480, 0, 0)`. In `FUN_0075f030`, the second stack argument is copied to `local_9c[2]`; `FUN_011f8680` consumes `param_1[2]` as backbuffer width and `param_1[3]` as height. | Manual and window-global regressions still seed `640x480`. The device-global route translates only the width copy from the supplied `480` argument; height and the other 14 DWORDs remain prepared by the harness. |
+| Present width/height | `FUN_007e7380` pushes `(0, 0, 480, 640)` before calling Graphics slot `+0x14`, so the callee receives `(640, 480, 0, 0)`. `FUN_0075f030` copies its first and second stack arguments from `[ESP+0xbc]` and `[ESP+0xc0]` to structure offsets `+8` and `+0xc`; `FUN_011f8680` consumes those offsets as width and height. | The device-global route translates the connected width/height pair. The other 12 DWORDs in `SporeGuestPresentParameters32` and the other D3D state fields remain prepared by the harness. |
 | Present format `UNKNOWN`, count `1`, multisample type/quality `NONE/0`, swap effect `DISCARD`, windowed `TRUE`, auto-depth off, depth format `0`, flags `0`, refresh `0`, interval `ONE` | `FUN_0075f030` assembles configuration/renderer values and `FUN_011f8680` passes them to `IDirect3D9::CreateDevice`. | Full per-field source/value mapping depends on config, Canvas and D3D capabilities and is not translated. These values are probe choices; zero-valued fields come from aggregate initialization. |
 | Initial guest globals `DAT_016f658c = 0`, `DAT_016f89d0 = 0` | Original `FUN_011f8110` first writes the window global; `CreateDevice` writes the device output global. Their initial zeroing/constructor path was not observed. | `SporeGuestMemory32::Clear` starts the Android guest map at zero. The host registry starts empty; the zero seed is manual harness state. |
 | `DAT_016f658c` window-global representation | Original `FUN_011f8110` writes the HWND supplied by the Canvas manager; `FUN_011f8680` consumes it for `CreateDevice`. | Setter now translated. Its input token and association with the SDL window remain manual. |
@@ -1673,7 +1673,7 @@ the 640x480 state, device options, remaining presentation fields, null
 alternate presenter, app objects, Canvas, and Steam behavior remain outside
 the translated path in this window-global increment. After `Present`,
 execution stops in the probe's own SDL loop; the Spore boot path itself has
-not run. The later device-global and width-copy increment is documented below.
+not run. The later device-global and dimension-pair increment is documented below.
 
 ## Translated device-global increment — 2026-11-05
 
@@ -1722,64 +1722,95 @@ The phone logs for this build are:
 The source and documentation diff for this increment is
 [graphics-device-global-2026-11-05.diff](./graphics-device-global-2026-11-05.diff).
 
-## FUN_0075f030 width-copy increment — 2026-11-05
+## FUN_0075f030 dimension-pair increment — 2026-11-05
 
-This is a deliberately bounded translation of one field write on the
-CreateDevice path, not a translation of the full setup function. On the current
-`SporeApp.exe` (SHA-256
-`fb66afc320730dec6f80b79301c7c525689859e3d0a99616b657559e8f11a1ae`):
+The earlier width-only probe incorrectly copied the second argument into the
+width field. Its `480x480` test values concealed the inversion. That increment
+is superseded; its dated source/log artifacts are preserved as historical
+regressions, not evidence that the old field mapping was correct.
 
-- `FUN_007e7380` supplies `(640, 480, 0, 0)` to the Graphics slot that reaches
-  `FUN_0075f030`.
-- `FUN_0075f030` places its second 32-bit stack argument in
-  `local_9c[2]`.
-- `FUN_011f8680` reads `param_1[2]` as the backbuffer width and
-  `param_1[3]` as the height. The direct assembly for
-  `FUN_011f8340(2)` initializes 1024x768, but the caller later replaces the
-  width and obtains the height from configuration.
+This pass checked the assembly of the current installed `SporeApp.exe`
+(SHA-256
+`6aec99cb2dc7fd08851a1718e92a60f359fb3fccca3b244a890ae07e93cbe59b`):
 
-The Android slice copies only that second argument (`480`) into the guest
-backbuffer-width field immediately before the existing translated
-CreateDevice/registry path. The probe begins with width `640`, so the log
-demonstrates the value transition to `480`; height remains the manually
-prepared `480`. This does **not** translate the configuration lookup for
-height, the remaining 14 DWORDs assembled by `FUN_0075f030`, or its other
-dependencies. The caller arguments are test inputs, not values produced by
-executing `FUN_007e7380`. The translated helper uses the 32-bit guest value;
-it does not reinterpret or store an ARM64 pointer.
+- In `FUN_007e7380`, instructions `0x7e73bf`–`0x7e73d0` push `0, 0, 0x1e0,
+  0x280` in right-to-left order before the virtual call at `+0x14`. The callee
+  therefore receives width `640`, height `480`, and two zero arguments.
+- `FUN_0075f030` reserves `0x9c` bytes in its prologue (`SUB ESP, 0x9c`) and
+  calls `FUN_011f8340(2)` with the local structure at `[ESP+0x34]`. The
+  initializer writes default dimensions at structure offsets `+8/+0xc`
+  (`1024x768`). After that call, instructions `0x75f25e`–`0x75f28e` read
+  width from `[ESP+0xbc]` and height from `[ESP+0xc0]`, then write those
+  values to `[ESP+0x3c]` and `[ESP+0x40]`, the same structure's `+8/+0xc`.
+- `FUN_011f8680` consumes width from `[ESI+8]` and height from `[ESI+0xc]`
+  (instructions `0x11f879c` and `0x11f8792`, respectively). The x86 guest
+  structure remains 32-bit; Android stores no ARM64 pointer in these fields.
+- Before `CreateDevice`, `FUN_011f8680` calls `FUN_011f7d00` with this
+  structure. `FUN_011f7d00` copies offsets `+8/+0xc` into
+  `DAT_016f8b9c/DAT_016f8ba0` (width/height), replacing either zero with one.
+  `FUN_011f8680` passes `&DAT_016f8b9c` to the D3D9 `CreateDevice` vtable call.
+  The selected nonzero test dimensions therefore traverse both the connected
+  structure fields and the device-creation presentation-parameter globals.
 
-Static evidence for this mapping is retained as `ev_f5e1c39d...`
-(`FUN_007e7380`), `ev_2c3d011c...` (`FUN_0075f030`),
-`ev_a5d4430b...` (`FUN_011f8680`), and `ev_5e20afcd...`
-(`FUN_011f8340` assembly), all for the executable digest above. Static
-analysis establishes instruction/data flow only; it does not establish that
-the original game executed these functions.
+The connected translated block now copies both arguments together into
+`back_buffer_width` and `back_buffer_height` immediately before the existing
+CreateDevice/registry path. Its inputs are explicit harness values, not the
+result of executing the complete `FUN_007e7380` call chain. The other 12 DWORDs
+in `SporeGuestPresentParameters32`, other D3D state fields, window adaptation,
+and D3D options remain manual.
 
-The phone run used the final `arm64-v8a` debug APK with SHA-256
-`BEB0ED76BA03B655E42ED037302C55AE00426E9AA525930D99710A4DC668E1EB` on
-the `2303ERA42L` (ADB serial `PJMZAEJRX4YLFIDI`, Android 15/API 35):
+For a differential check, `tools/test_graphics_parameter_x86_reference.cpp`
+extracts and executes the original 49 x86 instruction bytes from
+`FUN_0075f030` at `0x75f25e`–`0x75f28e` in a Windows x86 process. The shared
+dimension-copy helper is compared with those reference outputs for `1280x720`
+and `480x900`. This executes that original parameter-copy block only; it does
+not run the game or claim a full Spore runtime observation. Run it with
+`tools/test_graphics_parameter_x86_reference.ps1`.
 
-| Step | Result |
-|---|---|
-| Translated width copy, input `480` | PASS (`640` prepared width -> `480`; height remains manual `480`) |
-| Bridge CreateDevice and guest token registration | PASS (`480x480` guest parameters; token `0x00010002`) |
-| Guest `DAT_016f89d0` token drives `Present` | PASS |
-| Token zero / unknown rejected | PASS; host-device dispatch count remained `0` |
-| Token invalidated at release | PASS; later guest and registry `Present` rejected without increasing the `27` prior positive dispatches |
-| Manual graphics, window-global and D3D9 bridge regressions | PASS |
-| Original Spore startup / full `FUN_0075f030` | NOT RUN |
-| First unimplemented dependency | Height from configuration (`FUN_006a2660(0x5c97448)`), then the remaining setup fields and startup objects |
-| Stop point | Probe SDL loop after `Present`; no claim of Spore boot or game rendering |
+The Android device-global probe now uses `1280x720` so width/height inversion
+is observable. On the `2303ERA42L` phone (ADB serial `PJMZAEJRX4YLFIDI`,
+Android 15/API 35; tested APK SHA-256
+`8da9a118e04e0e25be9a34726d5d3b9c8d7f034f80ce3fa80dfc177c8404aeb1`), the
+translated pair reached `CreateDevice` as `1280x720`. The first successful
+`Present` followed a successful `Reset` to the phone's drawable size
+`2400x1080`. A temporary display override produced a successful
+`2400x1200` Reset; restoring the display size produced another successful
+`2400x1080` Reset. The physical display size was restored to `1080x2400`.
+Thus, the CreateDevice dimensions, each Reset input/result, and the first
+successful Present are distinct observations; the phone-size Reset occurs
+before the first Present.
 
-Focused phone logs are saved in:
+The same device run rejected zero, unknown, and invalidated guest tokens
+without dispatching Present to the device; it recorded 245 valid dispatches
+before invalidation and three successful Resets. Regressions were rerun
+separately: the D3D9 bridge smoke test, the manual translated graphics probe,
+and the prior window-global translated probe all passed.
 
-- [translated-device-global-increment-2026-11-05.log](./test-logs/translated-device-global-increment-2026-11-05.log)
-- [translated-graphics-manual-regression-2026-11-05.log](./test-logs/translated-graphics-manual-regression-2026-11-05.log)
-- [translated-window-global-increment-2026-11-05.log](./test-logs/translated-window-global-increment-2026-11-05.log)
-- [d3d9-bridge-regression-2026-11-05.log](./test-logs/d3d9-bridge-regression-2026-11-05.log)
+Static REA Evidence for this round, all for the executable digest above:
+`ev_692aba3c06cdcc46ee18f3f7f09990fbab19a7aae35e9cc3ec470f88bd49793b`
+(`FUN_007e7380`),
+`ev_e7803d79515551d1e03f65ff7025438645655190c27e97d914cbea0edb4de433`
+(`FUN_0075f030`),
+`ev_d3fefb821720552103b691042b299ab439ba3a3a1e382164c332de8d5dae9e9f`
+(`FUN_011f8680`), and
+`ev_4cb21b0d6393e11826a3f9404530fddf1bdf89dff199b692189148b6df5b3b41`
+(`FUN_011f8340`), plus
+`ev_c5b9cbf94d9ffee7afe43919aa70a63218141e2973fcec3fd52fea4de6da0ae1`
+(`FUN_011f7d00`). This is static mapping plus execution of the isolated
+original x86 instruction block, not execution of the original game's startup.
 
-The source delta for the width-copy increment is
-[translated-width-copy-2026-11-05.diff](./translated-width-copy-2026-11-05.diff).
+The reproducible x86 differential log is
+[translated-graphics-x86-reference-2026-11-05.log](./test-logs/translated-graphics-x86-reference-2026-11-05.log).
+The phone device-global run and separate regressions are recorded in:
+
+- [translated-device-global-dimensions-2026-11-05.log](./test-logs/translated-device-global-dimensions-2026-11-05.log)
+- [d3d9-bridge-regression-after-dimension-pair-2026-11-05.log](./test-logs/d3d9-bridge-regression-after-dimension-pair-2026-11-05.log)
+- [translated-graphics-manual-regression-after-dimension-pair-2026-11-05.log](./test-logs/translated-graphics-manual-regression-after-dimension-pair-2026-11-05.log)
+- [translated-window-global-increment-after-dimension-pair-2026-11-05.log](./test-logs/translated-window-global-increment-after-dimension-pair-2026-11-05.log)
+
+The earlier ADB blocker remains as historical context in
+[translated-graphics-device-run-blocked-2026-11-05.log](./test-logs/translated-graphics-device-run-blocked-2026-11-05.log); it is superseded by
+the successful device run above.
 
 ## Build
 

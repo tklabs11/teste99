@@ -1,0 +1,17 @@
+--------- beginning of main
+11-05 19:55:49.583 I/SDL/APP ( 4900): DXVK state cache path: /data/data/dev.sporeport.cellstage.dev/files/
+11-05 19:55:49.615 I/SDL/APP ( 4900): TRANSLATED_STAGE mode=window-global prepared=PASS device-window-param=0 guest-global=0 manual-window-token=0x00010001
+11-05 19:55:49.615 I/SDL/APP ( 4900): TRANSLATED_STAGE global-window=PASS address=0x016f658c
+11-05 19:55:49.615 I/SDL/APP ( 4900): TRANSLATED_STAGE FUN_011f8110 global=0x016f658c window-token=0x00010001
+11-05 19:55:49.615 I/SDL/APP ( 4900): TRANSLATED_STAGE create-device-input adapter=0 device-type=1 behavior=0x00000040 window-token=0x00010001 backbuffer=640x480 format=0 count=1 multisample=0 quality=0 swap=1 windowed=1 depth-stencil=0 depth-format=0 flags=0x00000000 refresh=0 interval=1
+11-05 19:55:49.615 I/SDL/APP ( 4900): D3D9_CALL CreateDevice input adapter=0 device-type=1 behavior=0x00000040 window-handle-present=1 backbuffer=640x480 format=0 count=1 multisample=0 quality=0 swap=1 windowed=1 depth-stencil=0 depth-format=0 flags=0x00000000 refresh=0 interval=1
+11-05 19:55:49.848 I/SDL/APP ( 4900): TRANSLATED_STAGE create-device=PASS result=0x00000000 guest-window=0x00010001 guest-device=0x00010002 backbuffer=640x480
+11-05 19:55:49.848 I/SDL/APP ( 4900): TRANSLATED_STAGE FUN_011f8680 device-global=PASS address=0x016f89d0 guest-device=0x00010002
+11-05 19:55:49.848 I/SDL/APP ( 4900): DXVK-native D3D9 device created (2177x987)
+11-05 19:55:49.848 I/SDL/APP ( 4900): TRANSLATED_STAGE reset[1]-input backbuffer=2400x1080 format=22 count=1 multisample=0 quality=0 swap=1 windowed=1 depth-stencil=0 depth-format=0 flags=0x00000000 refresh=0 interval=1
+11-05 19:55:49.849 I/SDL/APP ( 4900): TRANSLATED_STAGE reset[1]-result=0x00000000 backbuffer=2400x1080
+11-05 19:55:49.849 I/SDL/APP ( 4900): DXVK-native D3D9 device resized (2400x1080)
+11-05 19:55:49.875 I/SDL/APP ( 4900): TRANSLATED_STAGE first-present=PASS result=0x00000000 backbuffer=2400x1080
+11-05 19:55:53.608 I/SDL/APP ( 4900): TRANSLATED_STAGE device-global invalidated address=0x016f89d0 guest-device=0x00010002
+11-05 19:55:53.705 I/SDL/APP ( 4900): TRANSLATED_STAGE reset-count=1
+11-05 19:55:53.705 I/SDL/APP ( 4900): DXVK-native D3D9 test stopped

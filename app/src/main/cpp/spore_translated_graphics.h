@@ -91,9 +91,10 @@ void SporePrepareTranslatedWindowGlobalProbe(
 bool SporeTranslatedSetDeviceWindowGlobal(
     SporeGuestMemory32* memory,
     std::uint32_t guest_window_token);
-bool SporeTranslatedSetCreateDeviceBackBufferWidth(
+bool SporeTranslatedSetCreateDeviceBackBufferDimensions(
     SporeGuestD3D9State32* state,
-    std::uint32_t guest_width);
+    std::uint32_t guest_width,
+    std::uint32_t guest_height);
 
 HRESULT SporeTranslatedCreateDevice(
     SporeGuestD3D9State32* state,

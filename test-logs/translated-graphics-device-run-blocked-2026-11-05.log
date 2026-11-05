@@ -1,0 +1,9 @@
+test=translated-graphics-dimension-pair-phone-run
+apk_sha256=8DA9A118E04E0E25BE9A34726D5D3B9C8D7F034F80CE3FA80DFC177C8404AEB1
+build=:app:assembleDebug PASS
+adb_devices=none
+install=BLOCKED no devices/emulators found
+phone_create_device=NOT_RUN
+phone_reset=NOT_RUN
+phone_first_present=NOT_RUN
+historical_phone_regressions=preserved separately; not rerun for this APK
