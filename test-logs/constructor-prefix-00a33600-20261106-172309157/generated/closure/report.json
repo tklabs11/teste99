@@ -1,0 +1,336 @@
+{
+  "schema": "spore-static-lift-call-closure-v1",
+  "source_sha256": "6aec99cb2dc7fd08851a1718e92a60f359fb3fccca3b244a890ae07e93cbe59b",
+  "batch_exports": [
+    "C:\\SporeAnalysis\\spore_batch_all_parts\\spore_batch_all_0034.json",
+    "C:\\SporeAnalysis\\spore_batch_all_parts\\spore_batch_all_0086.json",
+    "C:\\SporeAnalysis\\spore_batch_all_parts\\spore_batch_all_0041.json",
+    "C:\\SporeAnalysis\\spore_batch_all_parts\\spore_batch_all_0040.json"
+  ],
+  "root_entries": [
+    "0x00921f00",
+    "0x011e64f0",
+    "0x00a247f0",
+    "0x00a0fdf0"
+  ],
+  "function_count": 16,
+  "iat_imports": [
+    {
+      "address": "0x013cc180",
+      "symbol": "KERNEL32.dll!CreateMutexA"
+    },
+    {
+      "address": "0x013cc198",
+      "symbol": "KERNEL32.dll!CreateSemaphoreA"
+    },
+    {
+      "address": "0x013cc2d0",
+      "symbol": "KERNEL32.dll!InitializeCriticalSection"
+    },
+    {
+      "address": "0x013cc2d8",
+      "symbol": "KERNEL32.dll!EnterCriticalSection"
+    },
+    {
+      "address": "0x013cc2dc",
+      "symbol": "KERNEL32.dll!LeaveCriticalSection"
+    },
+    {
+      "address": "0x013cc4f4",
+      "symbol": "MSVCR90.dll!strncpy"
+    }
+  ],
+  "import_calls": [
+    {
+      "function": "0x00921e00",
+      "site": "0x00921e18",
+      "iat_address": "0x013cc4f4",
+      "symbol": "MSVCR90.dll!strncpy"
+    },
+    {
+      "function": "0x00922150",
+      "site": "0x0092216c",
+      "iat_address": "0x013cc2d0",
+      "symbol": "KERNEL32.dll!InitializeCriticalSection"
+    },
+    {
+      "function": "0x00922150",
+      "site": "0x00922189",
+      "iat_address": "0x013cc180",
+      "symbol": "KERNEL32.dll!CreateMutexA"
+    },
+    {
+      "function": "0x009225d0",
+      "site": "0x009225ef",
+      "iat_address": "0x013cc4f4",
+      "symbol": "MSVCR90.dll!strncpy"
+    },
+    {
+      "function": "0x00922620",
+      "site": "0x0092266d",
+      "iat_address": "0x013cc198",
+      "symbol": "KERNEL32.dll!CreateSemaphoreA"
+    },
+    {
+      "function": "0x011e64f0",
+      "site": "0x011e653f",
+      "iat_address": "0x013cc4f4",
+      "symbol": "MSVCR90.dll!strncpy"
+    },
+    {
+      "function": "0x011ecd90",
+      "site": "0x011ecd97",
+      "iat_address": "0x013cc2d0",
+      "symbol": "KERNEL32.dll!InitializeCriticalSection"
+    },
+    {
+      "function": "0x011ecdd0",
+      "site": "0x011ecdd9",
+      "iat_address": "0x013cc2d8",
+      "symbol": "KERNEL32.dll!EnterCriticalSection"
+    },
+    {
+      "function": "0x011ecde0",
+      "site": "0x011ecde9",
+      "iat_address": "0x013cc2dc",
+      "symbol": "KERNEL32.dll!LeaveCriticalSection"
+    }
+  ],
+  "data_fixtures": [
+    {
+      "address": "0x01449334",
+      "section": ".rdata",
+      "bytes_hex": "7265736d616e3a00",
+      "text": "resman:"
+    }
+  ],
+  "reference_bytes_header": "C:\\Users\\wesll\\AndroidStudioProjects\\SporeAndroid\\test-logs\\constructor-prefix-00a33600-20261106-172309157\\generated\\closure\\closure_reference_bytes.hpp",
+  "functions": [
+    {
+      "address": "0x00921e00",
+      "name": "FUN_00921e00",
+      "generated_source": "spore_00921e00_arm64.cpp",
+      "instruction_count": 21,
+      "verified_instruction_bytes": 53,
+      "direct_call_targets": [],
+      "import_calls": [
+        {
+          "site": "0x00921e18",
+          "iat_address": "0x013cc4f4",
+          "symbol": "MSVCR90.dll!strncpy"
+        }
+      ]
+    },
+    {
+      "address": "0x00921e60",
+      "name": "FUN_00921e60",
+      "generated_source": "spore_00921e60_arm64.cpp",
+      "instruction_count": 58,
+      "verified_instruction_bytes": 147,
+      "direct_call_targets": [
+        "0x009225d0",
+        "0x009225d0",
+        "0x00921e00",
+        "0x00922620",
+        "0x00922620",
+        "0x00922150"
+      ],
+      "import_calls": []
+    },
+    {
+      "address": "0x00921f00",
+      "name": "FUN_00921f00",
+      "generated_source": "spore_00921f00_arm64.cpp",
+      "instruction_count": 41,
+      "verified_instruction_bytes": 121,
+      "direct_call_targets": [
+        "0x00922820",
+        "0x00922820",
+        "0x009222a0",
+        "0x00921e60",
+        "0x00921e60"
+      ],
+      "import_calls": []
+    },
+    {
+      "address": "0x00922150",
+      "name": "FUN_00922150",
+      "generated_source": "spore_00922150_arm64.cpp",
+      "instruction_count": 34,
+      "verified_instruction_bytes": 84,
+      "direct_call_targets": [],
+      "import_calls": [
+        {
+          "site": "0x0092216c",
+          "iat_address": "0x013cc2d0",
+          "symbol": "KERNEL32.dll!InitializeCriticalSection"
+        },
+        {
+          "site": "0x00922189",
+          "iat_address": "0x013cc180",
+          "symbol": "KERNEL32.dll!CreateMutexA"
+        }
+      ]
+    },
+    {
+      "address": "0x009222a0",
+      "name": "FUN_009222a0",
+      "generated_source": "spore_009222a0_arm64.cpp",
+      "instruction_count": 38,
+      "verified_instruction_bytes": 102,
+      "direct_call_targets": [
+        "0x00922150",
+        "0x00922150"
+      ],
+      "import_calls": []
+    },
+    {
+      "address": "0x009225d0",
+      "name": "FUN_009225d0",
+      "generated_source": "spore_009225d0_arm64.cpp",
+      "instruction_count": 23,
+      "verified_instruction_bytes": 60,
+      "direct_call_targets": [],
+      "import_calls": [
+        {
+          "site": "0x009225ef",
+          "iat_address": "0x013cc4f4",
+          "symbol": "MSVCR90.dll!strncpy"
+        }
+      ]
+    },
+    {
+      "address": "0x00922620",
+      "name": "FUN_00922620",
+      "generated_source": "spore_00922620_arm64.cpp",
+      "instruction_count": 40,
+      "verified_instruction_bytes": 102,
+      "direct_call_targets": [],
+      "import_calls": [
+        {
+          "site": "0x0092266d",
+          "iat_address": "0x013cc198",
+          "symbol": "KERNEL32.dll!CreateSemaphoreA"
+        }
+      ]
+    },
+    {
+      "address": "0x00922820",
+      "name": "FUN_00922820",
+      "generated_source": "spore_00922820_arm64.cpp",
+      "instruction_count": 32,
+      "verified_instruction_bytes": 85,
+      "direct_call_targets": [
+        "0x00922620",
+        "0x00922620"
+      ],
+      "import_calls": []
+    },
+    {
+      "address": "0x00a0fdf0",
+      "name": "FUN_00a0fdf0",
+      "generated_source": "spore_00a0fdf0_arm64.cpp",
+      "instruction_count": 15,
+      "verified_instruction_bytes": 40,
+      "direct_call_targets": [],
+      "import_calls": []
+    },
+    {
+      "address": "0x00a247f0",
+      "name": "FUN_00a247f0",
+      "generated_source": "spore_00a247f0_arm64.cpp",
+      "instruction_count": 28,
+      "verified_instruction_bytes": 94,
+      "direct_call_targets": [
+        "0x011e5d80",
+        "0x009222a0"
+      ],
+      "import_calls": []
+    },
+    {
+      "address": "0x011e5d80",
+      "name": "FUN_011e5d80",
+      "generated_source": "spore_011e5d80_arm64.cpp",
+      "instruction_count": 12,
+      "verified_instruction_bytes": 32,
+      "direct_call_targets": [
+        "0x011e8b20"
+      ],
+      "import_calls": []
+    },
+    {
+      "address": "0x011e64f0",
+      "name": "FUN_011e64f0",
+      "generated_source": "spore_011e64f0_arm64.cpp",
+      "instruction_count": 85,
+      "verified_instruction_bytes": 234,
+      "direct_call_targets": [
+        "0x011ecd90",
+        "0x011ecdd0",
+        "0x011ecde0",
+        "0x011ecde0"
+      ],
+      "import_calls": [
+        {
+          "site": "0x011e653f",
+          "iat_address": "0x013cc4f4",
+          "symbol": "MSVCR90.dll!strncpy"
+        }
+      ]
+    },
+    {
+      "address": "0x011e8b20",
+      "name": "FUN_011e8b20",
+      "generated_source": "spore_011e8b20_arm64.cpp",
+      "instruction_count": 16,
+      "verified_instruction_bytes": 33,
+      "direct_call_targets": [],
+      "import_calls": []
+    },
+    {
+      "address": "0x011ecd90",
+      "name": "FUN_011ecd90",
+      "generated_source": "spore_011ecd90_arm64.cpp",
+      "instruction_count": 8,
+      "verified_instruction_bytes": 21,
+      "direct_call_targets": [],
+      "import_calls": [
+        {
+          "site": "0x011ecd97",
+          "iat_address": "0x013cc2d0",
+          "symbol": "KERNEL32.dll!InitializeCriticalSection"
+        }
+      ]
+    },
+    {
+      "address": "0x011ecdd0",
+      "name": "FUN_011ecdd0",
+      "generated_source": "spore_011ecdd0_arm64.cpp",
+      "instruction_count": 6,
+      "verified_instruction_bytes": 16,
+      "direct_call_targets": [],
+      "import_calls": [
+        {
+          "site": "0x011ecdd9",
+          "iat_address": "0x013cc2d8",
+          "symbol": "KERNEL32.dll!EnterCriticalSection"
+        }
+      ]
+    },
+    {
+      "address": "0x011ecde0",
+      "name": "FUN_011ecde0",
+      "generated_source": "spore_011ecde0_arm64.cpp",
+      "instruction_count": 6,
+      "verified_instruction_bytes": 16,
+      "direct_call_targets": [],
+      "import_calls": [
+        {
+          "site": "0x011ecde9",
+          "iat_address": "0x013cc2dc",
+          "symbol": "KERNEL32.dll!LeaveCriticalSection"
+        }
+      ]
+    }
+  ]
+}

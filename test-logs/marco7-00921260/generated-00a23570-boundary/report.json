@@ -1,0 +1,36 @@
+{
+  "schema": "spore-m7-cfg-call-boundary-v1",
+  "source_sha256": "6aec99cb2dc7fd08851a1718e92a60f359fb3fccca3b244a890ae07e93cbe59b",
+  "root": "0x00a23570",
+  "boundary": {
+    "address": "0x00a2360d",
+    "mnemonic": "CALL",
+    "status": "blocked",
+    "bytes": "e89eebffff",
+    "target": "0x00a221b0"
+  },
+  "boundary_executed": false,
+  "root_instruction_count": 60,
+  "functions": [
+    {
+      "address": "0x00921260",
+      "verified_bytes": 92,
+      "instruction_count": 38
+    },
+    {
+      "address": "0x00921300",
+      "verified_bytes": 63,
+      "instruction_count": 26
+    },
+    {
+      "address": "0x00921360",
+      "verified_bytes": 94,
+      "instruction_count": 30
+    },
+    {
+      "address": "0x00a23570",
+      "verified_bytes": 174,
+      "instruction_count": 60
+    }
+  ]
+}

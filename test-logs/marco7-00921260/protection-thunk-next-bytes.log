@@ -1,0 +1,29 @@
+INVALID_MEMORY access=19 address=0x00000030 size=4 eip=0x3005ed82
+PE_SHA256=6aec99cb2dc7fd08851a1718e92a60f359fb3fccca3b244a890ae07e93cbe59b
+EXECUTION=original x86 PE bytes in Unicorn; VirtualAlloc is a bounded fixture
+VIRTUALALLOC ret=0x00402b2a address=0x00000000 size=0xbfa43 flags=0x3000 protect=0x40
+INSTRUCTIONS=1892408 VIRTUALALLOC_CALLS=1
+FINAL_EIP=0x3005ed82 EAX=0x70007fa8 ESP=0x70007d60 ERROR=Invalid memory read (UC_ERR_READ_UNMAPPED)
+REGISTERS=EAX:0x70007fa8 EBX:0x0005dd98 ECX:0x95b3a94f EDX:0x0198ea00 ESI:0x00000ac0 EDI:0x00000010 EBP:0x00000000 ESP:0x70007d60
+DISASM 0x3005ed82 mov eax, dword ptr fs:[0x30]
+DISASM 0x3005ed88 jmp 0x3005fefe
+DISASM 0x3005ed8d lea ebp, [esp + 0x15]
+DISASM 0x3005ed91 nop dword ptr [eax]
+NEXT_BYTES=8d5424168b400c8b401489c1662e0f1f8400000000000f1f4000e9ccfeffff000000008b543824e914faffff0f8401f88941040f8452feffff8b473ce92bfaffffe90fb73b83c3026685ff0f8549030000e95f0300000f84e9b5f1ffff0f84bf
+NEXT 0x3005fefe lea edx, [esp + 0x16]
+NEXT 0x3005ff02 mov eax, dword ptr [eax + 0xc]
+NEXT 0x3005ff05 mov eax, dword ptr [eax + 0x14]
+NEXT 0x3005ff08 mov ecx, eax
+NEXT 0x3005ff0a nop word ptr cs:[eax + eax]
+NEXT 0x3005ff14 nop dword ptr [eax]
+NEXT 0x3005ff18 jmp 0x3005fde9
+NEXT 0x3005ff1d add byte ptr [eax], al
+NEXT 0x3005ff1f add byte ptr [eax], al
+NEXT 0x3005ff21 mov edx, dword ptr [eax + edi + 0x24]
+NEXT 0x3005ff25 jmp 0x3005f93e
+NEXT 0x3005ff2a je 0x718ff731
+NEXT 0x3005ff30 add al, 0xf
+NEXT 0x3005ff32 test byte ptr [edx - 2], dl
+RECENT_EIP=0x30061a62,0x30061a65,0x30061a69,0x30061985,0x30061989,0x3006198a,0x3005ed78,0x3005ed79,0x3005ed7a,0x3005ed7b,0x3005ed7c,0x3005ed82
+BUFFER=a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5
+ALLOCATED_CODE_HEAD=98dd0500fc6d0500c00a000038190600881b0600c4c90b0000d00b0084f66690

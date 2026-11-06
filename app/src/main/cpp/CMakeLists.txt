@@ -159,13 +159,24 @@ target_include_directories(dxvk_d3d9
         "${DXVK_GENERATED_DIR}")
 target_link_libraries(dxvk_d3d9 PRIVATE SDL2 ${VULKAN_LIB} Threads::Threads ${ANDROID_LOG_LIB})
 
+set(M7_BACKEND_DIR "${CMAKE_CURRENT_LIST_DIR}/../../../../tools/batch_static_lift")
+set(M7_GENERATED_DIR "${CMAKE_CURRENT_LIST_DIR}/../../../../test-logs/marco7-00921260/generated-00a23570-through-00a221b0")
 add_library(spore_native_runtime SHARED
     native_runtime.cpp
-    dbpf_reader.cpp)
+    dbpf_reader.cpp
+    m7_fixture_probe.cpp
+    "${M7_GENERATED_DIR}/spore_00a23570_arm64.cpp"
+    "${M7_GENERATED_DIR}/spore_00a221b0_arm64.cpp"
+    "${M7_GENERATED_DIR}/spore_00921260_arm64.cpp"
+    "${M7_GENERATED_DIR}/spore_00921300_arm64.cpp"
+    "${M7_GENERATED_DIR}/spore_00921360_arm64.cpp")
 target_compile_features(spore_native_runtime PRIVATE cxx_std_17)
 target_include_directories(spore_native_runtime
     PUBLIC
-        "${CMAKE_CURRENT_LIST_DIR}")
+        "${CMAKE_CURRENT_LIST_DIR}"
+    PRIVATE
+        "${M7_BACKEND_DIR}"
+        "${M7_GENERATED_DIR}")
 target_link_libraries(spore_native_runtime
     PRIVATE
         ${ANDROID_LIB}

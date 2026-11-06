@@ -8,7 +8,7 @@ from pathlib import Path
 
 from capstone import Cs, CS_ARCH_X86, CS_MODE_32
 from unicorn import Uc, UcError, UC_ARCH_X86, UC_MODE_32
-from unicorn import UC_HOOK_CODE, UC_HOOK_MEM_INVALID
+from unicorn import UC_HOOK_CODE, UC_HOOK_MEM_INVALID, UC_HOOK_MEM_READ
 from unicorn.x86_const import (
     UC_X86_REG_EAX, UC_X86_REG_EBP, UC_X86_REG_EBX, UC_X86_REG_ECX,
     UC_X86_REG_EDI, UC_X86_REG_EDX, UC_X86_REG_EFLAGS, UC_X86_REG_EIP,
@@ -36,7 +36,20 @@ def read32(uc, address):
     return struct.unpack("<I", uc.mem_read(address, 4))[0]
 
 
-def run(path: Path, max_instructions: int):
+def run(path: Path, max_instructions: int, probe_peb: bool = False,
+        probe_module: bool = False, probe_dll: Path | None = None,
+        probe_ntdll: Path | None = None, probe_post_limit: int = 10000,
+        probe_missing_file: bool = False, probe_second_alloc: bool = False):
+    if probe_second_alloc and not probe_missing_file:
+        raise ValueError("second allocation probe requires file-failure probe")
+    if probe_missing_file and probe_ntdll is None:
+        raise ValueError("file probe requires KERNEL32 and NTDLL export probes")
+    if probe_ntdll is not None and probe_dll is None:
+        raise ValueError("NTDLL probe requires the KERNEL32 probe")
+    if probe_dll is not None:
+        probe_peb = probe_module = True
+    if probe_module and not probe_peb:
+        raise ValueError("module probe requires PEB probe")
     file = path.read_bytes()
     digest = hashlib.sha256(file).hexdigest()
     if digest != lifter.EXPECTED_SHA256:
@@ -71,6 +84,77 @@ def run(path: Path, max_instructions: int):
     uc.mem_map(BUFFER_BASE, 0x1000)
     uc.mem_write(BUFFER_BASE, bytes([0xA5]) * 64)
     uc.mem_map(STACK_BASE, 0x10000)
+    dll_base = 0x51000000
+    dll_size = 0
+    dll_digest = None
+    ntdll_base = 0x52000000
+    ntdll_size = 0
+    ntdll_digest = None
+    if probe_dll is not None:
+        dll_file = probe_dll.read_bytes()
+        dll_digest = hashlib.sha256(dll_file).hexdigest()
+        dll_pe = lifter.parse_pe(probe_dll)
+        dll_header = struct.unpack_from("<I", dll_file, 0x3C)[0] + 24
+        dll_size = struct.unpack_from("<I", dll_file, dll_header + 56)[0]
+        dll_header_size = struct.unpack_from("<I", dll_file, dll_header + 60)[0]
+        uc.mem_map(dll_base, (dll_size + 0xFFF) & ~0xFFF)
+        uc.mem_write(dll_base, dll_file[:dll_header_size])
+        for _, rva, _, offset, raw_size in dll_pe[2]:
+            if raw_size:
+                uc.mem_write(dll_base + rva,
+                             dll_file[offset:offset + raw_size])
+    if probe_ntdll is not None:
+        ntdll_file = probe_ntdll.read_bytes()
+        ntdll_digest = hashlib.sha256(ntdll_file).hexdigest()
+        ntdll_pe = lifter.parse_pe(probe_ntdll)
+        ntdll_header = struct.unpack_from("<I", ntdll_file, 0x3C)[0] + 24
+        ntdll_size = struct.unpack_from("<I", ntdll_file, ntdll_header + 56)[0]
+        ntdll_header_size = struct.unpack_from("<I", ntdll_file, ntdll_header + 60)[0]
+        uc.mem_map(ntdll_base, (ntdll_size + 0xFFF) & ~0xFFF)
+        uc.mem_write(ntdll_base, ntdll_file[:ntdll_header_size])
+        for _, rva, _, offset, raw_size in ntdll_pe[2]:
+            if raw_size:
+                uc.mem_write(ntdll_base + rva,
+                             ntdll_file[offset:offset + raw_size])
+    if probe_second_alloc:
+        uc.mem_map(0x32000000, 0x60000)
+    if probe_peb:
+        # Unicorn uses a zero FS base here. These are synthetic pointers only;
+        # no Windows loader state or module list is being modeled.
+        uc.mem_map(0, 0x1000)
+        uc.mem_map(0x60000000, 0x4000)
+        uc.mem_write(0x30, u32(0x60000000))
+        uc.mem_write(0x6000000C, u32(0x60001000))
+        if probe_module:
+            # Deliberately synthetic, single-entry loader list for dependency
+            # discovery. Its layout and contents are not a captured process.
+            head = 0x60001014
+            link = 0x60002008
+            second = 0x60002208 if probe_ntdll is not None else head
+            uc.mem_write(head, u32(link) + u32(second if probe_ntdll is not None else link))
+            uc.mem_write(link, u32(second) + u32(head))
+            if probe_ntdll is not None:
+                uc.mem_write(second, u32(head) + u32(link))
+            uc.mem_write(0x60002018,
+                         u32(dll_base if probe_dll is not None else IMAGE_BASE))
+            uc.mem_write(0x60002020,
+                         u32(dll_size if probe_dll is not None else image_size))
+            name = ("kernel32.dll" if probe_dll is not None else
+                    "SporeApp.exe").encode("utf-16le")
+            uc.mem_write(0x60002100, name + b"\0\0")
+            for offset in (0x24, 0x2C):
+                uc.mem_write(0x60002000 + offset,
+                             struct.pack("<HHI", len(name), len(name) + 2,
+                                         0x60002100))
+            if probe_ntdll is not None:
+                uc.mem_write(0x60002218, u32(ntdll_base))
+                uc.mem_write(0x60002220, u32(ntdll_size))
+                ntdll_name = "ntdll.dll".encode("utf-16le")
+                uc.mem_write(0x60002300, ntdll_name + b"\0\0")
+                for offset in (0x24, 0x2C):
+                    uc.mem_write(0x60002200 + offset,
+                                 struct.pack("<HHI", len(ntdll_name),
+                                             len(ntdll_name) + 2, 0x60002300))
     esp = STACK_BASE + 0x8000
     buffer = BUFFER_BASE + 8
     uc.mem_write(esp, u32(RETURN_SENTINEL) + u32(buffer) + u32(0) + u32(16))
@@ -83,11 +167,80 @@ def run(path: Path, max_instructions: int):
 
     events = []
     recent = deque(maxlen=12)
-    stats = {"instructions": 0, "virtual_alloc_calls": 0}
+    post_peb_trace = []
+    post_peb_recent = deque(maxlen=48)
+    post_peb_unique = {}
+    stats = {"instructions": 0, "virtual_alloc_calls": 0, "after_peb": None,
+             "probe_limit": False, "dll_entry": None, "candidate_name": None,
+             "dll_reads": 0, "dll_read_sites": [], "dll_stack": None,
+             "dll_wide_path": None, "file_stub_calls": 0,
+             "second_alloc_calls": 0}
 
     def on_code(emu, address, size, _):
         stats["instructions"] += 1
         recent.append(address)
+        if ((probe_dll is not None and dll_base <= address < dll_base + dll_size)
+                or (probe_ntdll is not None and ntdll_base <= address < ntdll_base + ntdll_size)):
+            stats["dll_entry"] = address
+            stack = emu.reg_read(UC_X86_REG_ESP)
+            stats["dll_stack"] = [read32(emu, stack + 4 * index)
+                                  for index in range(8)]
+            pointer = stats["dll_stack"][1]
+            try:
+                raw = bytes(emu.mem_read(pointer, 512))
+                chars = []
+                for offset in range(0, len(raw), 2):
+                    codepoint = int.from_bytes(raw[offset:offset + 2], "little")
+                    if not codepoint:
+                        break
+                    chars.append(chr(codepoint))
+                stats["dll_wide_path"] = "".join(chars)
+            except UcError:
+                stats["dll_wide_path"] = "unmapped"
+            if (probe_missing_file and address == 0x5101EA50 and
+                    stats["dll_wide_path"] == "C:\\Mirc\\mirc.ini" and
+                    stats["dll_stack"][2:8] ==
+                    [0x80000000, 1, 0, 3, 0, 0]):
+                stats["file_stub_calls"] += 1
+                emu.reg_write(UC_X86_REG_EAX, 0xFFFFFFFF)
+                emu.reg_write(UC_X86_REG_ESP, stack + 32)
+                emu.reg_write(UC_X86_REG_EIP, stats["dll_stack"][0])
+                stats["dll_entry"] = None
+                return
+            if (probe_second_alloc and address == 0x510165F0 and
+                    stats["dll_stack"][1:5] ==
+                    [0, 0x5DD98, 0x3000, 0x4]):
+                stats["second_alloc_calls"] += 1
+                emu.reg_write(UC_X86_REG_EAX, 0x32000000)
+                emu.reg_write(UC_X86_REG_ESP, stack + 20)
+                emu.reg_write(UC_X86_REG_EIP, stats["dll_stack"][0])
+                stats["dll_entry"] = None
+                return
+            emu.emu_stop()
+            return
+        if probe_peb and address == 0x3005F021 and stats["candidate_name"] is None:
+            stack = emu.reg_read(UC_X86_REG_ESP)
+            raw = bytes(emu.mem_read(stack + 0x14, 64))
+            chars = []
+            for offset in range(0, len(raw), 2):
+                codepoint = int.from_bytes(raw[offset:offset + 2], "little")
+                if codepoint == 0:
+                    break
+                chars.append(chr(codepoint))
+            stats["candidate_name"] = "".join(chars)
+        if probe_peb and address == 0x3005ED82:
+            stats["after_peb"] = stats["instructions"]
+        if probe_peb and stats["after_peb"] is not None and len(post_peb_trace) < 128:
+            post_peb_trace.append(address)
+        if probe_peb and stats["after_peb"] is not None:
+            post_peb_recent.append(address)
+            if len(post_peb_unique) < 256:
+                post_peb_unique[address] = None
+        if (probe_peb and stats["after_peb"] is not None and
+                stats["instructions"] - stats["after_peb"] >= probe_post_limit):
+            stats["probe_limit"] = True
+            emu.emu_stop()
+            return
         if address != VIRTUAL_ALLOC_STUB:
             return
         stack = emu.reg_read(UC_X86_REG_ESP)
@@ -107,20 +260,93 @@ def run(path: Path, max_instructions: int):
               f"eip=0x{emu.reg_read(UC_X86_REG_EIP):08x}")
         return False
 
+    def on_read(emu, access, address, size, value, _):
+        if ((probe_dll is not None and dll_base <= address < dll_base + dll_size)
+                or (probe_ntdll is not None and ntdll_base <= address < ntdll_base + ntdll_size)):
+            stats["dll_reads"] += 1
+            if len(stats["dll_read_sites"]) < 16:
+                stats["dll_read_sites"].append(
+                    (emu.reg_read(UC_X86_REG_EIP), address, size)
+                )
+
     uc.hook_add(UC_HOOK_CODE, on_code)
     uc.hook_add(UC_HOOK_MEM_INVALID, on_invalid)
+    if probe_dll is not None:
+        uc.hook_add(UC_HOOK_MEM_READ, on_read)
     error = None
     try:
-        uc.emu_start(ENTRY, RETURN_SENTINEL, timeout=20_000_000,
+        uc.emu_start(ENTRY, RETURN_SENTINEL,
+                     timeout=60_000_000 if probe_missing_file else 20_000_000,
                      count=max_instructions)
     except (UcError, ValueError) as exc:
         error = str(exc)
     print(f"PE_SHA256={digest}")
     print("EXECUTION=original x86 PE bytes in Unicorn; VirtualAlloc is a bounded fixture")
+    if probe_peb:
+        module_count = 2 if probe_ntdll is not None else (1 if probe_module else 0)
+        print(f"PEB_PROBE=synthetic FS:0x30 and PEB.Ldr; "
+              f"loader_entries={module_count}; not a Windows process reference")
+    if probe_dll is not None:
+        print(f"MODULE_PROBE=disk PE export data only; path={probe_dll} "
+              f"sha256={dll_digest} mapped_base=0x{dll_base:08x}; "
+              "execution stops before DLL code")
+    if probe_ntdll is not None:
+        print(f"MODULE_PROBE_NTDLL=disk PE export data only; path={probe_ntdll} "
+              f"sha256={ntdll_digest} mapped_base=0x{ntdll_base:08x}")
+    if probe_missing_file:
+        print("FILE_PROBE=explicit fixture: CreateFileW('C:\\Mirc\\mirc.ini') "
+              "returns INVALID_HANDLE_VALUE; not Windows DLL execution")
+    if probe_second_alloc:
+        print("SECOND_ALLOC_PROBE=explicit fixture: VirtualAlloc(0,0x5dd98,0x3000,0x4) "
+              "returns 0x32000000; not Windows DLL execution")
     for ret, requested, length, flags, protection in events:
         print(f"VIRTUALALLOC ret=0x{ret:08x} address=0x{requested:08x} "
               f"size=0x{length:x} flags=0x{flags:x} protect=0x{protection:x}")
     print(f"INSTRUCTIONS={stats['instructions']} VIRTUALALLOC_CALLS={stats['virtual_alloc_calls']}")
+    if probe_peb:
+        print(f"PEB_PROBE_REACHED={stats['after_peb'] is not None} "
+              f"PROBE_LIMIT={stats['probe_limit']} "
+              f"POST_PEB_INSTRUCTIONS={stats['instructions'] - stats['after_peb'] if stats['after_peb'] is not None else 0}")
+        if probe_dll is not None:
+            print(f"MODULE_PROBE_DLL_ENTRY={('0x%08x' % stats['dll_entry']) if stats['dll_entry'] is not None else 'none'}")
+            if stats["dll_stack"] is not None:
+                print("MODULE_PROBE_CALL_STACK=" + ",".join(
+                    f"0x{value:08x}" for value in stats["dll_stack"]
+                ))
+                print(f"MODULE_PROBE_WIDE_PATH={stats['dll_wide_path']!r}")
+            if probe_missing_file:
+                print(f"FILE_PROBE_STUB_CALLS={stats['file_stub_calls']}")
+            if probe_second_alloc:
+                print(f"SECOND_ALLOC_PROBE_STUB_CALLS={stats['second_alloc_calls']}")
+            print(f"MODULE_PROBE_DLL_READS={stats['dll_reads']} " + ",".join(
+                f"0x{site:08x}->0x{address:08x}:{size}"
+                for site, address, size in stats["dll_read_sites"]
+            ))
+        print(f"PEB_PROBE_CANDIDATE_NAME={stats['candidate_name']!r}")
+        print("PEB_PROBE_TRACE=" + ",".join(f"0x{address:08x}" for address in post_peb_trace))
+        print("PEB_PROBE_TAIL=" + ",".join(f"0x{address:08x}" for address in post_peb_recent))
+        disassembler = Cs(CS_ARCH_X86, CS_MODE_32)
+        for address in dict.fromkeys(post_peb_trace[:40]):
+            decoded = next(disassembler.disasm(
+                bytes(uc.mem_read(address, 15)), address, count=1
+            ), None)
+            if decoded:
+                print(f"PEB_PROBE_DISASM 0x{address:08x} "
+                      f"{decoded.mnemonic} {decoded.op_str}")
+        for address in dict.fromkeys(post_peb_recent):
+            decoded = next(disassembler.disasm(
+                bytes(uc.mem_read(address, 15)), address, count=1
+            ), None)
+            if decoded:
+                print(f"PEB_PROBE_TAIL_DISASM 0x{address:08x} "
+                      f"{decoded.mnemonic} {decoded.op_str}")
+        for address in post_peb_unique:
+            decoded = next(disassembler.disasm(
+                bytes(uc.mem_read(address, 15)), address, count=1
+            ), None)
+            if decoded:
+                print(f"PEB_PROBE_FLOW_DISASM 0x{address:08x} "
+                      f"{decoded.mnemonic} {decoded.op_str}")
     print(f"FINAL_EIP=0x{uc.reg_read(UC_X86_REG_EIP):08x} "
           f"EAX=0x{uc.reg_read(UC_X86_REG_EAX):08x} "
           f"ESP=0x{uc.reg_read(UC_X86_REG_ESP):08x} ERROR={error or 'none'}")
@@ -137,6 +363,7 @@ def run(path: Path, max_instructions: int):
         ):
             print(f"DISASM 0x{instruction.address:08x} {instruction.mnemonic} {instruction.op_str}")
         if final_eip == 0x3005ED82:
+            print("NEXT_BYTES=" + bytes(uc.mem_read(0x3005FEFE, 96)).hex())
             for instruction in Cs(CS_ARCH_X86, CS_MODE_32).disasm(
                 bytes(uc.mem_read(0x3005FEFE, 96)), 0x3005FEFE, count=18
             ):
@@ -151,5 +378,15 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--exe", required=True, type=Path)
     parser.add_argument("--max-instructions", type=int, default=1_000_000)
+    parser.add_argument("--probe-peb", action="store_true")
+    parser.add_argument("--probe-module", action="store_true")
+    parser.add_argument("--probe-dll", type=Path)
+    parser.add_argument("--probe-ntdll", type=Path)
+    parser.add_argument("--probe-post-limit", type=int, default=10000)
+    parser.add_argument("--probe-missing-file", action="store_true")
+    parser.add_argument("--probe-second-alloc", action="store_true")
     args = parser.parse_args()
-    raise SystemExit(run(args.exe, args.max_instructions))
+    raise SystemExit(run(args.exe, args.max_instructions, args.probe_peb,
+                         args.probe_module, args.probe_dll, args.probe_ntdll,
+                         args.probe_post_limit, args.probe_missing_file,
+                         args.probe_second_alloc))

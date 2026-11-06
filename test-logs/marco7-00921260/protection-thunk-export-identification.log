@@ -1,0 +1,5 @@
+kernel32_sha256=7f04765684de5ecb702afb5c4cfbfde12a4e61a125389ee23166aa66430e62f0
+kernel32_export_rva=0x1ea50 names=['CreateFileW']
+kernel32_export_rva=0x165f0 names=['VirtualAlloc']
+rol19_utf16_hash KERNEL32.DLL=0x6e2bca17
+rol19_utf16_hash NTDLL.DLL=0xad74dbf2

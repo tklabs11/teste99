@@ -1,0 +1,24 @@
+{
+  "schema": "spore-m7-00a2a210-entry-v1",
+  "source_sha256": "6aec99cb2dc7fd08851a1718e92a60f359fb3fccca3b244a890ae07e93cbe59b",
+  "entry": "0x00a2a210",
+  "boundary": {
+    "address": "0x00a2a275",
+    "mnemonic": "CALL",
+    "status": "blocked",
+    "reason": "prefix stops before direct call to 0x00921340",
+    "target": "0x00921340"
+  },
+  "boundary_executed": false,
+  "translated_instruction_count": 26,
+  "first_call_executed": true,
+  "first_call_target_instruction_count": 38,
+  "verified_prefix_sha256": "0c0fee6b2047168158cc1326bb81623c1976f8f8fa26fea795650732d3a5acaf",
+  "verified_prefix_bytes": "6aff685882210164a100000000506489250000000083ec2856576a006a048bf16a0c68600900008dbe5c030000578d4c242c8974241cc744242c00000000e80d70efff897c24208d463481c76009000068c9000000897c2428c744242c0c00000089442430",
+  "constructor_call_address": "0x00a33817",
+  "constructor_call_bytes": "e8f469ffff",
+  "constructor_generated_stop": "0x00a33831",
+  "constructor_generated_instruction_count": 113,
+  "constructor_generated_stop_reachable_in_fixture": false,
+  "last_executed_byte_if_reached": "0x00a2a274"
+}

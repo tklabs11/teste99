@@ -1,0 +1,27 @@
+{
+  "schema": "spore-m7-00a2a210-entry-v1",
+  "source_sha256": "6aec99cb2dc7fd08851a1718e92a60f359fb3fccca3b244a890ae07e93cbe59b",
+  "entry": "0x00a2a210",
+  "boundary": {
+    "address": "0x00a2a29e",
+    "mnemonic": "CALL",
+    "status": "blocked",
+    "reason": "prefix stops before direct call to 0x00a23570",
+    "target": "0x00a23570"
+  },
+  "boundary_executed": false,
+  "translated_instruction_count": 42,
+  "first_call_executed": true,
+  "second_call_executed": true,
+  "first_call_target_instruction_count": 38,
+  "lookup_table_address": "0x0143d850",
+  "lookup_table_sha256": "452bd6380531f69e2427233a59dbc409053c5a4b469c458e954cebca452347bf",
+  "verified_prefix_sha256": "416d2ef09c4ea1f45d8ecf0b4aa311eb3fabc33597c57f124d2f36aeae3de1ea",
+  "verified_prefix_bytes": "6aff685882210164a100000000506489250000000083ec2856576a006a048bf16a0c68600900008dbe5c030000578d4c242c8974241cc744242c00000000e80d70efff897c24208d463481c76009000068c9000000897c2428c744242c0c00000089442430e8c670efff83c4048d4c2418518b4c24488d54244852518d542450528b5424508d4c24545152508bce",
+  "constructor_call_address": "0x00a33817",
+  "constructor_call_bytes": "e8f469ffff",
+  "constructor_generated_stop": "0x00a33831",
+  "constructor_generated_instruction_count": 113,
+  "constructor_generated_stop_reachable_in_fixture": false,
+  "last_executed_byte_if_reached": "0x00a2a29d"
+}

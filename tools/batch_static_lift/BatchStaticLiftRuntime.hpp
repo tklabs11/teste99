@@ -380,7 +380,7 @@ private:
         return nullptr;
     }
 
-    std::array<Region, 8> regions_{};
+    std::array<Region, 16> regions_{};
     std::array<std::uint8_t, kStackBytes> stack_{};
     std::size_t region_count_ = 0;
     mutable std::mutex memory_mutex_;

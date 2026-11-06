@@ -1044,7 +1044,8 @@ def static_source(function, translated, call_targets, terminal_status=None):
 
 
 def translate_function(
-    function, exported_function_entries=None, iat_imports=None
+    function, exported_function_entries=None, iat_imports=None,
+    stop_call_site=None, stop_call_sites=None,
 ):
     reasons = []
     diagnostics = []
@@ -1094,6 +1095,27 @@ def translate_function(
                 "reason": "first instruction is not the function entry",
             }],
         )
+    stops = set(stop_call_sites or ())
+    if stop_call_site is not None:
+        stops.add(stop_call_site)
+    stops = {
+        parse_address(site) if isinstance(site, str) else int(site)
+        for site in stops
+    }
+    for site in sorted(stops):
+        boundary = by_address.get(site)
+        if boundary is None or boundary.get("mnemonic", "").upper() != "CALL":
+            raise LiftRejected(
+                [f"stop site 0x{site:08x} is not an exported CALL"],
+                diagnostics,
+            )
+        try:
+            direct_call_target(boundary)
+        except (KeyError, TypeError, ValueError) as error:
+            raise LiftRejected(
+                [f"stop site 0x{site:08x} is not a direct CALL: {error}"],
+                diagnostics,
+            ) from error
     translated = []
     for index, address in enumerate(addresses):
         instruction = by_address[address]
@@ -1103,20 +1125,28 @@ def translate_function(
             else None
         )
         try:
-            body = translate_instruction(
-                instruction,
-                index,
-                address_set,
-                next_address,
-                exported_function_entries,
-                iat_imports,
-            )
+            if address in stops:
+                target = direct_call_target(instruction)
+                body = [
+                    f"state.eip = 0x{address:08x}u;",
+                    "return BatchLiftStatus::unsupported_dependency;",
+                ]
+            else:
+                body = translate_instruction(
+                    instruction,
+                    index,
+                    address_set,
+                    next_address,
+                    exported_function_entries,
+                    iat_imports,
+                )
             translated.append((instruction, body))
             diagnostics.append({
                 "address": instruction["address"],
                 "mnemonic": instruction["mnemonic"].upper(),
-                "status": "translated",
+                "status": "blocked" if address in stops else "translated",
                 "bytes": instruction["bytes"],
+                **({"target": f"0x{target:08x}"} if address in stops else {}),
             })
         except (KeyError, TypeError, ValueError) as error:
             diagnostics.append({
@@ -1143,7 +1173,12 @@ def translate_function(
             ["function has no recognized terminal return or unconditional transfer"],
             diagnostics,
         )
-    call_targets = function_call_targets(function, iat_imports)
+    call_targets = [
+        target
+        for instruction in instructions
+        if parse_address(instruction["address"]) not in stops
+        for target in function_call_targets({"instructions": [instruction]}, iat_imports)
+    ]
     return static_source(function, translated, call_targets), diagnostics
 
 

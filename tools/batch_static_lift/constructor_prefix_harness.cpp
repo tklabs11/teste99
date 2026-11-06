@@ -1,6 +1,9 @@
 #include "BatchStaticLiftRuntime.hpp"
 #include "prefix_reference_bytes.hpp"
 #include "closure_reference_bytes.hpp"
+#if defined(M7_COMPOSITE_ENTRY)
+#include "m7_entry_reference_bytes.hpp"
+#endif
 
 #include <algorithm>
 #include <array>
@@ -97,17 +100,35 @@ BatchLiftStatus spore_lift_00a33600(
 BatchLiftStatus spore_lift_00fee000(
     BatchLiftMemory& memory,
     BatchLiftState& state);
+#if defined(M7_COMPOSITE_ENTRY)
+BatchLiftStatus spore_lift_00a2a210(
+    BatchLiftMemory& memory,
+    BatchLiftState& state);
+#endif
 
 namespace {
 
 constexpr std::uint32_t kObjectBase = 0x20000000u;
+#if defined(M7_THROUGH_FIRST_CALL)
+constexpr std::uint32_t kObjectBytes = 0x1100u;
+#else
 constexpr std::uint32_t kObjectBytes = 0x404u;
+#endif
 constexpr std::uint32_t kPrefixStackBase = 0x71000000u;
 constexpr std::uint32_t kPrefixStackBytes = 0x4000u;
 constexpr std::uint32_t kPrefixStackTopOffset = 0x3000u;
 constexpr std::uint32_t kPrefixEntryEsp =
     kPrefixStackBase + kPrefixStackTopOffset - sizeof(std::uint32_t);
 constexpr std::uint32_t kObjectCanary = 0x8badf00du;
+#if defined(M7_COMPOSITE_ENTRY)
+#if defined(M7_THROUGH_SECOND_CALL)
+constexpr std::uint32_t kCompositeStop = 0x00a2a29eu;
+#elif defined(M7_THROUGH_FIRST_CALL)
+constexpr std::uint32_t kCompositeStop = 0x00a2a275u;
+#else
+constexpr std::uint32_t kCompositeStop = 0x00a2a24eu;
+#endif
+#endif
 constexpr std::uint32_t kIndexedTestEntry = 0x00fee000u;
 constexpr std::uint32_t kIndexedObjectBase = 0x52000000u;
 constexpr std::size_t kIndexedObjectBytes = 0x100u;
@@ -829,7 +850,13 @@ bool read_guest_snapshot(
     BatchLiftStatus status,
     Snapshot& snapshot) {
     if (status != BatchLiftStatus::unsupported_dependency
-        || state.eip != kSporePrefixStop) {
+        || state.eip !=
+#if defined(M7_COMPOSITE_ENTRY)
+            kCompositeStop
+#else
+            kSporePrefixStop
+#endif
+        ) {
         std::fprintf(
             stderr,
             "guest prefix stopped unexpectedly: status=%u eip=%08x\n",
@@ -946,6 +973,14 @@ bool run_lifted_prefix(Snapshot& snapshot) {
             return false;
         }
     }
+#if defined(M7_THROUGH_SECOND_CALL)
+    auto lookup_table = kM7TableBytes;
+    if (!memory.map_region(
+            0x0143d850u, lookup_table.data(), lookup_table.size(), false)) {
+        std::fprintf(stderr, "could not map PE-backed M7 lookup table\n");
+        return false;
+    }
+#endif
     BatchGuestRuntime runtime;
     BatchLiftState state{};
     state.regs[0] = 0x87654321u;
@@ -960,13 +995,16 @@ bool run_lifted_prefix(Snapshot& snapshot) {
     state.eip = kSporePrefixEntry;
     state.fs_base = 0x30000000u;
     state.imports = &runtime;
-    const BatchLiftStatus status =
-        spore_lift_00a33600(memory, state);
+    BatchLiftStatus status = spore_lift_00a33600(memory, state);
     std::uint32_t canary{};
     if (!memory.load32(
             kObjectBase + kObjectBytes, canary)
         || canary != kObjectCanary) {
-        std::fprintf(stderr, "guest prefix overwrote the object canary\n");
+        std::fprintf(stderr,
+                     "guest prefix overwrote the object canary: value=%08x status=%u eip=%08x eax=%08x ebx=%08x ecx=%08x esi=%08x edi=%08x esp=%08x\n",
+                     canary, static_cast<unsigned>(status), state.eip,
+                     state.regs[0], state.regs[3], state.regs[1],
+                     state.regs[6], state.regs[7], state.regs[4]);
         return false;
     }
     if (!memory.load32(kPrefixStackBase, canary) || canary != 0x8badf00du) {
@@ -1026,9 +1064,11 @@ void print_snapshot(const char* label, const Snapshot& snapshot) {
 bool snapshots_equal(const Snapshot& left, const Snapshot& right) {
     Snapshot normalized_left = left;
     Snapshot normalized_right = right;
+#if !defined(M7_COMPOSITE_ENTRY)
     normalized_left.regs[1] = 0u;
-    normalized_left.regs[2] = 0u;
     normalized_right.regs[1] = 0u;
+#endif
+    normalized_left.regs[2] = 0u;
     normalized_right.regs[2] = 0u;
     return std::memcmp(
         &normalized_left, &normalized_right, sizeof(Snapshot)) == 0;
@@ -1038,7 +1078,17 @@ std::uint32_t normalize_object_pointer(
     std::uint32_t address,
     std::uint32_t native_base) {
     if (address < native_base
-        || address - native_base > kObjectBytes) {
+        || address - native_base >
+#if defined(M7_COMPOSITE_ENTRY)
+#if defined(M7_THROUGH_FIRST_CALL)
+            0x2000u
+#else
+            0x1000u
+#endif
+#else
+            kObjectBytes
+#endif
+        ) {
         return address;
     }
     return kObjectBase + (address - native_base);
@@ -1115,7 +1165,11 @@ bool run_original_prefix(Snapshot& snapshot) {
         PAGE_EXECUTE_READWRITE);
     void* object = VirtualAlloc(
         nullptr,
+#if defined(M7_THROUGH_FIRST_CALL)
+        0x2000u,
+#else
         0x1000u,
+#endif
         MEM_RESERVE | MEM_COMMIT,
         PAGE_READWRITE);
     if (code_allocation == nullptr
@@ -1135,6 +1189,24 @@ bool run_original_prefix(Snapshot& snapshot) {
     auto* child_code = static_cast<std::uint8_t*>(code_allocation) + 0x2000u;
     std::memcpy(root_code, kSporePrefixBytes.data(), kSporePrefixBytes.size());
     std::memcpy(child_code, kSporeChildBytes.data(), kSporeChildBytes.size());
+#if defined(M7_COMPOSITE_ENTRY)
+    auto* m7_code = static_cast<std::uint8_t*>(code_allocation) + 0x4000u;
+    std::memcpy(m7_code, kM7EntryBytes.data(), kM7EntryBytes.size());
+    m7_code[kM7EntryBytes.size()] = 0xccu;
+#if defined(M7_THROUGH_FIRST_CALL)
+    auto* m7_target_code = static_cast<std::uint8_t*>(code_allocation) + 0x5000u;
+    std::memcpy(m7_target_code, kM7TargetBytes.data(), kM7TargetBytes.size());
+#endif
+#if defined(M7_THROUGH_SECOND_CALL)
+    auto* m7_next_code = static_cast<std::uint8_t*>(code_allocation) + 0x6000u;
+    auto* m7_lookup_code = static_cast<std::uint8_t*>(code_allocation) + 0x7000u;
+    std::memcpy(m7_next_code, kM7NextBytes.data(), kM7NextBytes.size());
+    std::memcpy(m7_lookup_code, kM7LookupBytes.data(), kM7LookupBytes.size());
+    auto m7_table = kM7TableBytes;
+#endif
+    std::memcpy(root_code + (kSporePrefixStop - kSporePrefixEntry),
+                kM7RootCallBytes.data(), kM7RootCallBytes.size());
+#endif
     constexpr std::array<std::uint8_t, 8> kGlobalFloatA{
         0xf3u, 0x0fu, 0x10u, 0x05u, 0x18u, 0x57u, 0x48u, 0x01u};
     constexpr std::array<std::uint8_t, 8> kGlobalFloatB{
@@ -1212,10 +1284,55 @@ bool run_original_prefix(Snapshot& snapshot) {
     }
     const std::uint32_t root_runtime_address =
         static_cast<std::uint32_t>(reinterpret_cast<std::uintptr_t>(root_code));
+#if defined(M7_COMPOSITE_ENTRY)
+    if (!relocate_direct_call(
+            root_code + (kSporePrefixStop - kSporePrefixEntry), m7_code)) {
+        std::fprintf(stderr, "could not relocate M7 constructor CALL\n");
+        VirtualFree(code_allocation, 0, MEM_RELEASE);
+        VirtualFree(object, 0, MEM_RELEASE);
+        return false;
+    }
+#if defined(M7_THROUGH_FIRST_CALL)
+    if (!relocate_direct_call(
+            m7_code + (0x00a2a24eu - 0x00a2a210u), m7_target_code)) {
+        std::fprintf(stderr, "could not relocate first M7 child CALL\n");
+        VirtualFree(code_allocation, 0, MEM_RELEASE);
+        VirtualFree(object, 0, MEM_RELEASE);
+        return false;
+    }
+#endif
+#if defined(M7_THROUGH_SECOND_CALL)
+    constexpr std::array<std::uint8_t, 5> kM7TableEndPush{
+        0x68u, 0x50u, 0xdcu, 0x43u, 0x01u};
+    constexpr std::array<std::uint8_t, 5> kM7TableStartPush{
+        0x68u, 0x50u, 0xd8u, 0x43u, 0x01u};
+    if (std::memcmp(m7_next_code + 5u, kM7TableEndPush.data(), 5u) != 0
+        || std::memcmp(m7_next_code + 10u, kM7TableStartPush.data(), 5u) != 0
+        || !relocate_direct_call(
+            m7_code + (0x00a2a275u - 0x00a2a210u), m7_next_code)
+        || !relocate_direct_call(m7_next_code + 15u, m7_lookup_code)) {
+        std::fprintf(stderr, "could not relocate verified M7 lookup calls/data\n");
+        VirtualFree(code_allocation, 0, MEM_RELEASE);
+        VirtualFree(object, 0, MEM_RELEASE);
+        return false;
+    }
+    const std::uint32_t m7_table_start = native_address32(m7_table.data());
+    const std::uint32_t m7_table_end = native_address32(m7_table.data() + 0x400u);
+    std::memcpy(m7_next_code + 6u, &m7_table_end, sizeof(m7_table_end));
+    std::memcpy(m7_next_code + 11u, &m7_table_start, sizeof(m7_table_start));
+#endif
+    const std::uint32_t boundary_runtime_address = native_address32(
+        m7_code + kM7EntryBytes.size());
+#else
     const std::uint32_t boundary_runtime_address =
         root_runtime_address + (kSporePrefixStop - kSporePrefixEntry);
     root_code[kSporePrefixStop - kSporePrefixEntry] = 0xccu;
+#endif
+#if defined(M7_THROUGH_FIRST_CALL)
+    std::memset(object, 0, 0x2000u);
+#else
     std::memset(object, 0, 0x1000u);
+#endif
     static_cast<std::uint32_t*>(object)[8] = 0xabcdef01u;
     std::memcpy(
         static_cast<std::uint8_t*>(object) + kObjectBytes,
@@ -1293,20 +1410,22 @@ bool run_original_prefix(Snapshot& snapshot) {
     const std::uint32_t native_object_base = g_prefix_native_object;
     snapshot.regs[0] = normalize_native_stack_pointer(
         normalize_object_pointer(context.Eax, native_object_base));
-    snapshot.regs[1] = normalize_object_pointer(context.Ecx, native_object_base);
+    snapshot.regs[1] = normalize_native_stack_pointer(
+        normalize_object_pointer(context.Ecx, native_object_base));
     snapshot.regs[2] = context.Edx;
     snapshot.regs[3] = context.Ebx;
     snapshot.regs[4] = 0u;
     snapshot.regs[5] = context.Ebp;
     snapshot.regs[6] = normalize_object_pointer(context.Esi, native_object_base);
-    snapshot.regs[7] = context.Edi;
+    snapshot.regs[7] = normalize_object_pointer(context.Edi, native_object_base);
     snapshot.esp_delta = context.Esp - g_prefix_entry_esp;
     snapshot.eflags = context.EFlags & kFlagMask;
     snapshot.fs_head_delta =
         g_prefix_boundary_fs_head - g_prefix_entry_esp;
     for (unsigned index = 0; index < 4; ++index) {
         snapshot.saved_registers[index] = normalize_native_stack_pointer(
-            g_prefix_boundary_words[index]);
+            normalize_object_pointer(
+                g_prefix_boundary_words[index], native_object_base));
     }
     snapshot.stack_object = g_prefix_boundary_words[4];
     snapshot.stack_object = normalize_object_pointer(
@@ -1369,13 +1488,23 @@ int main() {
     }
     std::printf(
         "PASS original_x86_vs_lifted_x86 stop=0x%08x child=0x%08x\n",
+#if defined(M7_COMPOSITE_ENTRY)
+        kCompositeStop,
+        0x00a2a210u);
+#else
         kSporePrefixStop,
         kSporeChildEntry);
+#endif
 #else
     std::printf(
         "PASS lifted_arm64 stop=0x%08x child=0x%08x\n",
+#if defined(M7_COMPOSITE_ENTRY)
+        kCompositeStop,
+        0x00a2a210u);
+#else
         kSporePrefixStop,
         kSporeChildEntry);
+#endif
 #endif
     return 0;
 }

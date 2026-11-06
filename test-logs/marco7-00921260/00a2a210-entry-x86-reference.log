@@ -1,0 +1,4 @@
+PE_SHA256=6aec99cb2dc7fd08851a1718e92a60f359fb3fccca3b244a890ae07e93cbe59b EXECUTION=original_x86_bytes_in_Unicorn fixture=isolated_synthetic_FS
+instructions=18
+kind=original_x86 boundary=00a2a24e eax=ffffffff ecx=700001dc edx=12345678 ebx=11223344 esp_delta=-80 ebp=55667788 esi=20000000 edi=2000035c flags=00000014 fs_head=700001f4 stack=5c030020600900000c000000040000000000000000ffeeddccbbaa99000000200000000000000000000000000000000000000000000000000000000000000000
+boundary_reached=True final_eip=0x00a2a24e error=none

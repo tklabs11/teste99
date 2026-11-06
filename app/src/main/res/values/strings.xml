@@ -3,6 +3,10 @@
     <string name="native_chain_blocked">Cadeia nativa bloqueada: SporeApp.exe não corresponde ao SHA-256 esperado.</string>
     <string name="native_chain_running">Marco 1: lendo a tabela do PE original e executando a recompilação ARM64...</string>
     <string name="native_chain_failure">Falha na cadeia nativa: %1$s</string>
+    <string name="m7_fixture_button">Marco 7: testar lift ARM64 (fixture)</string>
+    <string name="m7_fixture_title">Diagnóstico do Marco 7</string>
+    <string name="m7_fixture_success">PASSOU: o lift ARM64 executou dentro deste APK.\n\nCinco funções chegaram à parada antes da chamada em 0x00A221FC. Registradores, flags e memória coincidiram com o snapshot x86 da fixture.</string>
+    <string name="m7_fixture_notice">Este diagnóstico usa código e dados gerados a partir do PE de referência, com entradas isoladas do harness. Não lê a instalação para iniciar o jogo e não demonstra boot ou renderização.</string>
     <string name="dbpf_resource_button">Hash da engine + ler cell_Eggkid</string>
     <string name="dbpf_resource_running">Calculando o hash do nome e lendo o recurso original...</string>
     <string name="dbpf_resource_failure">Falha ao ler recurso DBPF: %1$s</string>

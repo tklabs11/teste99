@@ -3365,8 +3365,9 @@ addresses are in the [Marco 7 report](./test-logs/marco7-00921260/report.md)
 and the [byte-verified thunk trace](./test-logs/marco7-00921260/protection-thunk-trace.log).
 The Marco 7 working files have been integrated into the Android Studio project at
 `C:\Users\wesll\AndroidStudioProjects\SporeAndroid`. Its Git remote is
-`https://github.com/tklabs11/spore_android`; the original HEAD is unchanged
-and the owner will make the commit. No new APK was built from these backend
+`https://github.com/tklabs11/spore_android`. The owner subsequently committed
+the earlier Marco 7 work as `a83635e` (`update 18`); the current CFG boundary
+work remains uncommitted. No new APK was built from these backend
 changes because the constructor closure is not connected to the app's JNI
 runtime yet.
 
@@ -3394,6 +3395,108 @@ calls of `FUN_00a221b0`, but did not clear the target bytes:
 [manual-map log](./test-logs/marco7-00921260/protection-thunk-manual-map.log).
 That last experiment is not an equivalent Windows load of the original PE;
 it cannot establish `0x011e073e` semantics or justify an APK integration.
+
+Marco 7 then advanced a **separate function-level boundary**. A CFG-aware
+stop-before-CALL generated four byte-verified functions for the path through
+`FUN_00a23570`, including `FUN_00921260`, `FUN_00921300`, and
+`FUN_00921360`. With an explicitly isolated object/stack fixture and PE-backed
+constants, Unicorn executed 1,170 original x86 instructions and stopped before
+`0x00a2360d -> FUN_00a221b0`. The host lift and the Android ARM64 lift matched
+the reference snapshot for registers, flags, object fields, and buffer:
+[comparison](./test-logs/marco7-00921260/00a23570-boundary-differential.log),
+[verified generated report](./test-logs/marco7-00921260/generated-00a23570-boundary-v2/report.json),
+and [Marco 7 details](./test-logs/marco7-00921260/report.md).
+The last byte executed in this **isolated function fixture** was `0x00a2360c`.
+The constructor harness still stops before `0x00a33817`, as confirmed by the
+[latest device regression](./test-logs/constructor-prefix-00a33600-20261106-172309157/comparison.log).
+All [55 Python tests](./test-logs/marco7-00921260/python-tests-cfg-boundary.log)
+pass. No game boot or rendering has been demonstrated.
+
+The next isolated Marco 7 path now executes **18 original x86 instructions
+inside `FUN_00a221b0`** after the `FUN_00a23570` call. With the documented
+fixture, the nonempty free list skips conditional `0x00f473a0`; original x86
+bytes in Unicorn, the host lift, and the ARM64 lift on device
+`PJMZAEJRX4YLFIDI` match at `0x00a221fc`, before calling the unresolved
+`0x011e073e` protection thunk. The last executed byte in that isolated path
+is `0x00a221fb`. Evidence: [verified five-function generation](./test-logs/marco7-00921260/generated-00a23570-through-00a221b0/report.json),
+[original x86 execution](./test-logs/marco7-00921260/00a23570-through-allocator-x86-reference.log),
+[host and Android comparison](./test-logs/marco7-00921260/00a23570-through-allocator-differential.log),
+[Android snapshot](./test-logs/marco7-00921260/00a23570-through-allocator-android.log),
+and [56 passing Python tests](./test-logs/marco7-00921260/python-tests-through-allocator.log).
+The constructor regression also passed again
+[on the device](./test-logs/constructor-prefix-00a33600-20261106-173351200/comparison.log).
+Its validated prefix still ends at `0x00a33816`, before the call at
+`0x00a33817`. These are harness fixtures; neither an APK boot nor rendering
+has been demonstrated. See the [Marco 7 report](./test-logs/marco7-00921260/report.md)
+for the exact branches, commands, and remaining dependencies.
+
+A bounded follow-up traced the unresolved `0x011e073e` protection thunk using
+**synthetic Windows loader state**, clearly separate from the validated Android
+lift. Its generated x86 code searches module-name hashes for `KERNEL32.DLL`
+and `NTDLL.DLL`, then resolves `CreateFileW` and attempts to open
+`C:\Mirc\mirc.ini`. After an explicitly modeled missing-file result, it
+resolves `VirtualAlloc` twice for additional buffers. The run stops before
+the second of those calls; it does not establish the thunk's final effect.
+See the [module/export trace](./test-logs/marco7-00921260/protection-thunk-two-modules-probe.log),
+[bounded API-fixture trace](./test-logs/marco7-00921260/protection-thunk-second-allocation-probe.log),
+[export identification](./test-logs/marco7-00921260/protection-thunk-export-identification.log),
+and [Marco 7 report](./test-logs/marco7-00921260/report.md).
+No new Android boot boundary was validated by this diagnostic.
+
+The **debug APK now runs the five-function Marco 7 fixture in its own ARM64
+JNI process** through a separate button labeled as a fixture. It checks the
+same registers, comparable flags, object fields, and buffer snapshot as the
+original x86 byte execution, stopping before `0x00a221fc`. The button and
+result explicitly say this is not game boot. The APK was built and installed
+on `PJMZAEJRX4YLFIDI`; [build log](./test-logs/marco7-00921260/apk-m7-fixture-build.log),
+[device logcat](./test-logs/marco7-00921260/apk-m7-fixture-logcat.log),
+[screenshot](./test-logs/marco7-00921260/apk-m7-fixture-result.png),
+and [artifact hash](./test-logs/marco7-00921260/apk-m7-fixture-artifact.log).
+The existing Marco 1 in-app native check also passed after installation
+([UI evidence](./test-logs/marco7-00921260/apk-m1-regression-ui.xml)).
+The constructor prefix remains at `0x00a33816`; the protection thunk still
+blocks actual game initialization. Source and reproduction details are in the
+[Marco 7 report](./test-logs/marco7-00921260/report.md).
+
+### Marco 7: chamada do construtor validada no Android
+
+Uma continuação posterior gerou o prefixo de `FUN_00a33600` com a chamada
+original `0x00a33817 → FUN_00a2a210` e executou as primeiras 18 instruções
+da filha. A execução parou **antes** do próximo `CALL`, em `0x00a2a24e →
+FUN_00921260`; o último byte executado na filha foi `0x00a2a24d`.
+Os snapshots dos bytes x86 originais, do lift x86 e do lift ARM64 no aparelho
+`PJMZAEJRX4YLFIDI` passaram na [comparação diferencial](./test-logs/marco7-00921260/m7-constructor-call-differential.log).
+O [relatório](./test-logs/marco7-00921260/report.md) traz os bytes, as
+funções alcançadas, os [logs x86](./test-logs/marco7-00921260/m7-constructor-call-x86.log)
+e [Android](./test-logs/marco7-00921260/m7-constructor-call-android.log),
+o [gerador e fontes](./test-logs/marco7-00921260/generated-constructor-call-v4/report.json)
+e o [script de reprodução no aparelho](./test-logs/marco7-00921260/run-m7-constructor-call-arm64.ps1).
+São fixtures de harness com imports modelados. O APK de debug demonstra a
+prova isolada anterior; esta cadeia nova foi executada em binário ARM64
+independente. Não há evidência de boot ou renderização do jogo.
+
+Na continuação, o mesmo caminho executou também **`FUN_00921260` completa**
+e retornou a `FUN_00a2a210`. A comparação dos bytes x86 originais com os
+lifts x86 e ARM64 no dispositivo passou, incluindo a lista escrita na região
+de `0x1100` bytes da fixture. O novo limite é **antes de `0x00a2a275`**, chamada
+para `FUN_00921340`; o último byte executado na função filha é `0x00a2a274`.
+Veja a [comparação](./test-logs/marco7-00921260/m7-first-call-differential.log),
+os [logs x86](./test-logs/marco7-00921260/m7-first-call-x86.log) e
+[Android](./test-logs/marco7-00921260/m7-first-call-android.log), os
+[metadados do gerador](./test-logs/marco7-00921260/generated-constructor-first-call-v5/report.json)
+e os detalhes no [relatório do Marco 7](./test-logs/marco7-00921260/report.md).
+Esta continuação também usou estado artificial do harness, sem boot do jogo.
+
+O caminho foi estendido novamente: `FUN_00921340` e sua busca em
+`FUN_009212c0` executaram com a tabela original verificada do PE. O x86
+original e os lifts x86/ARM64 no aparelho coincidiram na
+[comparação](./test-logs/marco7-00921260/m7-second-call-differential.log).
+O limite agora é **antes de `0x00a2a29e → FUN_00a23570`**, com último byte
+executado em `0x00a2a29d`. [Logs x86](./test-logs/marco7-00921260/m7-second-call-x86.log)
+e [Android](./test-logs/marco7-00921260/m7-second-call-android.log),
+[bytes e tabela verificados](./test-logs/marco7-00921260/generated-constructor-second-call-v6/report.json)
+e [relatório completo](./test-logs/marco7-00921260/report.md).
+É uma execução do harness, ainda sem boot ou renderização do jogo.
 
 ## Preserved one-function recursive-call pilot
 

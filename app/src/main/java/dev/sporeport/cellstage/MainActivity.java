@@ -13,6 +13,7 @@ import android.view.View;
 import android.widget.Button;
 import android.widget.LinearLayout;
 import android.widget.ProgressBar;
+import android.widget.ScrollView;
 import android.widget.TextView;
 
 import java.io.File;
@@ -57,6 +58,7 @@ public final class MainActivity extends Activity {
     private TextView runtimeStatus;
     private Button importButton;
     private Button nativeChainButton;
+    private Button m7FixtureButton;
     private Button dbpfResourceButton;
     private Button sdlTestButton;
     private Button launchButton;
@@ -159,6 +161,11 @@ public final class MainActivity extends Activity {
         nativeChainButton.setEnabled(false);
         nativeChainButton.setOnClickListener(v -> runNativeSporeChain());
 
+        m7FixtureButton = new Button(this);
+        m7FixtureButton.setText(R.string.m7_fixture_button);
+        m7FixtureButton.setAllCaps(false);
+        m7FixtureButton.setOnClickListener(v -> runMarco7Fixture());
+
         dbpfResourceButton = new Button(this);
         dbpfResourceButton.setText(R.string.dbpf_resource_button);
         dbpfResourceButton.setAllCaps(false);
@@ -237,6 +244,9 @@ public final class MainActivity extends Activity {
         root.addView(nativeChainButton, new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT));
+        root.addView(m7FixtureButton, new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT));
         root.addView(dbpfResourceButton, new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT));
@@ -246,7 +256,10 @@ public final class MainActivity extends Activity {
         root.addView(cancelButton, new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT));
-        setContentView(root);
+        ScrollView scroll = new ScrollView(this);
+        scroll.setFillViewport(true);
+        scroll.addView(root);
+        setContentView(scroll);
     }
 
     private void openFolderPicker() {
@@ -425,6 +438,29 @@ public final class MainActivity extends Activity {
                 status.setText(verifiedResult);
                 importButton.setEnabled(true);
                 nativeChainButton.setEnabled(true);
+            });
+        }).start();
+    }
+
+    private void runMarco7Fixture() {
+        m7FixtureButton.setEnabled(false);
+        new Thread(() -> {
+            String result;
+            try {
+                result = nativeMarco7Fixture();
+            } catch (RuntimeException | UnsatisfiedLinkError error) {
+                result = "MARCO7_FIXTURE_FAIL " + error.getMessage();
+            }
+            final String message = result;
+            runOnUiThread(() -> {
+                m7FixtureButton.setEnabled(true);
+                String display = message.startsWith("MARCO7_FIXTURE_PASS")
+                        ? getString(R.string.m7_fixture_success) : message;
+                new AlertDialog.Builder(this)
+                        .setTitle(R.string.m7_fixture_title)
+                        .setMessage(display + "\n\n" + getString(R.string.m7_fixture_notice))
+                        .setPositiveButton(android.R.string.ok, null)
+                        .show();
             });
         }).start();
     }
@@ -1375,6 +1411,7 @@ public final class MainActivity extends Activity {
     }
 
     private static native String nativeRuntimeInfo();
+    private static native String nativeMarco7Fixture();
     private static native String nativeSporeLookup(String executablePath, int key);
     private static native long nativeSporeNameHash(String name);
     private static native byte[] nativeReadDbpfResource(

@@ -37,6 +37,70 @@ def function(instructions):
 
 
 class StaticBatchLiftTests(unittest.TestCase):
+    def test_cfg_call_boundary_preserves_earlier_branch_and_stops_before_call(self):
+        body = function([
+            instruction(0x401000, "83f802", "CMP", ("EAX", "0x2")),
+            instruction(0x401003, "7303", "JNC", ("0x00401008",),
+                        flow="CONDITIONAL_JUMP", flows_to=("0x00401008",)),
+            instruction(0x401005, "33c0", "XOR", ("EAX", "EAX")),
+            instruction(0x401007, "c3", "RET", flow="TERMINATOR"),
+            instruction(0x401008, "e8f31f0000", "CALL", ("0x00403000",),
+                        flow="UNCONDITIONAL_CALL", flows_to=("0x00403000",),
+                        references=({"to": "0x00403000", "is_call": True},)),
+            instruction(0x40100D, "c3", "RET", flow="TERMINATOR"),
+        ])
+        source, diagnostics = lifter.translate_function(
+            body, set(), stop_call_site=0x401008
+        )
+        self.assertIn("goto L_00401008;", source)
+        self.assertIn("state.eip = 0x00401008u;", source)
+        self.assertIn("return BatchLiftStatus::unsupported_dependency;", source)
+        self.assertNotIn("spore_lift_00403000", source)
+        self.assertEqual(
+            [item for item in diagnostics if item["status"] == "blocked"],
+            [{"address": "0x00401008", "mnemonic": "CALL",
+              "status": "blocked", "bytes": "e8f31f0000",
+              "target": "0x00403000"}],
+        )
+
+    def test_cfg_call_boundary_rejects_non_call(self):
+        body = function([
+            instruction(0x401000, "33c0", "XOR", ("EAX", "EAX")),
+            instruction(0x401002, "c3", "RET", flow="TERMINATOR"),
+        ])
+        with self.assertRaises(lifter.LiftRejected) as raised:
+            lifter.translate_function(body, stop_call_site=0x401000)
+        self.assertIn("not an exported CALL", raised.exception.reasons[0])
+
+    def test_cfg_multiple_call_boundaries_keep_both_branches(self):
+        body = function([
+            instruction(0x401000, "7407", "JZ", ("0x00401009",),
+                        flow="CONDITIONAL_JUMP", flows_to=("0x00401009",)),
+            instruction(0x401002, "e8f9200000", "CALL", ("0x00403100",),
+                        flow="UNCONDITIONAL_CALL", flows_to=("0x00403100",),
+                        references=({"to": "0x00403100", "is_call": True},)),
+            instruction(0x401007, "eb05", "JMP", ("0x0040100e",),
+                        flow="UNCONDITIONAL_JUMP", flows_to=("0x0040100e",)),
+            instruction(0x401009, "e8f2210000", "CALL", ("0x00403200",),
+                        flow="UNCONDITIONAL_CALL", flows_to=("0x00403200",),
+                        references=({"to": "0x00403200", "is_call": True},)),
+            instruction(0x40100e, "c3", "RET", flow="TERMINATOR"),
+        ])
+        source, diagnostics = lifter.translate_function(
+            body, set(), stop_call_sites={0x401002, "0x00401009"}
+        )
+        self.assertIn("goto L_00401009;", source)
+        self.assertIn("state.eip = 0x00401002u;", source)
+        self.assertIn("state.eip = 0x00401009u;", source)
+        self.assertNotIn("spore_lift_00403100", source)
+        self.assertNotIn("spore_lift_00403200", source)
+        self.assertEqual(
+            [(item["address"], item["target"]) for item in diagnostics
+             if item["status"] == "blocked"],
+            [("0x00401002", "0x00403100"),
+             ("0x00401009", "0x00403200")],
+        )
+
     def test_prefix_data_ranges_emit_verified_pe_bytes(self):
         image = bytearray(0x400)
         image[0x208:0x20c] = b"\x00\x00\x80\x3f"
