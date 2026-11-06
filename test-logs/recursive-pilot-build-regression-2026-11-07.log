@@ -1,0 +1,23 @@
+﻿reference_sha256=6aec99cb2dc7fd08851a1718e92a60f359fb3fccca3b244a890ae07e93cbe59b
+function_va=0x006237a0 bytes=33
+direct_call=0x006237aa->0x006237a0
+generated=C:\Users\wesll\AndroidStudioProjects\SporeAndroid\tools\call_chain_lift\generated\spore_006237a0_arm64.cpp
+verified_bytes_header=C:\Users\wesll\AndroidStudioProjects\SporeAndroid\tools\call_chain_lift\generated\spore_006237a0_bytes.hpp
+x86_reference.cpp
+spore_006237a0_arm64.cpp
+Gerando Código...
+PASS x86 differential depth=0 return=0x0 child_ecx=0x0 eflags=0x44 esp_balanced=yes recursive_calls=0 native_call_return=verified callee_saved=verified object_memory=unchanged
+PASS x86 differential depth=1 return=0x0 child_ecx=0x1 eflags=0x55 esp_balanced=yes recursive_calls=1 native_call_return=verified callee_saved=verified object_memory=unchanged
+PASS x86 differential depth=2 return=0x0 child_ecx=0x80000001 eflags=0x55 esp_balanced=yes recursive_calls=2 native_call_return=verified callee_saved=verified object_memory=unchanged
+PASS x86 differential depth=3 return=0xebdd1061 child_ecx=0xd2f5172 eflags=0x90 esp_balanced=yes recursive_calls=3 native_call_return=verified callee_saved=verified object_memory=unchanged
+PASS guest depth=0 result=0x0 child=0x0 flags=0xa5a50046 esp=0xf004 eip=0xfedcba98 recursive_calls=0 guest_return_addresses=verified stack_canary=verified memory=unchanged
+PASS guest depth=1 result=0x0 child=0x1 flags=0xa5a50057 esp=0xf004 eip=0xfedcba98 recursive_calls=1 guest_return_addresses=verified stack_canary=verified memory=unchanged
+PASS guest depth=2 result=0x0 child=0x80000001 flags=0xa5a50057 esp=0xf004 eip=0xfedcba98 recursive_calls=2 guest_return_addresses=verified stack_canary=verified memory=unchanged
+PASS guest depth=3 result=0xebdd1061 child=0xd2f5172 flags=0xa5a50092 esp=0xf004 eip=0xfedcba98 recursive_calls=3 guest_return_addresses=verified stack_canary=verified memory=unchanged
+PASS guest_rejections unknown_target=rejected stack_underflow=rejected
+PASS guest_return_address_collision=0x006237af handled_by_call_depth
+PASS guest_harness cases=4 recursive_CALL_and_RET=executed
+PASS x86_vs_guest cases=4 function_va=0x006237a0 reference=verified_pe_bytes
+PASS arm64_compile target=aarch64-linux-android29
+DEVICE_RUN_SKIPPED=BuildOnly
+

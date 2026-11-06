@@ -1,0 +1,24 @@
+{
+  "schema": "spore-static-lift-call-closure-v1",
+  "source_sha256": "6aec99cb2dc7fd08851a1718e92a60f359fb3fccca3b244a890ae07e93cbe59b",
+  "batch_exports": [
+    "C:\\SporeAnalysis\\spore_batch_pilot_100.json"
+  ],
+  "root_entries": [
+    "0x006237a0"
+  ],
+  "function_count": 1,
+  "reference_bytes_header": "tools\\batch_static_lift\\generated\\recursive\\reference_bytes.hpp",
+  "functions": [
+    {
+      "address": "0x006237a0",
+      "name": "FUN_006237a0",
+      "generated_source": "spore_006237a0_arm64.cpp",
+      "instruction_count": 16,
+      "verified_instruction_bytes": 33,
+      "direct_call_targets": [
+        "0x006237a0"
+      ]
+    }
+  ]
+}

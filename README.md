@@ -2705,15 +2705,96 @@ SDL's app-private preference directory.
   `175757260a43130368954479569339729be92e0fb9cdfebbbf61c44be59beed0`.
   The on-device capture is `files/marco2-fnv-dbpf-pass.png`.
 
-## Executing a generated recursive call lift
+## Recovered batch lifter: direct CALL/RET
 
-The earlier `BatchStaticLift.py` generator was not recovered. The existing
-`tools/x86_lift_differential/BatchStaticLiftRuntime.hpp` is reused; the new
-`tools/generate_recursive_call_lift.py` is deliberately limited to
-`FUN_006237a0`. Before emission, it verifies the complete reference PE SHA-256,
-the function's 33 bytes, and that the direct `CALL` at `0x006237aa` targets
-`0x006237a0`. It emits the C++ lift and a byte header used by the x86 native
-reference harness.
+The recovered historical backend is preserved under
+[`tools/batch_static_lift/`](./tools/batch_static_lift/): the original
+`BatchStaticLift.py`, its `BatchStaticLiftRuntime.hpp`, and its unit tests were
+copied before modification. Direct near `CALL` now requires one immediate
+operand, one matching call reference, and an exact target function in the
+supplied export. Generated code pushes the real guest return address, calls
+the translated target with the same memory/register/flags state, and verifies
+that `RET` returned to that address. `RET` and `RET imm16` update guest ESP and
+EIP through the historical runtime. Indirect/far calls, targets absent from the
+export, rejected callees, and tail-call `JMP` transfers remain explicit
+rejections; no result is substituted for a call.
+
+The historical and recursive-pilot runtimes remain separate:
+
+| Contract | Historical batch runtime | Existing recursive pilot runtime |
+|---|---|---|
+| State | `regs[8]`, `eflags`, `eip`; same three statuses | Same fields and statuses |
+| Guest memory | Up to 8 mapped regions; 8/16/32-bit loads/stores | Fixed 64 KiB region at `0x1000`; 32-bit loads/stores |
+| Stack | Dedicated guest stack at `0x70000000`, initialized with a return sentinel | Stack is explicitly laid out in the fixed memory array |
+| Flags | Shared arithmetic/logical helpers for 8/16/32-bit operations | Smaller helper set used by the recursive pilot |
+| CALL/RET | Added stack-based `batch_guest_call32` / `batch_guest_return32` | Existing push/pop/CALL/RET helpers unchanged |
+
+`generate_call_closure.py` verifies each instruction's bytes against the
+reference PE and generates the selected root plus its direct-call closure.
+The first generated regression is `FUN_006237a0`, including its recursive
+`CALL` at `0x006237aa`. The distinct-function regression is
+`FUN_00bb9b70` at `0x00bb9b70`, which calls `FUN_00b8dab0` at `0x00b8dab0`;
+the guest return address is `0x00bb9b75`. The callee reads the fixture field
+`[ECX+0x194]`; values 4, 5, 6, and `0xffffffff` exercise both outcomes of the
+caller's comparison and `SETZ`.
+
+The generated-backend harness compares the reference x86 bytes with the
+generated functions on Windows x86, including return values, relevant flags,
+stack balance, and guest return addresses. It also compiles the same generated
+functions for ARM64. The 2026-11-07 run passed all x86 cases and the ARM64
+compile; no authorized Android device was connected, so that run records a
+skipped device execution. Logs:
+
+- [batch-static-lift-calls-final-2026-11-07.log](./test-logs/batch-static-lift-calls-final-2026-11-07.log)
+- [batch-static-lift-unit-2026-11-07.log](./test-logs/batch-static-lift-unit-2026-11-07.log)
+- [recursive-pilot-build-regression-2026-11-07.log](./test-logs/recursive-pilot-build-regression-2026-11-07.log)
+
+In the subsequent device run, the same harness passed on the connected
+`arm64-v8a` phone (ADB serial `PJMZAEJRX4YLFIDI`). The device reproduced all
+four recursive cases and all four distinct-function call cases, including
+return values, flags, balanced guest stack, and the callee/return address.
+The run also repeated and passed the x86 differential checks and ARM64 compile.
+Full output:
+[batch-static-lift-device-2026-11-06.log](./test-logs/batch-static-lift-device-2026-11-06.log).
+
+Reproduce byte verification, generation, x86 differential tests, and ARM64
+compilation from PowerShell:
+
+```powershell
+.\tools\run_batch_static_lift_calls.ps1 -BuildOnly
+```
+
+With one authorized ARM64 device connected, run the same harness on-device:
+
+```powershell
+.\tools\run_batch_static_lift_calls.ps1 -DeviceSerial <serial>
+```
+
+This proves reusable direct-call execution for a recursive function and a
+two-function chain; neither is an Android startup chain. Selecting and
+translating the next initialization-linked chain remains the next step.
+
+The next initialization-linked candidate is `FUN_00f47ed0`, already identified
+above as the boot initializer. Its export contains 797 instructions; the first
+call is `0x00f47ed9: CALL 0x006b4f20` (`SteamAPI_Init`). The supplied Ghidra
+function export has no function body at `0x006b4f20`, so the closure generator
+rejects it instead of inventing a return. The PE bytes at that thunk are
+`ff 25 04 c8 3c 01 cc cc`: an indirect jump through the `SteamAPI_Init` IAT
+slot at `0x013cc804`, which is outside the current direct-call subset. The
+chain is therefore selected but not translated. Reproducing startup requires
+an explicit import-thunk/API contract and its real Android initialization
+behavior; returning success alone would not demonstrate that initialization.
+The expected fail-closed attempt is recorded in
+[startup-call-closure-blocker-2026-11-07.log](./test-logs/startup-call-closure-blocker-2026-11-07.log).
+
+## Preserved one-function recursive-call pilot
+
+The earlier recursive pilot and its runtime are retained unchanged as a
+separate regression. `tools/generate_recursive_call_lift.py` remains
+deliberately limited to `FUN_006237a0`; it independently verifies the
+reference PE hash, the function's 33 bytes, and that the direct `CALL` at
+`0x006237aa` targets `0x006237a0`. It emits the pre-existing pilot lift and
+byte header; the recovered batch backend does not replace that runtime.
 
 The translated body executes the recursive call through shared guest memory,
 registers, EIP, and ESP. Each guest `CALL` pushes return address
@@ -2752,7 +2833,8 @@ Validation on 2026-11-06:
   the configuration fixture. Existing Android graphics and fixture
   sources/logs were left intact.
 
-Reproduce generation, x86 comparison and ARM64 compilation from PowerShell:
+Reproduce the preserved pilot generation, x86 comparison and ARM64
+compilation from PowerShell:
 
 ```powershell
 .\tools\run_recursive_call_lift.ps1 -BuildOnly
@@ -2768,5 +2850,6 @@ The run records are
 [call-chain-006237a0-2026-11-06.log](./test-logs/call-chain-006237a0-2026-11-06.log)
 and
 [call-chain-006237a0-device-2026-11-06.log](./test-logs/call-chain-006237a0-device-2026-11-06.log).
-The remaining scope is a general static-lift generator and integration with
-game initialization; this one-function pilot does not cover either.
+The separate pilot does not cover initialization; the recovered backend is
+now the reusable direct-call path, while an initialization-linked chain has
+not yet been translated.
