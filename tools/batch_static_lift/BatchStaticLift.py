@@ -754,7 +754,7 @@ def translate_instruction(
     return lines
 
 
-def static_source(function, translated, call_targets):
+def static_source(function, translated, call_targets, terminal_status=None):
     entry = parse_address(function["entry"])
     symbol = f"spore_lift_{entry:08x}"
     declarations = [
@@ -798,6 +798,12 @@ def static_source(function, translated, call_targets):
                 f"L_{address:08x}:"
             )
         body_lines.extend(f"    {line}" for line in instruction_body)
+    if terminal_status is not None:
+        terminal_address, status = terminal_status
+        body_lines += [
+            f"state.eip = 0x{terminal_address:08x}u;",
+            f"return BatchLiftStatus::{status};",
+        ]
     return "\n".join([
         '#include "BatchStaticLiftRuntime.hpp"',
         *declarations,
@@ -911,6 +917,230 @@ def translate_function(
         )
     call_targets = function_call_targets(function, iat_imports)
     return static_source(function, translated, call_targets), diagnostics
+
+
+def translate_function_prefix(
+    function, stop_address, exported_function_entries=None
+):
+    stop_address = (
+        parse_address(stop_address) if isinstance(stop_address, str)
+        else int(stop_address)
+    )
+    instructions = function.get("instructions")
+    diagnostics = []
+    reasons = []
+    if not isinstance(instructions, list) or not instructions:
+        raise LiftRejected(["instruction list is absent or empty"], diagnostics)
+    if function.get("instruction_count_exported") != len(instructions):
+        reasons.append("instruction count metadata differs from exported instruction records")
+    if function.get("instructions_truncated") is not False:
+        reasons.append("instruction export is truncated or truncation status is missing")
+    if function.get("references_truncated") is not False:
+        reasons.append("reference export is truncated or truncation status is missing")
+    if reasons:
+        raise LiftRejected(reasons, diagnostics)
+
+    by_address = {}
+    for instruction in instructions:
+        try:
+            address = parse_address(instruction["address"])
+            encoded = bytes.fromhex(instruction["bytes"])
+            if not encoded or len(encoded) != int(instruction["length"]):
+                raise ValueError("encoded bytes do not match instruction length")
+            if address in by_address:
+                raise ValueError("duplicate instruction address")
+            by_address[address] = instruction
+        except (KeyError, TypeError, ValueError) as error:
+            reasons.append(f"malformed instruction record: {error}")
+            diagnostics.append({
+                "address": instruction.get("address"),
+                "mnemonic": instruction.get("mnemonic"),
+                "status": "rejected",
+                "reason": str(error),
+            })
+    if reasons:
+        raise LiftRejected(reasons, diagnostics)
+
+    entry = parse_address(function["entry"])
+    if entry != min(by_address):
+        raise LiftRejected(
+            ["first instruction is not the function entry"],
+            [{
+                "address": function["entry"],
+                "mnemonic": "FUNCTION_ENTRY",
+                "status": "rejected",
+                "reason": "first instruction is not the function entry",
+            }],
+        )
+    boundary = by_address.get(stop_address)
+    if boundary is None:
+        raise LiftRejected(
+            [f"prefix boundary 0x{stop_address:08x} is not an exported instruction"],
+            [{
+                "address": f"0x{stop_address:08x}",
+                "mnemonic": "PREFIX_BOUNDARY",
+                "status": "rejected",
+                "reason": "prefix boundary is not an exported instruction",
+            }],
+        )
+    if boundary.get("mnemonic", "").upper() not in {"CALL", "CALLF"}:
+        raise LiftRejected(
+            ["prefix boundary must be a direct call instruction"],
+            [{
+                "address": boundary.get("address"),
+                "mnemonic": boundary.get("mnemonic", "UNKNOWN").upper(),
+                "status": "rejected",
+                "reason": "prefix boundary must be a direct call instruction",
+            }],
+        )
+    try:
+        boundary_target = direct_call_target(boundary)
+    except (KeyError, TypeError, ValueError) as error:
+        raise LiftRejected(
+            [f"prefix boundary call is not a resolved direct call: {error}"],
+            [{
+                "address": boundary.get("address"),
+                "mnemonic": boundary.get("mnemonic", "CALL").upper(),
+                "status": "rejected",
+                "reason": str(error),
+            }],
+        ) from error
+
+    prefix_instructions = [
+        by_address[address]
+        for address in sorted(by_address)
+        if address < stop_address
+    ]
+    if not prefix_instructions:
+        raise LiftRejected(
+            ["prefix contains no instructions before its boundary"],
+            [{
+                "address": boundary["address"],
+                "mnemonic": "PREFIX_BOUNDARY",
+                "status": "rejected",
+                "reason": "prefix contains no instructions before its boundary",
+            }],
+        )
+
+    cursor = entry
+    for instruction in prefix_instructions:
+        address = parse_address(instruction["address"])
+        if address != cursor:
+            raise LiftRejected(
+                ["prefix is not a contiguous instruction sequence"],
+                [{
+                    "address": instruction["address"],
+                    "mnemonic": instruction["mnemonic"].upper(),
+                    "status": "rejected",
+                    "reason": f"expected fall-through instruction at 0x{cursor:08x}",
+                }],
+            )
+        flow = instruction.get("flow", "").upper()
+        if flow not in {"FALL_THROUGH", "UNCONDITIONAL_CALL"}:
+            raise LiftRejected(
+                ["prefix contains a control-flow instruction before its boundary"],
+                [{
+                    "address": instruction["address"],
+                    "mnemonic": instruction["mnemonic"].upper(),
+                    "status": "rejected",
+                    "reason": "only fall-through instructions are allowed before the prefix boundary",
+                }],
+            )
+        if flow == "UNCONDITIONAL_CALL":
+            try:
+                target = direct_call_target(instruction)
+            except (KeyError, TypeError, ValueError) as error:
+                raise LiftRejected(
+                    [f"prefix call is not a resolved direct call: {error}"],
+                    [{
+                        "address": instruction.get("address"),
+                        "mnemonic": instruction.get("mnemonic", "CALL").upper(),
+                        "status": "rejected",
+                        "reason": str(error),
+                    }],
+                ) from error
+            if target not in (exported_function_entries or set()):
+                raise LiftRejected(
+                    [f"prefix call target 0x{target:08x} is not in the supplied export set"],
+                    [{
+                        "address": instruction["address"],
+                        "mnemonic": instruction["mnemonic"].upper(),
+                        "status": "rejected",
+                        "reason": (
+                            f"direct call target 0x{target:08x} is not in the "
+                            "supplied export set"
+                        ),
+                        "target": f"0x{target:08x}",
+                    }],
+                )
+        cursor += int(instruction["length"])
+    if cursor != stop_address:
+        raise LiftRejected(
+            ["prefix does not end at the requested call boundary"],
+            [{
+                "address": f"0x{stop_address:08x}",
+                "mnemonic": "PREFIX_BOUNDARY",
+                "status": "rejected",
+                "reason": f"preceding instructions end at 0x{cursor:08x}",
+            }],
+        )
+
+    addresses = {
+        parse_address(instruction["address"])
+        for instruction in prefix_instructions
+    }
+    addresses.add(stop_address)
+    translated = []
+    for index, instruction in enumerate(prefix_instructions):
+        address = parse_address(instruction["address"])
+        next_address = address + int(instruction["length"])
+        try:
+            body = translate_instruction(
+                instruction,
+                index,
+                addresses,
+                next_address,
+                exported_function_entries,
+            )
+            translated.append((instruction, body))
+            diagnostics.append({
+                "address": instruction["address"],
+                "mnemonic": instruction["mnemonic"].upper(),
+                "status": "translated",
+                "bytes": instruction["bytes"],
+            })
+        except (KeyError, TypeError, ValueError) as error:
+            diagnostics.append({
+                "address": instruction.get("address"),
+                "mnemonic": instruction.get("mnemonic", "UNKNOWN").upper(),
+                "status": "rejected",
+                "reason": str(error),
+                "operands": instruction.get("operands", []),
+            })
+            raise LiftRejected(
+                [f"{instruction.get('address')}: {error}"], diagnostics
+            ) from error
+
+    diagnostics.append({
+        "address": boundary["address"],
+        "mnemonic": boundary["mnemonic"].upper(),
+        "status": "blocked",
+        "reason": (
+            f"prefix stops before direct call to 0x{boundary_target:08x}"
+        ),
+        "target": f"0x{boundary_target:08x}",
+    })
+    call_targets = [
+        direct_call_target(instruction)
+        for instruction in prefix_instructions
+        if instruction.get("flow", "").upper() == "UNCONDITIONAL_CALL"
+    ]
+    return static_source(
+        function,
+        translated,
+        call_targets,
+        terminal_status=(stop_address, "unsupported_dependency"),
+    ), diagnostics
 
 
 def translate_function_set(functions, iat_imports=None):

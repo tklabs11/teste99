@@ -2932,7 +2932,11 @@ device run is
 the 32 Python backend regressions pass with
 `python -m unittest -v test_static_batch_lift`.
 
-## Expanding the startup closure through `FUN_00a33600` — 2026-11-06
+## Expanding the startup closure through `FUN_00a33600` — 2026-11-06 (historical snapshot)
+
+> This section records the state after `MOVSS` support but before the
+> `XORPS`/x87 work in commit `53db419`. The current root diagnosis and partial
+> execution results are documented in the next section.
 
 The diagnostic report for `FUN_00a33600` and its direct-call closure is
 [call-closure-00a33600-after-sse-move-2026-11-06.json](./test-logs/call-closure-00a33600-after-sse-move-2026-11-06.json).
@@ -3012,6 +3016,90 @@ python .\tools\batch_static_lift\diagnose_call_closure.py `
 Run the retained x86/build/device regressions with
 `.\tools\run_batch_static_lift_calls.ps1 -DeviceSerial <serial>`. This does not
 generate or execute the still-blocked `FUN_00a33600` closure.
+
+## Verified partial execution of `FUN_00a33600` — 2026-11-06
+
+The backend now has a reusable prefix mode: it translates only contiguous
+fall-through instructions up to a selected direct-call boundary, and permits
+ordinary guest `CALL`/`RET` only for explicitly included, byte-verified
+dependencies. The generated report distinguishes this deliberately incomplete
+prefix from a complete function. A boundary reached at runtime returns
+`unsupported_dependency`; it cannot be reported as a successful full-function
+execution.
+
+The latest closure report,
+[call-closure-00a33600-after-xorps-x87-2026-11-06.json](./test-logs/call-closure-00a33600-after-xorps-x87-2026-11-06.json),
+shows that all 380 root instructions now translate: 41 `MOVSS`, two `XORPS`,
+`FLD`, `FSTP`, and 34 direct `CALL`s are covered. The 34 calls have 21 distinct
+targets, each present in the exports. The full 86-function closure remains
+incomplete: 220 unsupported sites, one missing internal body (`0x011e073e`),
+and two unresolved indirect-call candidates remain. It also contains 33
+identified IAT callsites and five direct calls to import thunks. The earlier
+report's 78 root rejections and the recovered Steam-folder pilot's three-function
+list were stale-copy differences: Git history places `MOVSS` in `452a613` and
+`XORPS`/x87 support in `53db419`; this repository retains its five-function
+regression. The historical Steam-folder copy has no matching Git history to
+establish why its runner list was shortened.
+
+The focused test executes a 31-instruction prefix from an internal entry in
+`FUN_00a33600`, including its real direct call to `FUN_00743b50`. It compares
+the original x86 bytes against the generated lift on Windows x86, then compares
+that lift with the same generated code on Android ARM64. The x86 harness
+relocates only the included `CALL rel32` at `0x00a33656` to the mapped child
+body; the target and call/return semantics are retained and the relocation is
+recorded in the generated report. The output snapshots match exactly:
+`EAX=0x20000020`, `ESP delta=-80`, `EFLAGS=0x44`, the tested object fields,
+and the guest SEH-chain words. Guest `FS:[0]` lives in guest memory with the
+documented sentinel; the native harness restores the host FS chain after
+capturing the comparison state.
+
+The object memory is a harness-provided mapping, not a game allocation. Its
+`+0x20` field starts with a sentinel and is cleared by the executed
+`FUN_00743b50`; no child result is substituted. Execution stops before the
+next call, at `0x00a3366a` to `FUN_00921f00`. The first unsupported instruction
+in that dependency is `XCHG dword ptr [ECX],EAX` at `0x00921f08`; its body also
+calls targets absent from the supplied exports (`0x00922820`, `0x009222a0`,
+and `0x00921e60`). This is evidence for a real prefix only, not a complete
+constructor, a game-startup run, or a full `FUN_00a33600` execution.
+
+### Allocator singleton and initializer evidence
+
+Static inspection of the supplied PE (SHA-256
+`6aec99cb2dc7fd08851a1718e92a60f359fb3fccca3b244a890ae07e93cbe59b`) supports
+an initializer relationship, but does not prove that the game executed it:
+
+- The `.rdata` entry at `0x013cc828` contains the code pointer
+  `0x0138e640`; neighboring entries are also code pointers. The consumer and
+  runtime invocation of this table have not been established.
+- Code at `0x0138e640` checks `0x016c8b40` and calls `FUN_00f474d0` at
+  `0x0138e649` when the global is null. It sets `0x016c8b48` based on that
+  routine's boolean result, then pushes `0x013c9950` and calls `0x011e07ef`.
+  The role of the final call is not fully established.
+- `FUN_00f474d0` calls `FUN_00935c80` with hash `0xee9b7413` and callback
+  address `0x00f47480` when `0x016c8b40` is null. It validates the returned
+  record's `+0x10` value (`0x2b5c`) and `+0x14` byte, then stores its `+0x18`
+  pointer in `0x016c8b44`; the failure branch calls `FUN_00f47430`.
+  `FUN_00935c80` initializes/searches a registry and invokes the supplied
+  callback on a miss while using the critical section at `0x013cc2d8`.
+- Code at `0x00f47480` begins by obtaining `GetProcessHeap` and calling
+  `HeapAlloc` for `0x530` bytes. Its complete function boundary and allocated
+  object's type are not established.
+- `0x016c8b40` and the adjacent globals are in the `.data` virtual range beyond
+  its raw file-backed bytes. Their runtime values, callback execution, and
+  normal-startup initialization remain unknown; no values were invented for
+  the prefix test.
+
+The successful focused run, generated source, byte header, and report are kept
+in
+[constructor-prefix-00a33600-20261106-111528511](./test-logs/constructor-prefix-00a33600-20261106-111528511/).
+The reproducible command is
+`.\tools\run_constructor_prefix_tests.ps1 -DeviceSerial <serial>`; it preserves
+prior runs by creating a new timestamped directory. The five-function
+x86/ARM64/device regression also passed on `PJMZAEJRX4YLFIDI`; its fresh log is
+[five-function-regression-20261106-113845944.log](./test-logs/five-function-regression-20261106-113845944.log).
+The current Python backend suite has 41 tests. These results validate the
+implemented prefix and preserve earlier behavior; they do not complete the
+allocator path or initialize the game.
 
 ## Preserved one-function recursive-call pilot
 

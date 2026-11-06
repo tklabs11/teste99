@@ -17,6 +17,7 @@ enum class BatchLiftStatus {
     unsupported_import,
     synchronization_error,
     invalid_x87_state,
+    unsupported_dependency,
 };
 
 class BatchLiftMemory;

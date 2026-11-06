@@ -36,6 +36,104 @@ def function(instructions):
 
 
 class StaticBatchLiftTests(unittest.TestCase):
+    def test_prefix_executes_exported_call_and_stops_before_next_dependency(self):
+        body = function([
+            instruction(0x401000, "b801000000", "MOV", ("EAX", "0x1")),
+            instruction(
+                0x401005, "e8f61f0000", "CALL", ("0x00402000",),
+                flow="UNCONDITIONAL_CALL",
+                flows_to=("0x00402000",),
+                references=({"to": "0x00402000", "is_call": True},),
+            ),
+            instruction(0x40100A, "bb02000000", "MOV", ("EBX", "0x2")),
+            instruction(
+                0x40100F, "e8ec1f0000", "CALL", ("0x00403000",),
+                flow="UNCONDITIONAL_CALL",
+                flows_to=("0x00403000",),
+                references=({"to": "0x00403000", "is_call": True},),
+            ),
+            instruction(0x401014, "c3", "RET", flow="TERMINAL"),
+        ])
+
+        source, diagnostics = lifter.translate_function_prefix(
+            body, 0x40100F, {0x402000}
+        )
+
+        self.assertIn("state.eip = 0x0040100fu;", source)
+        self.assertIn(
+            "return BatchLiftStatus::unsupported_dependency;", source
+        )
+        self.assertIn("batch_guest_call32", source)
+        self.assertIn("spore_lift_00402000(memory, state)", source)
+        self.assertEqual(diagnostics[-1]["status"], "blocked")
+        self.assertEqual(diagnostics[-1]["target"], "0x00403000")
+
+    def test_prefix_requires_direct_call_boundary(self):
+        body = function([
+            instruction(0x401000, "b801000000", "MOV", ("EAX", "0x1")),
+            instruction(0x401005, "c3", "RET", flow="TERMINAL"),
+        ])
+
+        with self.assertRaises(lifter.LiftRejected) as raised:
+            lifter.translate_function_prefix(body, 0x401005)
+
+        self.assertIn("direct call instruction", raised.exception.reasons[0])
+
+    def test_prefix_rejects_control_flow_before_boundary(self):
+        body = function([
+            instruction(
+                0x401000, "eb00", "JMP", ("0x00401002",),
+                flow="UNCONDITIONAL_JUMP", flows_to=("0x00401002",),
+            ),
+            instruction(
+                0x401002, "e8f90f0000", "CALL", ("0x00402000",),
+                flow="UNCONDITIONAL_CALL",
+                flows_to=("0x00402000",),
+                references=({"to": "0x00402000", "is_call": True},),
+            ),
+        ])
+
+        with self.assertRaises(lifter.LiftRejected) as raised:
+            lifter.translate_function_prefix(body, 0x401002)
+
+        self.assertIn("control-flow instruction", raised.exception.reasons[0])
+
+    def test_prefix_rejects_call_without_exported_target_body(self):
+        body = function([
+            instruction(
+                0x401000, "e8fb0f0000", "CALL", ("0x00402000",),
+                flow="UNCONDITIONAL_CALL",
+                flows_to=("0x00402000",),
+                references=({"to": "0x00402000", "is_call": True},),
+            ),
+            instruction(0x401005, "90", "NOP"),
+            instruction(
+                0x401006, "e8f51f0000", "CALL", ("0x00403000",),
+                flow="UNCONDITIONAL_CALL",
+                flows_to=("0x00403000",),
+                references=({"to": "0x00403000", "is_call": True},),
+            ),
+        ])
+
+        with self.assertRaises(lifter.LiftRejected) as raised:
+            lifter.translate_function_prefix(body, 0x401006, set())
+
+        self.assertIn("not in the supplied export set", raised.exception.reasons[0])
+
+    def test_prefix_rejects_unresolved_boundary_call(self):
+        body = function([
+            instruction(0x401000, "b801000000", "MOV", ("EAX", "0x1")),
+            instruction(
+                0x401005, "ffd0", "CALL", ("EAX",),
+                flow="COMPUTED_CALL",
+            ),
+        ])
+
+        with self.assertRaises(lifter.LiftRejected) as raised:
+            lifter.translate_function_prefix(body, 0x401005)
+
+        self.assertIn("resolved direct call", raised.exception.reasons[0])
+
     def test_import_thunk_diagnostic_resolves_pe_import_and_text_stub(self):
         image = bytearray(0x600)
         image[:2] = b"MZ"
