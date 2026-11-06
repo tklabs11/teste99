@@ -1,0 +1,3 @@
+PASS case=0 x86_original_vs_lift instructions=38
+PASS case=1 x86_original_vs_lift instructions=38
+PASS case=2 x86_original_vs_lift instructions=38

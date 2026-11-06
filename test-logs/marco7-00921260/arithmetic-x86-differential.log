@@ -1,0 +1,23 @@
+PASS DIV case=0 exception=00000000 quotient=ffffffff remainder=00000000
+PASS DIV case=1 exception=00000000 quotient=80000000 remainder=00000000
+PASS DIV case=2 exception=00000000 quotient=00000003 remainder=00000001
+PASS DIV case=3 exception=c0000094 quotient=00000000 remainder=00000000
+PASS DIV case=4 exception=c0000095 quotient=00000000 remainder=00000000
+PASS DIV case=5 exception=c0000095 quotient=00000000 remainder=00000000
+PASS IMUL case=0 result=00000000 cf_of=000
+PASS IMUL case=1 result=ffffffff cf_of=000
+PASS IMUL case=2 result=fffffffe cf_of=801
+PASS IMUL case=3 result=80000000 cf_of=000
+PASS IMUL case=4 result=80000000 cf_of=801
+PASS SAR count=1 value=00000000 result=00000000 flags=044
+PASS SAR count=1 value=00000001 result=00000000 flags=045
+PASS SAR count=1 value=00000002 result=00000001 flags=000
+PASS SAR count=1 value=7fffffff result=3fffffff flags=005
+PASS SAR count=1 value=80000000 result=c0000000 flags=084
+PASS SAR count=1 value=ffffffff result=ffffffff flags=085
+PASS SAR count=2 value=00000000 result=00000000 flags=044
+PASS SAR count=2 value=00000001 result=00000000 flags=044
+PASS SAR count=2 value=00000002 result=00000000 flags=045
+PASS SAR count=2 value=7fffffff result=1fffffff flags=005
+PASS SAR count=2 value=80000000 result=e0000000 flags=084
+PASS SAR count=2 value=ffffffff result=ffffffff flags=085

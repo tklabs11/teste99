@@ -1,0 +1,1 @@
+PASS sse_x86_vs_arm64 cases=8 including_cvtt_bits_and_flags

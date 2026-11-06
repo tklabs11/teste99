@@ -1,0 +1,4 @@
+PASS case=0 x86_original_vs_arm64_lift eax=00000002 output=00000002
+PASS case=1 x86_original_vs_arm64_lift eax=0000000b output=00000006
+PASS case=2 x86_original_vs_arm64_lift eax=823f12d9 output=2b6a5bc0
+PASS case=3 x86_original_vs_arm64_lift eax=823f12d9 output=80000001

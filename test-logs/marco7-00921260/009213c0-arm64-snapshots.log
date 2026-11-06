@@ -1,0 +1,4 @@
+case=0 status=0 eax=00000002 output=00000002 flags=00000004 depth=0
+case=1 status=0 eax=0000000b output=00000006 flags=00000004 depth=0
+case=2 status=0 eax=823f12d9 output=2b6a5bc0 flags=00000004 depth=0
+case=3 status=0 eax=823f12d9 output=80000001 flags=00000004 depth=0

@@ -1,0 +1,7 @@
+map_failure requested=00400000 actual=00000000 error=487 host_image=10000000 occupied_base=00400000 occupied_size=69632 state=00001000 type=00040000 mapped_file=\Device\HarddiskVolume3\Windows\System32\C_850.NLS
+relocated_map=20000000
+mapped=20000000 size=03f33000 relocations=379090 manual_no_reloc_fixture=0 thunk=011e073e virtual_alloc_iat=757065F0
+stub_bytes=e9d10f22bf computed_target=e0001714
+case=FUN_011e073e destination=001afde0
+status=exception result=00000000 exception=c0000005 eip=e0001714 fault=e0001714 access=8 buffer=a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5
+stub_after=e9d10f22bf

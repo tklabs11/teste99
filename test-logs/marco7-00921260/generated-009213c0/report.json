@@ -1,0 +1,37 @@
+{
+  "schema": "spore-static-lift-call-closure-v1",
+  "source_sha256": "6aec99cb2dc7fd08851a1718e92a60f359fb3fccca3b244a890ae07e93cbe59b",
+  "batch_exports": [
+    "C:\\SporeAnalysis\\spore_batch_all_parts\\spore_batch_all_0034.json"
+  ],
+  "root_entries": [
+    "0x009213c0"
+  ],
+  "function_count": 2,
+  "iat_imports": [],
+  "import_calls": [],
+  "data_fixtures": [],
+  "reference_bytes_header": "test-logs\\marco7-00921260\\generated-009213c0\\closure_reference_bytes.hpp",
+  "functions": [
+    {
+      "address": "0x00921300",
+      "name": "FUN_00921300",
+      "generated_source": "spore_00921300_arm64.cpp",
+      "instruction_count": 26,
+      "verified_instruction_bytes": 63,
+      "direct_call_targets": [],
+      "import_calls": []
+    },
+    {
+      "address": "0x009213c0",
+      "name": "FUN_009213c0",
+      "generated_source": "spore_009213c0_arm64.cpp",
+      "instruction_count": 39,
+      "verified_instruction_bytes": 128,
+      "direct_call_targets": [
+        "0x00921300"
+      ],
+      "import_calls": []
+    }
+  ]
+}

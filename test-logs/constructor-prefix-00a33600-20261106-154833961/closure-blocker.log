@@ -1,0 +1,3 @@
+Diagnosed 10 exported function(s); no code emitted.
+Findings: {"import_thunk_call_sites": 0, "indirect_calls": 0, "indirect_calls_without_candidates": 0, "indirect_iat_import_call_sites": 0, "invalid_functions": 0, "missing_internal_functions": 3, "unresolved_calls": 0, "unsupported_instructions": 30}
+Report: C:\Users\wesll\Documents\ChatGPT\teste5\source\test-logs\constructor-prefix-00a33600-20261106-154833961\generated\closure-blocker-00a2a210.json

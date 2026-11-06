@@ -1,0 +1,2 @@
+isolated_process_nls_unmap=1 remap_after_nls=00000000 error=487
+map_failure requested=00400000 actual=00000000 error=487 host_image=10000000 occupied_base=00400000 occupied_size=69632 state=00001000 type=00040000 mapped_file=\Device\HarddiskVolume3\Windows\System32\C_850.NLS

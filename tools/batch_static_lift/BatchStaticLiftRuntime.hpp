@@ -5,6 +5,7 @@
 #include <cstdint>
 #include <condition_variable>
 #include <cstring>
+#include <cmath>
 #include <limits>
 #include <memory>
 #include <mutex>
@@ -30,6 +31,7 @@ enum class BatchLiftStatus {
     unsupported_import,
     synchronization_error,
     invalid_x87_state,
+    divide_error,
     unsupported_dependency,
 };
 
@@ -460,6 +462,106 @@ inline bool batch_guest_fstp64(
     const std::uint64_t value = state.x87_stack[state.x87_depth - 1u];
     if (!memory.store64(address, value)) return false;
     state.x87_stack[--state.x87_depth] = 0u;
+    return true;
+}
+
+// This bounded path was differential-tested with x87 CW=0x027f (53-bit,
+// round-to-nearest) and MXCSR=0x1f80. The guest state does not model changes
+// to either control register or x87 exception/status flags.
+inline bool batch_guest_fild32(const BatchLiftMemory& memory,
+                              BatchLiftState& state, std::uint32_t address) {
+    if (state.x87_depth >= 8u) return false;
+    std::uint32_t raw{};
+    if (!memory.load32(address, raw)) return false;
+    const double value = static_cast<double>(static_cast<std::int32_t>(raw));
+    std::uint64_t bits{};
+    std::memcpy(&bits, &value, sizeof(bits));
+    state.x87_stack[state.x87_depth++] = bits;
+    return true;
+}
+
+inline bool batch_guest_x87_float32_arithmetic(const BatchLiftMemory& memory,
+                                                BatchLiftState& state,
+                                                std::uint32_t address,
+                                                unsigned operation) {
+    if (state.x87_depth == 0u) return false;
+    std::uint32_t raw{};
+    if (!memory.load32(address, raw)) return false;
+    double top{};
+    float source{};
+    std::memcpy(&top, &state.x87_stack[state.x87_depth - 1u], sizeof(top));
+    std::memcpy(&source, &raw, sizeof(source));
+    const double result = operation == 1u ? top * static_cast<double>(source)
+        : operation == 2u ? top / static_cast<double>(source)
+        : top + static_cast<double>(source);
+    std::memcpy(&state.x87_stack[state.x87_depth - 1u], &result, sizeof(result));
+    return true;
+}
+
+inline bool batch_guest_fstp32(BatchLiftMemory& memory,
+                               BatchLiftState& state, std::uint32_t address) {
+    if (state.x87_depth == 0u) return false;
+    double top{};
+    std::memcpy(&top, &state.x87_stack[state.x87_depth - 1u], sizeof(top));
+    const float result = static_cast<float>(top);
+    std::uint32_t raw{};
+    std::memcpy(&raw, &result, sizeof(raw));
+    if (!memory.store32(address, raw)) return false;
+    state.x87_stack[--state.x87_depth] = 0u;
+    return true;
+}
+
+inline bool batch_guest_cvtss2si(BatchLiftState& state,
+                                 std::uint32_t destination,
+                                 std::uint32_t source) {
+    if (destination >= 8u || source >= 8u) return false;
+    float value{};
+    std::memcpy(&value, &state.xmm[source][0], sizeof(value));
+    const double rounded = std::nearbyint(static_cast<double>(value));
+    state.regs[destination] = !std::isfinite(rounded) ||
+        rounded < -2147483648.0 || rounded >= 2147483648.0
+        ? 0x80000000u
+        : static_cast<std::uint32_t>(static_cast<std::int32_t>(rounded));
+    return true;
+}
+
+inline bool batch_guest_cvttss2si_memory(const BatchLiftMemory& memory,
+                                         BatchLiftState& state,
+                                         std::uint32_t destination,
+                                         std::uint32_t address) {
+    if (destination >= 8u) return false;
+    std::uint32_t raw{};
+    if (!memory.load32(address, raw)) return false;
+    float value{};
+    std::memcpy(&value, &raw, sizeof(value));
+    const double truncated = std::trunc(static_cast<double>(value));
+    state.regs[destination] = !std::isfinite(truncated) ||
+        truncated < -2147483648.0 || truncated >= 2147483648.0
+        ? 0x80000000u
+        : static_cast<std::uint32_t>(static_cast<std::int32_t>(truncated));
+    return true;
+}
+
+inline bool batch_guest_cvtsi2ss(BatchLiftState& state,
+                                 std::uint32_t destination,
+                                 std::uint32_t source) {
+    if (destination >= 8u || source >= 8u) return false;
+    const float value = static_cast<float>(static_cast<std::int32_t>(state.regs[source]));
+    std::memcpy(&state.xmm[destination][0], &value, sizeof(value));
+    return true;
+}
+
+inline bool batch_guest_ucomiss(BatchLiftState& state,
+                                std::uint32_t left,
+                                std::uint32_t right) {
+    if (left >= 8u || right >= 8u) return false;
+    float a{}, b{};
+    std::memcpy(&a, &state.xmm[left][0], sizeof(a));
+    std::memcpy(&b, &state.xmm[right][0], sizeof(b));
+    state.eflags &= ~0x8c5u;
+    if (std::isnan(a) || std::isnan(b)) state.eflags |= 0x045u;
+    else if (a < b) state.eflags |= 0x001u;
+    else if (a == b) state.eflags |= 0x040u;
     return true;
 }
 

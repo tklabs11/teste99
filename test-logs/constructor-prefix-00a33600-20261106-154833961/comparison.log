@@ -1,0 +1,6 @@
+PASS original_x86_vs_lifted_x86
+PASS lifted_x86_vs_lifted_arm64
+PASS arm64_device_run serial=PJMZAEJRX4YLFIDI
+EXECUTED=FUN_00743b50,FUN_00921f00,FUN_009222a0,FUN_011e64f0,FUN_00a247f0,FUN_00a0fdf0x6
+BOUNDARY=0x00a33817 target=0x00a2a210 status=unsupported_dependency
+REGISTER_POLICY=ECX,EDX recorded_as_caller_saved_not_compared

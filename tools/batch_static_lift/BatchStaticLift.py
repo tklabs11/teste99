@@ -38,26 +38,26 @@ REGISTER_ALIASES = {
     "SP": (4, 16, 0), "BP": (5, 16, 0), "SI": (6, 16, 0), "DI": (7, 16, 0),
 }
 MEMORY_OPERAND = re.compile(
-    r"^(?:(byte|word|dword|qword|double) ptr )?\[\s*"
+    r"^(?:(byte|word|dword|qword|double|float) ptr )?\[\s*"
     r"(EAX|ECX|EDX|EBX|ESP|EBP|ESI|EDI)"
     r"(?:\s*([+-])\s*(-?(?:0x[0-9a-f]+|[0-9]+)))?\s*\]$",
     re.IGNORECASE,
 )
 INDEXED_MEMORY_OPERAND = re.compile(
-    r"^(?:(byte|word|dword|qword|double) ptr )?\[\s*"
+    r"^(?:(byte|word|dword|qword|double|float) ptr )?\[\s*"
     r"(EAX|ECX|EDX|EBX|ESP|EBP|ESI|EDI)\s*\+\s*"
     r"(EAX|ECX|EDX|EBX|EBP|ESI|EDI)\s*\*\s*"
     r"(0x[0-9a-f]+|[0-9]+)"
-    r"(?:\s*([+-])\s*(0x[0-9a-f]+|[0-9]+))?\s*\]$",
+    r"(?:\s*([+-])\s*(-?(?:0x[0-9a-f]+|[0-9]+)))?\s*\]$",
     re.IGNORECASE,
 )
 FS_MEMORY_OPERAND = re.compile(
-    r"^(?:(byte|word|dword|qword|double) ptr )?FS:\[\s*"
+    r"^(?:(byte|word|dword|qword|double|float) ptr )?FS:\[\s*"
     r"([+-]?(?:0x[0-9a-f]+|[0-9]+))\s*\]$",
     re.IGNORECASE,
 )
 ABSOLUTE_MEMORY_OPERAND = re.compile(
-    r"^(?:(byte|word|dword|qword|double) ptr )?\[\s*(0x[0-9a-f]+|[0-9]+)\s*\]$",
+    r"^(?:(byte|word|dword|qword|double|float) ptr )?\[\s*(0x[0-9a-f]+|[0-9]+)\s*\]$",
     re.IGNORECASE,
 )
 XMM_REGISTER = re.compile(r"^XMM([0-7])$", re.IGNORECASE)
@@ -159,6 +159,7 @@ def parse_operand(text, infer_memory_width=None):
             "dword": 32,
             "qword": 64,
             "double": 64,
+            "float": 32,
         }.get((match.group(1) or "").lower(), infer_memory_width)
         if memory_width is None:
             raise ValueError(f"memory operand width is ambiguous: {text!r}")
@@ -177,6 +178,7 @@ def parse_operand(text, infer_memory_width=None):
             "dword": 32,
             "qword": 64,
             "double": 64,
+            "float": 32,
         }.get((match.group(1) or "").lower(), infer_memory_width)
         if memory_width is None:
             raise ValueError(f"memory operand width is ambiguous: {text!r}")
@@ -204,6 +206,7 @@ def parse_operand(text, infer_memory_width=None):
             "dword": 32,
             "qword": 64,
             "double": 64,
+            "float": 32,
         }.get((match.group(1) or "").lower(), infer_memory_width)
         if memory_width is None:
             raise ValueError(f"memory operand width is ambiguous: {text!r}")
@@ -223,10 +226,13 @@ def parse_operand(text, infer_memory_width=None):
         if scale not in {1, 2, 4, 8}:
             raise ValueError(f"unsupported x86 index scale in {text!r}")
         displacement_token = match.group(6)
-        displacement = int(
-            displacement_token,
-            16 if displacement_token.lower().startswith("0x") else 10,
-        ) if displacement_token else 0
+        displacement = 0
+        if displacement_token:
+            negative = displacement_token.startswith("-")
+            magnitude = displacement_token[1:] if negative else displacement_token
+            displacement = int(
+                magnitude, 16 if magnitude.lower().startswith("0x") else 10,
+            ) * (-1 if negative else 1)
         if match.group(5) == "-":
             displacement = -displacement
         memory_width = {
@@ -235,6 +241,7 @@ def parse_operand(text, infer_memory_width=None):
             "dword": 32,
             "qword": 64,
             "double": 64,
+            "float": 32,
         }.get((match.group(1) or "").lower(), infer_memory_width)
         if memory_width is None:
             raise ValueError(f"memory operand width is ambiguous: {text!r}")
@@ -610,6 +617,12 @@ def translate_instruction(
                 f"{mnemonic} expects 1 operand; found {len(operands_text)}"
             )
         operand = resolve_operands(operands_text)[0]
+        if mnemonic == "FSTP" and operand[0] in {"absolute_memory", "memory"} and operand[3] == 32:
+            return [
+                "if (state.x87_depth == 0u) return BatchLiftStatus::invalid_x87_state;",
+                f"if (!batch_guest_fstp32(memory, state, {memory_address(operand)})) "
+                "return BatchLiftStatus::invalid_memory;",
+            ]
         if operand[0] not in {"absolute_memory", "memory"} or operand[3] != 64:
             raise ValueError(
                 f"{mnemonic} currently supports only 64-bit memory operands"
@@ -627,6 +640,61 @@ def translate_instruction(
             f"if (!{helper}(memory, state, {memory_address(operand)})) "
             "return BatchLiftStatus::invalid_memory;"
         ]
+    if mnemonic in {"FILD", "FADD", "FMUL", "FDIV"}:
+        if len(operands_text) != 1:
+            raise ValueError(f"{mnemonic} expects one operand")
+        operand = resolve_operands(operands_text)[0]
+        if operand[0] not in {"absolute_memory", "memory"} or operand[3] != 32:
+            raise ValueError(f"{mnemonic} requires 32-bit memory")
+        if mnemonic == "FILD":
+            return [
+                "if (state.x87_depth >= 8u) return BatchLiftStatus::invalid_x87_state;",
+                f"if (!batch_guest_fild32(memory, state, {memory_address(operand)})) "
+                "return BatchLiftStatus::invalid_memory;",
+            ]
+        operation = {"FADD": 0, "FMUL": 1, "FDIV": 2}[mnemonic]
+        return [
+            "if (state.x87_depth == 0u) return BatchLiftStatus::invalid_x87_state;",
+            f"if (!batch_guest_x87_float32_arithmetic(memory, state, {memory_address(operand)}, "
+            f"{operation}u)) "
+            "return BatchLiftStatus::invalid_memory;",
+        ]
+    if mnemonic == "CVTTSS2SI":
+        if len(operands_text) != 2:
+            raise ValueError("CVTTSS2SI expects two operands")
+        destination = REGISTER.fullmatch(operands_text[0])
+        source = parse_operand(operands_text[1])
+        if destination is None or source[0] not in {"memory", "absolute_memory"} or source[3] != 32:
+            raise ValueError("CVTTSS2SI requires a 32-bit register and 32-bit memory")
+        dst = REGISTER_INDEX[destination.group(0).upper()]
+        return [
+            f"if (!batch_guest_cvttss2si_memory(memory, state, {dst}u, {memory_address(source)})) "
+            "return BatchLiftStatus::invalid_memory;"
+        ]
+    if mnemonic in {"CVTSS2SI", "CVTSI2SS"}:
+        if len(operands_text) != 2:
+            raise ValueError(f"{mnemonic} expects two operands")
+        if mnemonic == "CVTSS2SI":
+            destination = REGISTER.fullmatch(operands_text[0])
+            source = XMM_REGISTER.fullmatch(operands_text[1])
+            helper = "batch_guest_cvtss2si"
+        else:
+            destination = XMM_REGISTER.fullmatch(operands_text[0])
+            source = REGISTER.fullmatch(operands_text[1])
+            helper = "batch_guest_cvtsi2ss"
+        if destination is None or source is None:
+            raise ValueError(f"{mnemonic} requires a 32-bit register and XMM register")
+        dst = REGISTER_INDEX[destination.group(0).upper()] if mnemonic == "CVTSS2SI" else int(destination.group(1))
+        src = int(source.group(1)) if mnemonic == "CVTSS2SI" else REGISTER_INDEX[source.group(0).upper()]
+        return [f"if (!{helper}(state, {dst}u, {src}u)) return BatchLiftStatus::invalid_control_flow;"]
+    if mnemonic == "UCOMISS":
+        if len(operands_text) != 2:
+            raise ValueError("UCOMISS expects two operands")
+        left = XMM_REGISTER.fullmatch(operands_text[0])
+        right = XMM_REGISTER.fullmatch(operands_text[1])
+        if left is None or right is None:
+            raise ValueError("UCOMISS requires two XMM registers")
+        return [f"if (!batch_guest_ucomiss(state, {int(left.group(1))}u, {int(right.group(1))}u)) return BatchLiftStatus::invalid_control_flow;"]
 
     set_condition = None
     if mnemonic.startswith("SET") and len(mnemonic) > 3:
@@ -641,7 +709,7 @@ def translate_instruction(
             infer_untyped_memory=mnemonic not in {"MOVZX", "MOVSX"},
         )
     )
-    if mnemonic != "MOV" and any(
+    if mnemonic not in {"MOV", "LEA", "CMP"} and any(
         operand[0] == "indexed_memory" for operand in operands
     ):
         raise ValueError("indexed memory operands currently support MOV only")
@@ -654,6 +722,14 @@ def translate_instruction(
 
     if mnemonic == "NOP":
         require(0)
+    elif mnemonic == "CMOVC":
+        require(2)
+        if any(operand[0] != "register" or operand_width(operand) != 32
+               for operand in operands):
+            raise ValueError("CMOVC requires two 32-bit registers")
+        lines.append(
+            f"if ((state.eflags & 0x001u) != 0u) state.regs[{operands[0][1]}] = state.regs[{operands[1][1]}];"
+        )
     elif set_condition is not None:
         require(1)
         if operand_width(operands[0]) != 8:
@@ -687,10 +763,19 @@ def translate_instruction(
         require(2)
         if operands[0][0] != "register" or operand_width(operands[0]) != 32:
             raise ValueError("LEA requires a 32-bit register destination")
-        if operands[1][0] != "memory":
-            raise ValueError("LEA source must be a supported base-plus-displacement address")
+        if operands[1][0] not in {"memory", "indexed_memory"}:
+            raise ValueError("LEA source must be a supported effective address")
         lines.append(f"{temp} = {memory_address(operands[1])};")
         lines += emit_store(operands[0], temp)
+    elif mnemonic == "NOT":
+        require(1)
+        if operands[0][0] not in {"register", "memory", "absolute_memory", "fs_memory"}:
+            raise ValueError("NOT requires a register or memory destination")
+        width = operand_width(operands[0])
+        if width not in {8, 16, 32}:
+            raise ValueError("NOT requires an 8-, 16-, or 32-bit destination")
+        lines += emit_load(operands[0], f"{temp}a")
+        lines += emit_store(operands[0], f"(~{temp}a & {cpp_u32(width_mask(width))})")
     elif mnemonic in {"MOVZX", "MOVSX"}:
         require(2)
         destination_width = operand_width(operands[0])
@@ -707,6 +792,51 @@ def translate_instruction(
                 f"({temp}a ^ {cpp_u32(sign)}) - {cpp_u32(sign)});"
             )
         lines += emit_store(operands[0], f"{temp}a")
+    elif mnemonic == "DIV":
+        require(1)
+        if operands[0][0] != "register" or operand_width(operands[0]) != 32:
+            raise ValueError("DIV currently requires a 32-bit register divisor")
+        lines += emit_load(operands[0], f"{temp}a")
+        lines += [
+            f"if ({temp}a == 0u) return BatchLiftStatus::divide_error;",
+            "{",
+            f"const std::uint64_t dividend = (static_cast<std::uint64_t>(state.regs[2]) << 32u) | state.regs[0];",
+            f"const std::uint64_t quotient = dividend / {temp}a;",
+            "if (quotient > 0xffffffffull) return BatchLiftStatus::divide_error;",
+            "state.regs[0] = static_cast<std::uint32_t>(quotient);",
+            f"state.regs[2] = static_cast<std::uint32_t>(dividend % {temp}a);",
+            "}",
+        ]
+    elif mnemonic == "IMUL":
+        require(2)
+        if any(operand[0] != "register" or operand_width(operand) != 32
+               for operand in operands):
+            raise ValueError("IMUL currently requires two 32-bit registers")
+        lines += emit_load(operands[0], f"{temp}a")
+        lines += emit_load(operands[1], f"{temp}b")
+        lines += [
+            "{",
+            f"const std::int64_t product = static_cast<std::int64_t>(static_cast<std::int32_t>({temp}a)) * static_cast<std::int32_t>({temp}b);",
+            f"state.regs[{operands[0][1]}] = static_cast<std::uint32_t>(product);",
+            "state.eflags &= ~0x801u;",
+            "if (product < -2147483648ll || product > 2147483647ll) state.eflags |= 0x801u;",
+            "}",
+        ]
+    elif mnemonic == "SAR":
+        require(2)
+        if operands[0][0] != "register" or operand_width(operands[0]) != 32:
+            raise ValueError("SAR currently requires a 32-bit register destination")
+        if operands[1][0] != "immediate" or operands[1][1] not in {1, 2}:
+            raise ValueError("SAR currently supports immediate counts 1 and 2")
+        count = operands[1][1]
+        lines += emit_load(operands[0], f"{temp}a")
+        lines += [
+            f"{temp}r = ({temp}a >> {count}u) | "
+            f"(({temp}a & 0x80000000u) ? (0xffffffffu << {32 - count}u) : 0u);",
+            f"batch_set_logic_flags(state, {temp}r, 32u);",
+            f"if (({temp}a & {1 << (count - 1)}u) != 0u) state.eflags |= 0x001u;",
+        ]
+        lines += emit_store(operands[0], f"{temp}r")
     elif mnemonic in {"ADD", "SUB", "SBB", "CMP", "TEST", "AND", "OR", "XOR", "INC", "DEC", "NEG"}:
         if mnemonic in {"INC", "DEC", "NEG"}:
             require(1)
@@ -715,8 +845,10 @@ def translate_instruction(
         if operands[0][0] == "immediate":
             raise ValueError(f"{mnemonic} destination cannot be immediate")
         if len(operands) == 2 and operands[0][0] in {
-            "memory", "fs_memory"
-        } and operands[1][0] in {"memory", "fs_memory"}:
+            "memory", "fs_memory", "indexed_memory", "absolute_memory",
+        } and operands[1][0] in {
+            "memory", "fs_memory", "indexed_memory", "absolute_memory",
+        }:
             raise ValueError(f"{mnemonic} cannot use two memory operands")
         op_width = operand_width(operands[0])
         if op_width not in {8, 16, 32}:

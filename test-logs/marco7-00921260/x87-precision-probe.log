@@ -1,0 +1,25 @@
+x87_control=027f mxcsr=00001f80
+PASS value=00000000 factor=3f800000 x87=00000000 precise=00000000
+PASS value=00000001 factor=3f800000 x87=3f800000 precise=3f800000
+PASS value=7fffffff factor=3f800000 x87=4f000000 precise=4f000000
+PASS value=80000000 factor=3f800000 x87=4f000000 precise=4f000000
+PASS value=ffffffff factor=3f800000 x87=4f800000 precise=4f800000
+PASS value=12345678 factor=3f800000 x87=4d91a2b4 precise=4d91a2b4
+PASS value=00000000 factor=3f000000 x87=00000000 precise=00000000
+PASS value=00000001 factor=3f000000 x87=3f000000 precise=3f000000
+PASS value=7fffffff factor=3f000000 x87=4e800000 precise=4e800000
+PASS value=80000000 factor=3f000000 x87=4e800000 precise=4e800000
+PASS value=ffffffff factor=3f000000 x87=4f000000 precise=4f000000
+PASS value=12345678 factor=3f000000 x87=4d11a2b4 precise=4d11a2b4
+PASS value=00000000 factor=3eaaaaab x87=00000000 precise=00000000
+PASS value=00000001 factor=3eaaaaab x87=3eaaaaab precise=3eaaaaab
+PASS value=7fffffff factor=3eaaaaab x87=4e2aaaab precise=4e2aaaab
+PASS value=80000000 factor=3eaaaaab x87=4e2aaaab precise=4e2aaaab
+PASS value=ffffffff factor=3eaaaaab x87=4eaaaaab precise=4eaaaaab
+PASS value=12345678 factor=3eaaaaab x87=4cc22e45 precise=4cc22e45
+PASS value=00000000 factor=4f000000 x87=00000000 precise=00000000
+PASS value=00000001 factor=4f000000 x87=4f000000 precise=4f000000
+PASS value=7fffffff factor=4f000000 x87=5e800000 precise=5e800000
+PASS value=80000000 factor=4f000000 x87=5e800000 precise=5e800000
+PASS value=ffffffff factor=4f000000 x87=5f000000 precise=5f000000
+PASS value=12345678 factor=4f000000 x87=5d11a2b4 precise=5d11a2b4

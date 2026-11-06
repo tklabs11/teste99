@@ -1,0 +1,4 @@
+PASS case=0 x86_original_vs_arm64_lift
+PASS case=1 x86_original_vs_arm64_lift
+PASS case=2 x86_original_vs_arm64_lift
+PASS case=3 x86_original_vs_arm64_lift

@@ -13,6 +13,10 @@ runtime-r4/
 *.apk
 *.aab
 *.o
+*.obj
+/tmp-m7/
+/test-logs/marco7-00921260/*.exe
+/test-logs/marco7-00921260/*_arm64
 __pycache__/
 /tools/lifting_harness_arm64
 /tools/x86_candidate_differential

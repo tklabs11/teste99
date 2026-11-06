@@ -1,0 +1,3302 @@
+{
+  "schema": "spore-static-lift-call-diagnostic-v1",
+  "source_sha256": "6aec99cb2dc7fd08851a1718e92a60f359fb3fccca3b244a890ae07e93cbe59b",
+  "batch_exports": [
+    "C:\\SporeAnalysis\\spore_batch_all_parts\\spore_batch_all_0041.json",
+    "C:\\SporeAnalysis\\spore_batch_all_parts\\spore_batch_all_0021.json",
+    "C:\\SporeAnalysis\\spore_batch_all_parts\\spore_batch_all_0034.json",
+    "C:\\SporeAnalysis\\spore_batch_all_parts\\spore_batch_all_0040.json",
+    "C:\\SporeAnalysis\\spore_batch_all_parts\\spore_batch_all_0086.json",
+    "C:\\SporeAnalysis\\spore_batch_all_parts\\spore_batch_all_0073.json"
+  ],
+  "root_entries": [
+    "0x00a2a210"
+  ],
+  "reachable_exported_function_count": 33,
+  "import_thunk_count_in_pe": 118,
+  "functions": [
+    {
+      "address": "0x00921260",
+      "name": "FUN_00921260",
+      "batch": "C:\\SporeAnalysis\\spore_batch_all_parts\\spore_batch_all_0034.json",
+      "instruction_count": 38,
+      "verified_byte_count": 92,
+      "byte_validation_error": null,
+      "translation_reasons": [],
+      "translated_instruction_counts": {
+        "ADD": 1,
+        "AND": 2,
+        "CMP": 4,
+        "DEC": 2,
+        "DIV": 1,
+        "IMUL": 1,
+        "JC": 1,
+        "JNC": 3,
+        "LEA": 4,
+        "MOV": 9,
+        "NOT": 2,
+        "POP": 3,
+        "PUSH": 3,
+        "RET": 1,
+        "XOR": 1
+      },
+      "direct_calls": []
+    },
+    {
+      "address": "0x009212c0",
+      "name": "FUN_009212c0",
+      "batch": "C:\\SporeAnalysis\\spore_batch_all_parts\\spore_batch_all_0034.json",
+      "instruction_count": 26,
+      "verified_byte_count": 63,
+      "byte_validation_error": null,
+      "translation_reasons": [],
+      "translated_instruction_counts": {
+        "ADD": 1,
+        "CMP": 1,
+        "JC": 1,
+        "JG": 1,
+        "JLE": 1,
+        "JMP": 1,
+        "LEA": 2,
+        "MOV": 6,
+        "OR": 1,
+        "POP": 2,
+        "PUSH": 2,
+        "RET": 1,
+        "SAR": 2,
+        "SUB": 2,
+        "TEST": 2
+      },
+      "direct_calls": []
+    },
+    {
+      "address": "0x00921300",
+      "name": "FUN_00921300",
+      "batch": "C:\\SporeAnalysis\\spore_batch_all_parts\\spore_batch_all_0034.json",
+      "instruction_count": 26,
+      "verified_byte_count": 63,
+      "byte_validation_error": null,
+      "translation_reasons": [],
+      "translated_instruction_counts": {
+        "ADD": 1,
+        "CMP": 1,
+        "JG": 1,
+        "JLE": 1,
+        "JMP": 1,
+        "JNC": 1,
+        "LEA": 2,
+        "MOV": 6,
+        "OR": 1,
+        "POP": 2,
+        "PUSH": 2,
+        "RET": 1,
+        "SAR": 2,
+        "SUB": 2,
+        "TEST": 2
+      },
+      "direct_calls": []
+    },
+    {
+      "address": "0x00921340",
+      "name": "FUN_00921340",
+      "batch": "C:\\SporeAnalysis\\spore_batch_all_parts\\spore_batch_all_0034.json",
+      "instruction_count": 8,
+      "verified_byte_count": 27,
+      "byte_validation_error": null,
+      "translation_reasons": [],
+      "translated_instruction_counts": {
+        "ADD": 1,
+        "CALL": 1,
+        "LEA": 1,
+        "MOV": 1,
+        "PUSH": 3,
+        "RET": 1
+      },
+      "direct_calls": [
+        {
+          "site": "0x0092134f",
+          "mnemonic": "CALL",
+          "operand": [
+            "0x009212c0"
+          ],
+          "target": {
+            "address": "0x009212c0",
+            "classification": "exported_function"
+          }
+        }
+      ]
+    },
+    {
+      "address": "0x00921360",
+      "name": "FUN_00921360",
+      "batch": "C:\\SporeAnalysis\\spore_batch_all_parts\\spore_batch_all_0034.json",
+      "instruction_count": 30,
+      "verified_byte_count": 94,
+      "byte_validation_error": null,
+      "translation_reasons": [],
+      "translated_instruction_counts": {
+        "ADD": 3,
+        "CALL": 1,
+        "CMOVC": 1,
+        "CVTSI2SS": 1,
+        "CVTSS2SI": 1,
+        "FADD": 1,
+        "FILD": 1,
+        "FMUL": 1,
+        "FSTP": 1,
+        "JGE": 1,
+        "LEA": 1,
+        "MOV": 7,
+        "MOVSS": 1,
+        "POP": 1,
+        "PUSH": 4,
+        "RET": 1,
+        "SUB": 1,
+        "TEST": 1,
+        "UCOMISS": 1
+      },
+      "direct_calls": [
+        {
+          "site": "0x00921375",
+          "mnemonic": "CALL",
+          "operand": [
+            "0x00921300"
+          ],
+          "target": {
+            "address": "0x00921300",
+            "classification": "exported_function"
+          }
+        }
+      ]
+    },
+    {
+      "address": "0x009213c0",
+      "name": "FUN_009213c0",
+      "batch": "C:\\SporeAnalysis\\spore_batch_all_parts\\spore_batch_all_0034.json",
+      "instruction_count": 39,
+      "verified_byte_count": 128,
+      "byte_validation_error": null,
+      "translation_reasons": [],
+      "translated_instruction_counts": {
+        "ADD": 3,
+        "CALL": 1,
+        "CMOVC": 1,
+        "CVTSI2SS": 1,
+        "CVTSS2SI": 1,
+        "CVTTSS2SI": 1,
+        "FADD": 2,
+        "FDIV": 1,
+        "FILD": 2,
+        "FMUL": 1,
+        "FSTP": 2,
+        "JGE": 2,
+        "LEA": 1,
+        "MOV": 9,
+        "MOVSS": 1,
+        "POP": 1,
+        "PUSH": 4,
+        "RET": 1,
+        "SUB": 1,
+        "TEST": 2,
+        "UCOMISS": 1
+      },
+      "direct_calls": [
+        {
+          "site": "0x009213f7",
+          "mnemonic": "CALL",
+          "operand": [
+            "0x00921300"
+          ],
+          "target": {
+            "address": "0x00921300",
+            "classification": "exported_function"
+          }
+        }
+      ]
+    },
+    {
+      "address": "0x00926100",
+      "name": "FUN_00926100",
+      "batch": "C:\\SporeAnalysis\\spore_batch_all_parts\\spore_batch_all_0034.json",
+      "instruction_count": 12,
+      "verified_byte_count": 27,
+      "byte_validation_error": null,
+      "translation_reasons": [
+        "0x00926111: indirect or unresolved call is not supported"
+      ],
+      "translated_instruction_counts": {
+        "CMP": 1,
+        "JZ": 1,
+        "MOV": 3,
+        "POP": 1,
+        "PUSH": 3,
+        "RET": 1,
+        "XOR": 1
+      },
+      "direct_calls": []
+    },
+    {
+      "address": "0x009267a0",
+      "name": "FUN_009267a0",
+      "batch": "C:\\SporeAnalysis\\spore_batch_all_parts\\spore_batch_all_0034.json",
+      "instruction_count": 8,
+      "verified_byte_count": 22,
+      "byte_validation_error": null,
+      "translation_reasons": [],
+      "translated_instruction_counts": {
+        "ADD": 1,
+        "AND": 1,
+        "CMP": 1,
+        "JBE": 1,
+        "MOV": 2,
+        "RET": 2
+      },
+      "direct_calls": []
+    },
+    {
+      "address": "0x009267f0",
+      "name": "FUN_009267f0",
+      "batch": "C:\\SporeAnalysis\\spore_batch_all_parts\\spore_batch_all_0034.json",
+      "instruction_count": 32,
+      "verified_byte_count": 78,
+      "byte_validation_error": null,
+      "translation_reasons": [
+        "0x009267f6: unsupported instruction SHR",
+        "0x00926804: unsupported instruction SHR",
+        "0x00926812: unsupported instruction SHR",
+        "0x00926820: unsupported instruction SHR",
+        "0x0092682c: unsupported instruction SHR"
+      ],
+      "translated_instruction_counts": {
+        "ADD": 1,
+        "CMP": 5,
+        "JA": 5,
+        "LEA": 4,
+        "MOV": 6,
+        "RET": 6
+      },
+      "direct_calls": []
+    },
+    {
+      "address": "0x00926840",
+      "name": "FUN_00926840",
+      "batch": "C:\\SporeAnalysis\\spore_batch_all_parts\\spore_batch_all_0034.json",
+      "instruction_count": 28,
+      "verified_byte_count": 99,
+      "byte_validation_error": null,
+      "translation_reasons": [
+        "0x00926890: unsupported instruction SHR"
+      ],
+      "translated_instruction_counts": {
+        "ADD": 1,
+        "AND": 1,
+        "CMP": 3,
+        "JNZ": 1,
+        "JZ": 2,
+        "LEA": 1,
+        "MOV": 15,
+        "POP": 1,
+        "PUSH": 1,
+        "RET": 1
+      },
+      "direct_calls": []
+    },
+    {
+      "address": "0x009268b0",
+      "name": "FUN_009268b0",
+      "batch": "C:\\SporeAnalysis\\spore_batch_all_parts\\spore_batch_all_0034.json",
+      "instruction_count": 19,
+      "verified_byte_count": 64,
+      "byte_validation_error": null,
+      "translation_reasons": [
+        "0x009268dd: unsupported instruction SHR"
+      ],
+      "translated_instruction_counts": {
+        "ADD": 1,
+        "AND": 1,
+        "CMP": 1,
+        "JNZ": 1,
+        "MOV": 10,
+        "OR": 1,
+        "POP": 1,
+        "PUSH": 1,
+        "RET": 1
+      },
+      "direct_calls": []
+    },
+    {
+      "address": "0x009268f0",
+      "name": "FUN_009268f0",
+      "batch": "C:\\SporeAnalysis\\spore_batch_all_parts\\spore_batch_all_0034.json",
+      "instruction_count": 16,
+      "verified_byte_count": 62,
+      "byte_validation_error": null,
+      "translation_reasons": [],
+      "translated_instruction_counts": {
+        "AND": 3,
+        "MOV": 9,
+        "OR": 2,
+        "RET": 1,
+        "SUB": 1
+      },
+      "direct_calls": []
+    },
+    {
+      "address": "0x00926960",
+      "name": "FUN_00926960",
+      "batch": "C:\\SporeAnalysis\\spore_batch_all_parts\\spore_batch_all_0034.json",
+      "instruction_count": 60,
+      "verified_byte_count": 168,
+      "byte_validation_error": null,
+      "translation_reasons": [
+        "0x00926989: unsupported instruction SHR",
+        "0x009269ef: unsupported instruction SHL",
+        "0x009269f1: SAR currently supports immediate counts 1 and 2",
+        "0x009269f4: indexed memory operands currently support MOV only"
+      ],
+      "translated_instruction_counts": {
+        "ADD": 1,
+        "AND": 3,
+        "CALL": 1,
+        "CMP": 6,
+        "JC": 1,
+        "JMP": 3,
+        "JNC": 3,
+        "JZ": 2,
+        "LEA": 3,
+        "MOV": 23,
+        "POP": 4,
+        "PUSH": 5,
+        "RET": 1
+      },
+      "direct_calls": [
+        {
+          "site": "0x00926999",
+          "mnemonic": "CALL",
+          "operand": [
+            "0x009267f0"
+          ],
+          "target": {
+            "address": "0x009267f0",
+            "classification": "exported_function"
+          }
+        }
+      ]
+    },
+    {
+      "address": "0x00926a30",
+      "name": "FUN_00926a30",
+      "batch": "C:\\SporeAnalysis\\spore_batch_all_parts\\spore_batch_all_0034.json",
+      "instruction_count": 18,
+      "verified_byte_count": 47,
+      "byte_validation_error": null,
+      "translation_reasons": [],
+      "translated_instruction_counts": {
+        "ADD": 1,
+        "CMP": 4,
+        "JC": 2,
+        "JNZ": 1,
+        "JZ": 1,
+        "LEA": 1,
+        "MOV": 4,
+        "POP": 1,
+        "PUSH": 1,
+        "RET": 1,
+        "XOR": 1
+      },
+      "direct_calls": []
+    },
+    {
+      "address": "0x00926ab0",
+      "name": "FUN_00926ab0",
+      "batch": "C:\\SporeAnalysis\\spore_batch_all_parts\\spore_batch_all_0034.json",
+      "instruction_count": 20,
+      "verified_byte_count": 51,
+      "byte_validation_error": null,
+      "translation_reasons": [],
+      "translated_instruction_counts": {
+        "AND": 1,
+        "CALL": 1,
+        "CMP": 2,
+        "JC": 1,
+        "JNC": 1,
+        "JZ": 1,
+        "LEA": 1,
+        "MOV": 4,
+        "POP": 2,
+        "PUSH": 2,
+        "RET": 2,
+        "TEST": 1,
+        "XOR": 1
+      },
+      "direct_calls": [
+        {
+          "site": "0x00926ac3",
+          "mnemonic": "CALL",
+          "operand": [
+            "0x00926a30"
+          ],
+          "target": {
+            "address": "0x00926a30",
+            "classification": "exported_function"
+          }
+        }
+      ]
+    },
+    {
+      "address": "0x00926c20",
+      "name": "FUN_00926c20",
+      "batch": "C:\\SporeAnalysis\\spore_batch_all_parts\\spore_batch_all_0034.json",
+      "instruction_count": 126,
+      "verified_byte_count": 396,
+      "byte_validation_error": null,
+      "translation_reasons": [
+        "0x00926c6f: indirect or unresolved call is not supported",
+        "0x00926ca8: indirect or unresolved call is not supported",
+        "0x00926ccf: indirect or unresolved call is not supported",
+        "0x00926cee: unsupported instruction SHR"
+      ],
+      "translated_instruction_counts": {
+        "ADD": 1,
+        "AND": 9,
+        "CMP": 8,
+        "DEC": 2,
+        "JA": 1,
+        "JNC": 2,
+        "JNZ": 2,
+        "JZ": 5,
+        "LEA": 7,
+        "MOV": 46,
+        "NOT": 3,
+        "OR": 2,
+        "POP": 8,
+        "PUSH": 16,
+        "RET": 2,
+        "SETNZ": 1,
+        "SUB": 2,
+        "TEST": 3,
+        "XOR": 2
+      },
+      "direct_calls": []
+    },
+    {
+      "address": "0x00926db0",
+      "name": "FUN_00926db0",
+      "batch": "C:\\SporeAnalysis\\spore_batch_all_parts\\spore_batch_all_0034.json",
+      "instruction_count": 111,
+      "verified_byte_count": 350,
+      "byte_validation_error": null,
+      "translation_reasons": [
+        "0x00926dcc: indirect or unresolved call is not supported",
+        "0x00926dfd: indexed memory operands currently support MOV only",
+        "0x00926e36: unsupported instruction SHR",
+        "0x00926e6c: indirect or unresolved call is not supported",
+        "0x00926efc: indirect or unresolved call is not supported"
+      ],
+      "translated_instruction_counts": {
+        "ADD": 10,
+        "AND": 3,
+        "CALL": 1,
+        "CMP": 10,
+        "DEC": 1,
+        "INC": 1,
+        "JBE": 1,
+        "JC": 1,
+        "JNC": 2,
+        "JNZ": 2,
+        "JZ": 8,
+        "LEA": 5,
+        "MOV": 33,
+        "NOP": 1,
+        "OR": 1,
+        "POP": 4,
+        "PUSH": 11,
+        "RET": 1,
+        "SUB": 6,
+        "TEST": 3,
+        "XOR": 1
+      },
+      "direct_calls": [
+        {
+          "site": "0x00926eb1",
+          "mnemonic": "CALL",
+          "operand": [
+            "0x009268f0"
+          ],
+          "target": {
+            "address": "0x009268f0",
+            "classification": "exported_function"
+          }
+        }
+      ]
+    },
+    {
+      "address": "0x00926f10",
+      "name": "FUN_00926f10",
+      "batch": "C:\\SporeAnalysis\\spore_batch_all_parts\\spore_batch_all_0034.json",
+      "instruction_count": 60,
+      "verified_byte_count": 181,
+      "byte_validation_error": null,
+      "translation_reasons": [
+        "0x00926f48: indirect or unresolved call is not supported"
+      ],
+      "translated_instruction_counts": {
+        "ADD": 1,
+        "AND": 2,
+        "CMP": 2,
+        "DEC": 1,
+        "INC": 1,
+        "JC": 1,
+        "JMP": 1,
+        "JZ": 3,
+        "LEA": 5,
+        "MOV": 21,
+        "NOT": 1,
+        "OR": 2,
+        "POP": 4,
+        "PUSH": 6,
+        "RET": 2,
+        "SUB": 4,
+        "TEST": 1,
+        "XOR": 1
+      },
+      "direct_calls": []
+    },
+    {
+      "address": "0x00926fd0",
+      "name": "FUN_00926fd0",
+      "batch": "C:\\SporeAnalysis\\spore_batch_all_parts\\spore_batch_all_0034.json",
+      "instruction_count": 129,
+      "verified_byte_count": 364,
+      "byte_validation_error": null,
+      "translation_reasons": [
+        "0x0092700f: unsupported instruction SHR",
+        "0x00927068: indexed memory operands currently support MOV only",
+        "0x0092712f: indirect or unresolved call is not supported"
+      ],
+      "translated_instruction_counts": {
+        "ADD": 3,
+        "AND": 3,
+        "CALL": 3,
+        "CMP": 6,
+        "DEC": 1,
+        "JA": 1,
+        "JC": 2,
+        "JMP": 2,
+        "JNZ": 2,
+        "JZ": 7,
+        "LEA": 7,
+        "MOV": 50,
+        "OR": 4,
+        "POP": 11,
+        "PUSH": 11,
+        "RET": 3,
+        "SETC": 1,
+        "SUB": 3,
+        "TEST": 6
+      },
+      "direct_calls": [
+        {
+          "site": "0x009270c2",
+          "mnemonic": "CALL",
+          "operand": [
+            "0x009268b0"
+          ],
+          "target": {
+            "address": "0x009268b0",
+            "classification": "exported_function"
+          }
+        },
+        {
+          "site": "0x009270d5",
+          "mnemonic": "CALL",
+          "operand": [
+            "0x00926ab0"
+          ],
+          "target": {
+            "address": "0x00926ab0",
+            "classification": "exported_function"
+          }
+        },
+        {
+          "site": "0x009270ef",
+          "mnemonic": "CALL",
+          "operand": [
+            "0x00926db0"
+          ],
+          "target": {
+            "address": "0x00926db0",
+            "classification": "exported_function"
+          }
+        }
+      ]
+    },
+    {
+      "address": "0x00927140",
+      "name": "FUN_00927140",
+      "batch": "C:\\SporeAnalysis\\spore_batch_all_parts\\spore_batch_all_0034.json",
+      "instruction_count": 131,
+      "verified_byte_count": 381,
+      "byte_validation_error": null,
+      "translation_reasons": [
+        "0x00927154: indirect or unresolved call is not supported",
+        "0x00927190: unsupported instruction SHR",
+        "0x00927193: unsupported instruction SHL",
+        "0x009271ef: indirect or unresolved call is not supported",
+        "0x00927267: indirect or unresolved call is not supported",
+        "0x009272ab: indirect or unresolved call is not supported"
+      ],
+      "translated_instruction_counts": {
+        "ADD": 3,
+        "AND": 6,
+        "CALL": 2,
+        "CMP": 3,
+        "DEC": 4,
+        "DIV": 1,
+        "INC": 1,
+        "JBE": 1,
+        "JC": 1,
+        "JMP": 1,
+        "JNZ": 2,
+        "JZ": 7,
+        "LEA": 5,
+        "MOV": 42,
+        "MOVZX": 1,
+        "NOT": 2,
+        "OR": 2,
+        "POP": 8,
+        "PUSH": 16,
+        "RET": 2,
+        "SETNZ": 1,
+        "SUB": 3,
+        "TEST": 9,
+        "XOR": 2
+      },
+      "direct_calls": [
+        {
+          "site": "0x0092725a",
+          "mnemonic": "CALL",
+          "operand": [
+            "0x00926840"
+          ],
+          "target": {
+            "address": "0x00926840",
+            "classification": "exported_function"
+          }
+        },
+        {
+          "site": "0x00927295",
+          "mnemonic": "CALL",
+          "operand": [
+            "0x00926c20"
+          ],
+          "target": {
+            "address": "0x00926c20",
+            "classification": "exported_function"
+          }
+        }
+      ]
+    },
+    {
+      "address": "0x009272c0",
+      "name": "FUN_009272c0",
+      "batch": "C:\\SporeAnalysis\\spore_batch_all_parts\\spore_batch_all_0034.json",
+      "instruction_count": 172,
+      "verified_byte_count": 520,
+      "byte_validation_error": null,
+      "translation_reasons": [
+        "0x00927325: unsupported instruction CMOVA",
+        "0x0092732c: indirect or unresolved call is not supported",
+        "0x0092734b: indexed memory operands currently support MOV only",
+        "0x00927494: unsupported instruction SHR"
+      ],
+      "translated_instruction_counts": {
+        "ADD": 9,
+        "AND": 6,
+        "CALL": 3,
+        "CMOVC": 1,
+        "CMP": 10,
+        "JBE": 2,
+        "JMP": 4,
+        "JNZ": 4,
+        "JZ": 6,
+        "LEA": 5,
+        "MOV": 76,
+        "OR": 5,
+        "POP": 8,
+        "PUSH": 14,
+        "RET": 2,
+        "SETZ": 1,
+        "SUB": 7,
+        "TEST": 4,
+        "XOR": 1
+      },
+      "direct_calls": [
+        {
+          "site": "0x00927400",
+          "mnemonic": "CALL",
+          "operand": [
+            "0x00926840"
+          ],
+          "target": {
+            "address": "0x00926840",
+            "classification": "exported_function"
+          }
+        },
+        {
+          "site": "0x0092741e",
+          "mnemonic": "CALL",
+          "operand": [
+            "0x00926c20"
+          ],
+          "target": {
+            "address": "0x00926c20",
+            "classification": "exported_function"
+          }
+        },
+        {
+          "site": "0x00927432",
+          "mnemonic": "CALL",
+          "operand": [
+            "0x00926840"
+          ],
+          "target": {
+            "address": "0x00926840",
+            "classification": "exported_function"
+          }
+        }
+      ]
+    },
+    {
+      "address": "0x009274d0",
+      "name": "FUN_009274d0",
+      "batch": "C:\\SporeAnalysis\\spore_batch_all_parts\\spore_batch_all_0034.json",
+      "instruction_count": 135,
+      "verified_byte_count": 495,
+      "byte_validation_error": null,
+      "translation_reasons": [
+        "0x0092750b: indirect or unresolved call is not supported",
+        "0x00927545: direct call target 0x011e073e is not in the exported function set",
+        "0x00927655: indirect or unresolved call is not supported",
+        "0x009276ab: indirect or unresolved call is not supported"
+      ],
+      "translated_instruction_counts": {
+        "ADD": 4,
+        "AND": 1,
+        "CALL": 3,
+        "CMP": 9,
+        "DEC": 1,
+        "INC": 1,
+        "JNZ": 6,
+        "JZ": 4,
+        "LEA": 4,
+        "MOV": 69,
+        "OR": 1,
+        "POP": 4,
+        "PUSH": 19,
+        "RET": 1,
+        "SUB": 1,
+        "XOR": 3
+      },
+      "direct_calls": [
+        {
+          "site": "0x009274f1",
+          "mnemonic": "CALL",
+          "operand": [
+            "0x00926100"
+          ],
+          "target": {
+            "address": "0x00926100",
+            "classification": "exported_function"
+          }
+        },
+        {
+          "site": "0x00927545",
+          "mnemonic": "CALL",
+          "operand": [
+            "0x011e073e"
+          ],
+          "target": {
+            "address": "0x011e073e",
+            "classification": "missing_internal_function",
+            "section": ".text"
+          }
+        },
+        {
+          "site": "0x00927642",
+          "mnemonic": "CALL",
+          "operand": [
+            "0x00928df0"
+          ],
+          "target": {
+            "address": "0x00928df0",
+            "classification": "exported_function"
+          }
+        },
+        {
+          "site": "0x00927684",
+          "mnemonic": "CALL",
+          "operand": [
+            "0x00927140"
+          ],
+          "target": {
+            "address": "0x00927140",
+            "classification": "exported_function"
+          }
+        }
+      ]
+    },
+    {
+      "address": "0x009276c0",
+      "name": "FUN_009276c0",
+      "batch": "C:\\SporeAnalysis\\spore_batch_all_parts\\spore_batch_all_0034.json",
+      "instruction_count": 25,
+      "verified_byte_count": 61,
+      "byte_validation_error": null,
+      "translation_reasons": [
+        "0x009276d8: indirect or unresolved call is not supported",
+        "0x009276f1: indirect or unresolved call is not supported"
+      ],
+      "translated_instruction_counts": {
+        "CALL": 1,
+        "DEC": 1,
+        "INC": 1,
+        "JZ": 3,
+        "MOV": 4,
+        "POP": 3,
+        "PUSH": 6,
+        "RET": 1,
+        "TEST": 3
+      },
+      "direct_calls": [
+        {
+          "site": "0x009276e4",
+          "mnemonic": "CALL",
+          "operand": [
+            "0x00926fd0"
+          ],
+          "target": {
+            "address": "0x00926fd0",
+            "classification": "exported_function"
+          }
+        }
+      ]
+    },
+    {
+      "address": "0x00927700",
+      "name": "FUN_00927700",
+      "batch": "C:\\SporeAnalysis\\spore_batch_all_parts\\spore_batch_all_0034.json",
+      "instruction_count": 112,
+      "verified_byte_count": 339,
+      "byte_validation_error": null,
+      "translation_reasons": [
+        "0x00927712: unsupported instruction SHR",
+        "0x0092778d: indexed memory operands currently support MOV only",
+        "0x00927806: unsupported instruction SHR"
+      ],
+      "translated_instruction_counts": {
+        "ADD": 6,
+        "AND": 6,
+        "CALL": 1,
+        "CMP": 4,
+        "JMP": 3,
+        "JNZ": 4,
+        "JZ": 5,
+        "LEA": 4,
+        "MOV": 50,
+        "OR": 3,
+        "POP": 5,
+        "PUSH": 10,
+        "RET": 2,
+        "SUB": 2,
+        "TEST": 4
+      },
+      "direct_calls": [
+        {
+          "site": "0x00927851",
+          "mnemonic": "CALL",
+          "operand": [
+            "0x009274d0"
+          ],
+          "target": {
+            "address": "0x009274d0",
+            "classification": "exported_function"
+          }
+        }
+      ]
+    },
+    {
+      "address": "0x00927be0",
+      "name": "FUN_00927be0",
+      "batch": "C:\\SporeAnalysis\\spore_batch_all_parts\\spore_batch_all_0034.json",
+      "instruction_count": 577,
+      "verified_byte_count": 1760,
+      "byte_validation_error": null,
+      "translation_reasons": [
+        "0x00927c4e: unsupported instruction SHR",
+        "0x00927c68: unsupported instruction SHR",
+        "0x00927ca3: indexed memory operands currently support MOV only",
+        "0x00927cc6: unsupported instruction SHR",
+        "0x00927cd9: unsupported instruction SHR",
+        "0x00927cec: unsupported instruction SHR",
+        "0x00927cff: unsupported instruction SHR",
+        "0x00927d10: unsupported instruction SHR",
+        "0x00927e3f: SAR currently supports immediate counts 1 and 2",
+        "0x00927e51: unsupported instruction SHL",
+        "0x00927e7f: unsupported instruction SHL",
+        "0x00927f53: unsupported instruction SHR",
+        "0x00927fe7: indexed memory operands currently support MOV only",
+        "0x0092803a: indirect or unresolved call is not supported",
+        "0x0092805c: indirect or unresolved call is not supported",
+        "0x00928077: indirect or unresolved call is not supported",
+        "0x0092811e: indexed memory operands currently support MOV only",
+        "0x00928167: indexed memory operands currently support MOV only",
+        "0x0092824e: indexed memory operands currently support MOV only",
+        "0x0092826a: indexed memory operands currently support MOV only",
+        "0x009282b8: unsupported instruction SHR"
+      ],
+      "translated_instruction_counts": {
+        "ADD": 31,
+        "AND": 15,
+        "CALL": 7,
+        "CMP": 52,
+        "DEC": 1,
+        "INC": 4,
+        "JA": 7,
+        "JBE": 1,
+        "JC": 5,
+        "JGE": 1,
+        "JLE": 2,
+        "JMP": 21,
+        "JNC": 7,
+        "JNZ": 28,
+        "JZ": 24,
+        "LEA": 29,
+        "MOV": 190,
+        "NOP": 3,
+        "NOT": 1,
+        "OR": 11,
+        "POP": 40,
+        "PUSH": 17,
+        "RET": 10,
+        "SETC": 4,
+        "SETNC": 4,
+        "SUB": 11,
+        "TEST": 28,
+        "XOR": 2
+      },
+      "direct_calls": [
+        {
+          "site": "0x00927c0b",
+          "mnemonic": "CALL",
+          "operand": [
+            "0x009267a0"
+          ],
+          "target": {
+            "address": "0x009267a0",
+            "classification": "exported_function"
+          }
+        },
+        {
+          "site": "0x00927d30",
+          "mnemonic": "CALL",
+          "operand": [
+            "0x00927700"
+          ],
+          "target": {
+            "address": "0x00927700",
+            "classification": "exported_function"
+          }
+        },
+        {
+          "site": "0x00927dc3",
+          "mnemonic": "CALL",
+          "operand": [
+            "0x00926960"
+          ],
+          "target": {
+            "address": "0x00926960",
+            "classification": "exported_function"
+          }
+        },
+        {
+          "site": "0x00927f46",
+          "mnemonic": "CALL",
+          "operand": [
+            "0x00927700"
+          ],
+          "target": {
+            "address": "0x00927700",
+            "classification": "exported_function"
+          }
+        },
+        {
+          "site": "0x00927f9b",
+          "mnemonic": "CALL",
+          "operand": [
+            "0x00926f10"
+          ],
+          "target": {
+            "address": "0x00926f10",
+            "classification": "exported_function"
+          }
+        },
+        {
+          "site": "0x00927fd5",
+          "mnemonic": "CALL",
+          "operand": [
+            "0x009272c0"
+          ],
+          "target": {
+            "address": "0x009272c0",
+            "classification": "exported_function"
+          }
+        },
+        {
+          "site": "0x009280d1",
+          "mnemonic": "CALL",
+          "operand": [
+            "0x00926f10"
+          ],
+          "target": {
+            "address": "0x00926f10",
+            "classification": "exported_function"
+          }
+        }
+      ]
+    },
+    {
+      "address": "0x009289f0",
+      "name": "FUN_009289f0",
+      "batch": "C:\\SporeAnalysis\\spore_batch_all_parts\\spore_batch_all_0034.json",
+      "instruction_count": 25,
+      "verified_byte_count": 64,
+      "byte_validation_error": null,
+      "translation_reasons": [
+        "0x009289ff: indirect or unresolved call is not supported",
+        "0x00928a23: indirect or unresolved call is not supported"
+      ],
+      "translated_instruction_counts": {
+        "CALL": 1,
+        "DEC": 1,
+        "INC": 1,
+        "JZ": 2,
+        "MOV": 7,
+        "POP": 2,
+        "PUSH": 6,
+        "RET": 1,
+        "TEST": 2
+      },
+      "direct_calls": [
+        {
+          "site": "0x00928a14",
+          "mnemonic": "CALL",
+          "operand": [
+            "0x00927be0"
+          ],
+          "target": {
+            "address": "0x00927be0",
+            "classification": "exported_function"
+          }
+        }
+      ]
+    },
+    {
+      "address": "0x00928df0",
+      "name": "FUN_00928df0",
+      "batch": "C:\\SporeAnalysis\\spore_batch_all_parts\\spore_batch_all_0034.json",
+      "instruction_count": 7,
+      "verified_byte_count": 21,
+      "byte_validation_error": null,
+      "translation_reasons": [
+        "0x00928df7: indirect or unresolved call is not supported"
+      ],
+      "translated_instruction_counts": {
+        "ADD": 1,
+        "LEA": 1,
+        "MOV": 1,
+        "PUSH": 1,
+        "RET": 1,
+        "SUB": 1
+      },
+      "direct_calls": []
+    },
+    {
+      "address": "0x00a221b0",
+      "name": "FUN_00a221b0",
+      "batch": "C:\\SporeAnalysis\\spore_batch_all_parts\\spore_batch_all_0041.json",
+      "instruction_count": 37,
+      "verified_byte_count": 98,
+      "byte_validation_error": null,
+      "translation_reasons": [
+        "0x00a221fc: direct call target 0x011e073e is not in the exported function set"
+      ],
+      "translated_instruction_counts": {
+        "ADD": 4,
+        "CALL": 1,
+        "CMP": 1,
+        "JMP": 2,
+        "JNZ": 1,
+        "JZ": 1,
+        "LEA": 1,
+        "MOV": 10,
+        "POP": 2,
+        "PUSH": 11,
+        "RET": 1,
+        "TEST": 1
+      },
+      "direct_calls": [
+        {
+          "site": "0x00a221e9",
+          "mnemonic": "CALL",
+          "operand": [
+            "0x00f473a0"
+          ],
+          "target": {
+            "address": "0x00f473a0",
+            "classification": "exported_function"
+          }
+        },
+        {
+          "site": "0x00a221fc",
+          "mnemonic": "CALL",
+          "operand": [
+            "0x011e073e"
+          ],
+          "target": {
+            "address": "0x011e073e",
+            "classification": "missing_internal_function",
+            "section": ".text"
+          }
+        }
+      ]
+    },
+    {
+      "address": "0x00a22220",
+      "name": "FUN_00a22220",
+      "batch": "C:\\SporeAnalysis\\spore_batch_all_parts\\spore_batch_all_0041.json",
+      "instruction_count": 64,
+      "verified_byte_count": 159,
+      "byte_validation_error": null,
+      "translation_reasons": [],
+      "translated_instruction_counts": {
+        "ADD": 1,
+        "CALL": 2,
+        "CMP": 6,
+        "DIV": 1,
+        "INC": 1,
+        "JBE": 2,
+        "JC": 2,
+        "JNC": 1,
+        "JNZ": 1,
+        "JZ": 2,
+        "LEA": 2,
+        "MOV": 23,
+        "POP": 8,
+        "PUSH": 6,
+        "RET": 2,
+        "TEST": 2,
+        "XOR": 2
+      },
+      "direct_calls": [
+        {
+          "site": "0x00a2222b",
+          "mnemonic": "CALL",
+          "operand": [
+            "0x00a221b0"
+          ],
+          "target": {
+            "address": "0x00a221b0",
+            "classification": "exported_function"
+          }
+        },
+        {
+          "site": "0x00a222aa",
+          "mnemonic": "CALL",
+          "operand": [
+            "0x00f47380"
+          ],
+          "target": {
+            "address": "0x00f47380",
+            "classification": "exported_function"
+          }
+        }
+      ]
+    },
+    {
+      "address": "0x00a23570",
+      "name": "FUN_00a23570",
+      "batch": "C:\\SporeAnalysis\\spore_batch_all_parts\\spore_batch_all_0041.json",
+      "instruction_count": 60,
+      "verified_byte_count": 174,
+      "byte_validation_error": null,
+      "translation_reasons": [],
+      "translated_instruction_counts": {
+        "ADD": 1,
+        "CALL": 3,
+        "CMP": 1,
+        "JNC": 1,
+        "LEA": 2,
+        "MOV": 25,
+        "MOVSS": 4,
+        "POP": 8,
+        "PUSH": 11,
+        "RET": 2,
+        "XOR": 2
+      },
+      "direct_calls": [
+        {
+          "site": "0x00a235b5",
+          "mnemonic": "CALL",
+          "operand": [
+            "0x00921260"
+          ],
+          "target": {
+            "address": "0x00921260",
+            "classification": "exported_function"
+          }
+        },
+        {
+          "site": "0x00a23602",
+          "mnemonic": "CALL",
+          "operand": [
+            "0x00921360"
+          ],
+          "target": {
+            "address": "0x00921360",
+            "classification": "exported_function"
+          }
+        },
+        {
+          "site": "0x00a2360d",
+          "mnemonic": "CALL",
+          "operand": [
+            "0x00a221b0"
+          ],
+          "target": {
+            "address": "0x00a221b0",
+            "classification": "exported_function"
+          }
+        }
+      ]
+    },
+    {
+      "address": "0x00a2a210",
+      "name": "FUN_00a2a210",
+      "batch": "C:\\SporeAnalysis\\spore_batch_all_parts\\spore_batch_all_0041.json",
+      "instruction_count": 71,
+      "verified_byte_count": 253,
+      "byte_validation_error": null,
+      "translation_reasons": [],
+      "translated_instruction_counts": {
+        "ADD": 3,
+        "CALL": 5,
+        "CMP": 1,
+        "JBE": 1,
+        "LEA": 8,
+        "MOV": 24,
+        "MOVSS": 4,
+        "POP": 2,
+        "PUSH": 20,
+        "RET": 1,
+        "SUB": 1,
+        "XOR": 1
+      },
+      "direct_calls": [
+        {
+          "site": "0x00a2a24e",
+          "mnemonic": "CALL",
+          "operand": [
+            "0x00921260"
+          ],
+          "target": {
+            "address": "0x00921260",
+            "classification": "exported_function"
+          }
+        },
+        {
+          "site": "0x00a2a275",
+          "mnemonic": "CALL",
+          "operand": [
+            "0x00921340"
+          ],
+          "target": {
+            "address": "0x00921340",
+            "classification": "exported_function"
+          }
+        },
+        {
+          "site": "0x00a2a29e",
+          "mnemonic": "CALL",
+          "operand": [
+            "0x00a23570"
+          ],
+          "target": {
+            "address": "0x00a23570",
+            "classification": "exported_function"
+          }
+        },
+        {
+          "site": "0x00a2a2e6",
+          "mnemonic": "CALL",
+          "operand": [
+            "0x009213c0"
+          ],
+          "target": {
+            "address": "0x009213c0",
+            "classification": "exported_function"
+          }
+        },
+        {
+          "site": "0x00a2a2f3",
+          "mnemonic": "CALL",
+          "operand": [
+            "0x00a22220"
+          ],
+          "target": {
+            "address": "0x00a22220",
+            "classification": "exported_function"
+          }
+        }
+      ]
+    },
+    {
+      "address": "0x00f47380",
+      "name": "FUN_00f47380",
+      "batch": "C:\\SporeAnalysis\\spore_batch_all_parts\\spore_batch_all_0073.json",
+      "instruction_count": 7,
+      "verified_byte_count": 21,
+      "byte_validation_error": null,
+      "translation_reasons": [],
+      "translated_instruction_counts": {
+        "CALL": 1,
+        "JZ": 1,
+        "MOV": 2,
+        "PUSH": 1,
+        "RET": 1,
+        "TEST": 1
+      },
+      "direct_calls": [
+        {
+          "site": "0x00f4738f",
+          "mnemonic": "CALL",
+          "operand": [
+            "0x009276c0"
+          ],
+          "target": {
+            "address": "0x009276c0",
+            "classification": "exported_function"
+          }
+        }
+      ]
+    },
+    {
+      "address": "0x00f473a0",
+      "name": "FUN_00f473a0",
+      "batch": "C:\\SporeAnalysis\\spore_batch_all_parts\\spore_batch_all_0073.json",
+      "instruction_count": 15,
+      "verified_byte_count": 42,
+      "byte_validation_error": null,
+      "translation_reasons": [],
+      "translated_instruction_counts": {
+        "CALL": 1,
+        "MOV": 7,
+        "PUSH": 6,
+        "RET": 1
+      },
+      "direct_calls": [
+        {
+          "site": "0x00f473c4",
+          "mnemonic": "CALL",
+          "operand": [
+            "0x009289f0"
+          ],
+          "target": {
+            "address": "0x009289f0",
+            "classification": "exported_function"
+          }
+        }
+      ]
+    }
+  ],
+  "direct_call_edges": [
+    {
+      "from": "0x00a2a210",
+      "to": "0x00921260",
+      "kind": "direct",
+      "site": "0x00a2a24e"
+    },
+    {
+      "from": "0x00a2a210",
+      "to": "0x00921340",
+      "kind": "direct",
+      "site": "0x00a2a275"
+    },
+    {
+      "from": "0x00a2a210",
+      "to": "0x00a23570",
+      "kind": "direct",
+      "site": "0x00a2a29e"
+    },
+    {
+      "from": "0x00a2a210",
+      "to": "0x009213c0",
+      "kind": "direct",
+      "site": "0x00a2a2e6"
+    },
+    {
+      "from": "0x00a2a210",
+      "to": "0x00a22220",
+      "kind": "direct",
+      "site": "0x00a2a2f3"
+    },
+    {
+      "from": "0x00921340",
+      "to": "0x009212c0",
+      "kind": "direct",
+      "site": "0x0092134f"
+    },
+    {
+      "from": "0x009213c0",
+      "to": "0x00921300",
+      "kind": "direct",
+      "site": "0x009213f7"
+    },
+    {
+      "from": "0x00a22220",
+      "to": "0x00a221b0",
+      "kind": "direct",
+      "site": "0x00a2222b"
+    },
+    {
+      "from": "0x00a22220",
+      "to": "0x00f47380",
+      "kind": "direct",
+      "site": "0x00a222aa"
+    },
+    {
+      "from": "0x00a23570",
+      "to": "0x00921260",
+      "kind": "direct",
+      "site": "0x00a235b5"
+    },
+    {
+      "from": "0x00a23570",
+      "to": "0x00921360",
+      "kind": "direct",
+      "site": "0x00a23602"
+    },
+    {
+      "from": "0x00a23570",
+      "to": "0x00a221b0",
+      "kind": "direct",
+      "site": "0x00a2360d"
+    },
+    {
+      "from": "0x00921360",
+      "to": "0x00921300",
+      "kind": "direct",
+      "site": "0x00921375"
+    },
+    {
+      "from": "0x00a221b0",
+      "to": "0x00f473a0",
+      "kind": "direct",
+      "site": "0x00a221e9"
+    },
+    {
+      "from": "0x00f47380",
+      "to": "0x009276c0",
+      "kind": "direct",
+      "site": "0x00f4738f"
+    },
+    {
+      "from": "0x00f473a0",
+      "to": "0x009289f0",
+      "kind": "direct",
+      "site": "0x00f473c4"
+    },
+    {
+      "from": "0x009276c0",
+      "to": "0x00926fd0",
+      "kind": "direct",
+      "site": "0x009276e4"
+    },
+    {
+      "from": "0x00926fd0",
+      "to": "0x009268b0",
+      "kind": "direct",
+      "site": "0x009270c2"
+    },
+    {
+      "from": "0x00926fd0",
+      "to": "0x00926ab0",
+      "kind": "direct",
+      "site": "0x009270d5"
+    },
+    {
+      "from": "0x00926fd0",
+      "to": "0x00926db0",
+      "kind": "direct",
+      "site": "0x009270ef"
+    },
+    {
+      "from": "0x009289f0",
+      "to": "0x00927be0",
+      "kind": "direct",
+      "site": "0x00928a14"
+    },
+    {
+      "from": "0x00926ab0",
+      "to": "0x00926a30",
+      "kind": "direct",
+      "site": "0x00926ac3"
+    },
+    {
+      "from": "0x00926db0",
+      "to": "0x009268f0",
+      "kind": "direct",
+      "site": "0x00926eb1"
+    },
+    {
+      "from": "0x00927be0",
+      "to": "0x009267a0",
+      "kind": "direct",
+      "site": "0x00927c0b"
+    },
+    {
+      "from": "0x00927be0",
+      "to": "0x00927700",
+      "kind": "direct",
+      "site": "0x00927d30"
+    },
+    {
+      "from": "0x00927be0",
+      "to": "0x00926960",
+      "kind": "direct",
+      "site": "0x00927dc3"
+    },
+    {
+      "from": "0x00927be0",
+      "to": "0x00927700",
+      "kind": "direct",
+      "site": "0x00927f46"
+    },
+    {
+      "from": "0x00927be0",
+      "to": "0x00926f10",
+      "kind": "direct",
+      "site": "0x00927f9b"
+    },
+    {
+      "from": "0x00927be0",
+      "to": "0x009272c0",
+      "kind": "direct",
+      "site": "0x00927fd5"
+    },
+    {
+      "from": "0x00927be0",
+      "to": "0x00926f10",
+      "kind": "direct",
+      "site": "0x009280d1"
+    },
+    {
+      "from": "0x00926960",
+      "to": "0x009267f0",
+      "kind": "direct",
+      "site": "0x00926999"
+    },
+    {
+      "from": "0x009272c0",
+      "to": "0x00926840",
+      "kind": "direct",
+      "site": "0x00927400"
+    },
+    {
+      "from": "0x009272c0",
+      "to": "0x00926c20",
+      "kind": "direct",
+      "site": "0x0092741e"
+    },
+    {
+      "from": "0x009272c0",
+      "to": "0x00926840",
+      "kind": "direct",
+      "site": "0x00927432"
+    },
+    {
+      "from": "0x00927700",
+      "to": "0x009274d0",
+      "kind": "direct",
+      "site": "0x00927851"
+    },
+    {
+      "from": "0x009274d0",
+      "to": "0x00926100",
+      "kind": "direct",
+      "site": "0x009274f1"
+    },
+    {
+      "from": "0x009274d0",
+      "to": "0x00928df0",
+      "kind": "direct",
+      "site": "0x00927642"
+    },
+    {
+      "from": "0x009274d0",
+      "to": "0x00927140",
+      "kind": "direct",
+      "site": "0x00927684"
+    },
+    {
+      "from": "0x00927140",
+      "to": "0x00926840",
+      "kind": "direct",
+      "site": "0x0092725a"
+    },
+    {
+      "from": "0x00927140",
+      "to": "0x00926c20",
+      "kind": "direct",
+      "site": "0x00927295"
+    }
+  ],
+  "missing_dependencies": [
+    {
+      "address": "0x011e073e",
+      "classification": "missing_internal_function",
+      "section": ".text",
+      "referenced_by": [
+        {
+          "function": "0x00a221b0",
+          "site": "0x00a221fc"
+        },
+        {
+          "function": "0x009274d0",
+          "site": "0x00927545"
+        }
+      ]
+    }
+  ],
+  "indirect_calls": [
+    {
+      "function": "0x009276c0",
+      "site": "0x009276d8",
+      "mnemonic": "CALL",
+      "operand": [
+        "dword ptr [0x013cc2d8]"
+      ],
+      "reason": "indirect or unresolved call is not supported",
+      "resolution_status": "unresolved_runtime_target",
+      "destination_classification": "indirect_iat_import",
+      "iat_import": {
+        "iat_address": "0x013cc2d8",
+        "symbol": "KERNEL32.dll!EnterCriticalSection"
+      },
+      "candidate_targets": []
+    },
+    {
+      "function": "0x009276c0",
+      "site": "0x009276f1",
+      "mnemonic": "CALL",
+      "operand": [
+        "dword ptr [0x013cc2dc]"
+      ],
+      "reason": "indirect or unresolved call is not supported",
+      "resolution_status": "unresolved_runtime_target",
+      "destination_classification": "indirect_iat_import",
+      "iat_import": {
+        "iat_address": "0x013cc2dc",
+        "symbol": "KERNEL32.dll!LeaveCriticalSection"
+      },
+      "candidate_targets": []
+    },
+    {
+      "function": "0x00926fd0",
+      "site": "0x0092712f",
+      "mnemonic": "CALL",
+      "operand": [
+        "dword ptr [0x013cc1c4]"
+      ],
+      "reason": "indirect or unresolved call is not supported",
+      "resolution_status": "unresolved_runtime_target",
+      "destination_classification": "indirect_iat_import",
+      "iat_import": {
+        "iat_address": "0x013cc1c4",
+        "symbol": "KERNEL32.dll!VirtualFree"
+      },
+      "candidate_targets": []
+    },
+    {
+      "function": "0x009289f0",
+      "site": "0x009289ff",
+      "mnemonic": "CALL",
+      "operand": [
+        "dword ptr [0x013cc2d8]"
+      ],
+      "reason": "indirect or unresolved call is not supported",
+      "resolution_status": "unresolved_runtime_target",
+      "destination_classification": "indirect_iat_import",
+      "iat_import": {
+        "iat_address": "0x013cc2d8",
+        "symbol": "KERNEL32.dll!EnterCriticalSection"
+      },
+      "candidate_targets": []
+    },
+    {
+      "function": "0x009289f0",
+      "site": "0x00928a23",
+      "mnemonic": "CALL",
+      "operand": [
+        "dword ptr [0x013cc2dc]"
+      ],
+      "reason": "indirect or unresolved call is not supported",
+      "resolution_status": "unresolved_runtime_target",
+      "destination_classification": "indirect_iat_import",
+      "iat_import": {
+        "iat_address": "0x013cc2dc",
+        "symbol": "KERNEL32.dll!LeaveCriticalSection"
+      },
+      "candidate_targets": []
+    },
+    {
+      "function": "0x00926db0",
+      "site": "0x00926dcc",
+      "mnemonic": "CALL",
+      "operand": [
+        "dword ptr [0x013cc2d8]"
+      ],
+      "reason": "indirect or unresolved call is not supported",
+      "resolution_status": "unresolved_runtime_target",
+      "destination_classification": "indirect_iat_import",
+      "iat_import": {
+        "iat_address": "0x013cc2d8",
+        "symbol": "KERNEL32.dll!EnterCriticalSection"
+      },
+      "candidate_targets": []
+    },
+    {
+      "function": "0x00926db0",
+      "site": "0x00926e6c",
+      "mnemonic": "CALL",
+      "operand": [
+        "dword ptr [0x013cc1c4]"
+      ],
+      "reason": "indirect or unresolved call is not supported",
+      "resolution_status": "unresolved_runtime_target",
+      "destination_classification": "indirect_iat_import",
+      "iat_import": {
+        "iat_address": "0x013cc1c4",
+        "symbol": "KERNEL32.dll!VirtualFree"
+      },
+      "candidate_targets": []
+    },
+    {
+      "function": "0x00926db0",
+      "site": "0x00926efc",
+      "mnemonic": "CALL",
+      "operand": [
+        "dword ptr [0x013cc2dc]"
+      ],
+      "reason": "indirect or unresolved call is not supported",
+      "resolution_status": "unresolved_runtime_target",
+      "destination_classification": "indirect_iat_import",
+      "iat_import": {
+        "iat_address": "0x013cc2dc",
+        "symbol": "KERNEL32.dll!LeaveCriticalSection"
+      },
+      "candidate_targets": []
+    },
+    {
+      "function": "0x00927be0",
+      "site": "0x0092803a",
+      "mnemonic": "CALL",
+      "operand": [
+        "dword ptr [0x013cc2dc]"
+      ],
+      "reason": "indirect or unresolved call is not supported",
+      "resolution_status": "unresolved_runtime_target",
+      "destination_classification": "indirect_iat_import",
+      "iat_import": {
+        "iat_address": "0x013cc2dc",
+        "symbol": "KERNEL32.dll!LeaveCriticalSection"
+      },
+      "candidate_targets": []
+    },
+    {
+      "function": "0x00927be0",
+      "site": "0x0092805c",
+      "mnemonic": "CALL",
+      "operand": [
+        "EDX"
+      ],
+      "reason": "indirect or unresolved call is not supported",
+      "resolution_status": "unresolved_runtime_target",
+      "destination_classification": "unresolved_destination",
+      "iat_import": null,
+      "candidate_targets": []
+    },
+    {
+      "function": "0x00927be0",
+      "site": "0x00928077",
+      "mnemonic": "CALL",
+      "operand": [
+        "dword ptr [0x013cc2d8]"
+      ],
+      "reason": "indirect or unresolved call is not supported",
+      "resolution_status": "unresolved_runtime_target",
+      "destination_classification": "indirect_iat_import",
+      "iat_import": {
+        "iat_address": "0x013cc2d8",
+        "symbol": "KERNEL32.dll!EnterCriticalSection"
+      },
+      "candidate_targets": []
+    },
+    {
+      "function": "0x00926f10",
+      "site": "0x00926f48",
+      "mnemonic": "CALL",
+      "operand": [
+        "dword ptr [0x013cc1c8]"
+      ],
+      "reason": "indirect or unresolved call is not supported",
+      "resolution_status": "unresolved_runtime_target",
+      "destination_classification": "indirect_iat_import",
+      "iat_import": {
+        "iat_address": "0x013cc1c8",
+        "symbol": "KERNEL32.dll!VirtualAlloc"
+      },
+      "candidate_targets": []
+    },
+    {
+      "function": "0x009272c0",
+      "site": "0x0092732c",
+      "mnemonic": "CALL",
+      "operand": [
+        "dword ptr [0x013cc1c8]"
+      ],
+      "reason": "indirect or unresolved call is not supported",
+      "resolution_status": "unresolved_runtime_target",
+      "destination_classification": "indirect_iat_import",
+      "iat_import": {
+        "iat_address": "0x013cc1c8",
+        "symbol": "KERNEL32.dll!VirtualAlloc"
+      },
+      "candidate_targets": []
+    },
+    {
+      "function": "0x00926c20",
+      "site": "0x00926c6f",
+      "mnemonic": "CALL",
+      "operand": [
+        "dword ptr [0x013cc1c8]"
+      ],
+      "reason": "indirect or unresolved call is not supported",
+      "resolution_status": "unresolved_runtime_target",
+      "destination_classification": "indirect_iat_import",
+      "iat_import": {
+        "iat_address": "0x013cc1c8",
+        "symbol": "KERNEL32.dll!VirtualAlloc"
+      },
+      "candidate_targets": []
+    },
+    {
+      "function": "0x00926c20",
+      "site": "0x00926ca8",
+      "mnemonic": "CALL",
+      "operand": [
+        "dword ptr [0x013cc1c8]"
+      ],
+      "reason": "indirect or unresolved call is not supported",
+      "resolution_status": "unresolved_runtime_target",
+      "destination_classification": "indirect_iat_import",
+      "iat_import": {
+        "iat_address": "0x013cc1c8",
+        "symbol": "KERNEL32.dll!VirtualAlloc"
+      },
+      "candidate_targets": []
+    },
+    {
+      "function": "0x00926c20",
+      "site": "0x00926ccf",
+      "mnemonic": "CALL",
+      "operand": [
+        "dword ptr [0x013cc1c8]"
+      ],
+      "reason": "indirect or unresolved call is not supported",
+      "resolution_status": "unresolved_runtime_target",
+      "destination_classification": "indirect_iat_import",
+      "iat_import": {
+        "iat_address": "0x013cc1c8",
+        "symbol": "KERNEL32.dll!VirtualAlloc"
+      },
+      "candidate_targets": []
+    },
+    {
+      "function": "0x009274d0",
+      "site": "0x0092750b",
+      "mnemonic": "CALL",
+      "operand": [
+        "dword ptr [0x013cc2d8]"
+      ],
+      "reason": "indirect or unresolved call is not supported",
+      "resolution_status": "unresolved_runtime_target",
+      "destination_classification": "indirect_iat_import",
+      "iat_import": {
+        "iat_address": "0x013cc2d8",
+        "symbol": "KERNEL32.dll!EnterCriticalSection"
+      },
+      "candidate_targets": []
+    },
+    {
+      "function": "0x009274d0",
+      "site": "0x00927655",
+      "mnemonic": "CALL",
+      "operand": [
+        "dword ptr [0x013cc2dc]"
+      ],
+      "reason": "indirect or unresolved call is not supported",
+      "resolution_status": "unresolved_runtime_target",
+      "destination_classification": "indirect_iat_import",
+      "iat_import": {
+        "iat_address": "0x013cc2dc",
+        "symbol": "KERNEL32.dll!LeaveCriticalSection"
+      },
+      "candidate_targets": []
+    },
+    {
+      "function": "0x009274d0",
+      "site": "0x009276ab",
+      "mnemonic": "CALL",
+      "operand": [
+        "ECX"
+      ],
+      "reason": "indirect or unresolved call is not supported",
+      "resolution_status": "unresolved_runtime_target",
+      "destination_classification": "unresolved_destination",
+      "iat_import": null,
+      "candidate_targets": []
+    },
+    {
+      "function": "0x00926100",
+      "site": "0x00926111",
+      "mnemonic": "CALL",
+      "operand": [
+        "dword ptr [0x013cc1c0]"
+      ],
+      "reason": "indirect or unresolved call is not supported",
+      "resolution_status": "unresolved_runtime_target",
+      "destination_classification": "indirect_iat_import",
+      "iat_import": {
+        "iat_address": "0x013cc1c0",
+        "symbol": "KERNEL32.dll!InitializeCriticalSectionAndSpinCount"
+      },
+      "candidate_targets": []
+    },
+    {
+      "function": "0x00927140",
+      "site": "0x00927154",
+      "mnemonic": "CALL",
+      "operand": [
+        "dword ptr [0x013cc2d8]"
+      ],
+      "reason": "indirect or unresolved call is not supported",
+      "resolution_status": "unresolved_runtime_target",
+      "destination_classification": "indirect_iat_import",
+      "iat_import": {
+        "iat_address": "0x013cc2d8",
+        "symbol": "KERNEL32.dll!EnterCriticalSection"
+      },
+      "candidate_targets": []
+    },
+    {
+      "function": "0x00927140",
+      "site": "0x009271ef",
+      "mnemonic": "CALL",
+      "operand": [
+        "dword ptr [0x013cc134]"
+      ],
+      "reason": "indirect or unresolved call is not supported",
+      "resolution_status": "unresolved_runtime_target",
+      "destination_classification": "indirect_iat_import",
+      "iat_import": {
+        "iat_address": "0x013cc134",
+        "symbol": "KERNEL32.dll!VirtualQuery"
+      },
+      "candidate_targets": []
+    },
+    {
+      "function": "0x00927140",
+      "site": "0x00927267",
+      "mnemonic": "CALL",
+      "operand": [
+        "dword ptr [0x013cc2dc]"
+      ],
+      "reason": "indirect or unresolved call is not supported",
+      "resolution_status": "unresolved_runtime_target",
+      "destination_classification": "indirect_iat_import",
+      "iat_import": {
+        "iat_address": "0x013cc2dc",
+        "symbol": "KERNEL32.dll!LeaveCriticalSection"
+      },
+      "candidate_targets": []
+    },
+    {
+      "function": "0x00927140",
+      "site": "0x009272ab",
+      "mnemonic": "CALL",
+      "operand": [
+        "dword ptr [0x013cc2dc]"
+      ],
+      "reason": "indirect or unresolved call is not supported",
+      "resolution_status": "unresolved_runtime_target",
+      "destination_classification": "indirect_iat_import",
+      "iat_import": {
+        "iat_address": "0x013cc2dc",
+        "symbol": "KERNEL32.dll!LeaveCriticalSection"
+      },
+      "candidate_targets": []
+    },
+    {
+      "function": "0x00928df0",
+      "site": "0x00928df7",
+      "mnemonic": "CALL",
+      "operand": [
+        "dword ptr [0x013cc0dc]"
+      ],
+      "reason": "indirect or unresolved call is not supported",
+      "resolution_status": "unresolved_runtime_target",
+      "destination_classification": "indirect_iat_import",
+      "iat_import": {
+        "iat_address": "0x013cc0dc",
+        "symbol": "KERNEL32.dll!GetSystemInfo"
+      },
+      "candidate_targets": []
+    }
+  ],
+  "unresolved_calls": [],
+  "unsupported_instructions": [
+    {
+      "function": "0x00926fd0",
+      "address": "0x0092700f",
+      "mnemonic": "SHR",
+      "operands": [
+        "EDI",
+        "0x3"
+      ],
+      "instruction_class": "other",
+      "reason": "unsupported instruction SHR"
+    },
+    {
+      "function": "0x00926fd0",
+      "address": "0x00927068",
+      "mnemonic": "TEST",
+      "operands": [
+        "byte ptr [EAX + EBP*0x1 + 0x4]",
+        "0x1"
+      ],
+      "instruction_class": "other",
+      "reason": "indexed memory operands currently support MOV only"
+    },
+    {
+      "function": "0x009268b0",
+      "address": "0x009268dd",
+      "mnemonic": "SHR",
+      "operands": [
+        "EDX",
+        "0x1"
+      ],
+      "instruction_class": "other",
+      "reason": "unsupported instruction SHR"
+    },
+    {
+      "function": "0x00926db0",
+      "address": "0x00926dfd",
+      "mnemonic": "TEST",
+      "operands": [
+        "byte ptr [ESI + EBX*0x1 + -0xc]",
+        "0x1"
+      ],
+      "instruction_class": "other",
+      "reason": "indexed memory operands currently support MOV only"
+    },
+    {
+      "function": "0x00926db0",
+      "address": "0x00926e36",
+      "mnemonic": "SHR",
+      "operands": [
+        "EAX",
+        "0x1"
+      ],
+      "instruction_class": "other",
+      "reason": "unsupported instruction SHR"
+    },
+    {
+      "function": "0x00927be0",
+      "address": "0x00927c4e",
+      "mnemonic": "SHR",
+      "operands": [
+        "ECX",
+        "0x3"
+      ],
+      "instruction_class": "other",
+      "reason": "unsupported instruction SHR"
+    },
+    {
+      "function": "0x00927be0",
+      "address": "0x00927c68",
+      "mnemonic": "SHR",
+      "operands": [
+        "ECX",
+        "0x3"
+      ],
+      "instruction_class": "other",
+      "reason": "unsupported instruction SHR"
+    },
+    {
+      "function": "0x00927be0",
+      "address": "0x00927ca3",
+      "mnemonic": "OR",
+      "operands": [
+        "dword ptr [ECX + EAX*0x1 + 0x4]",
+        "0x1"
+      ],
+      "instruction_class": "other",
+      "reason": "indexed memory operands currently support MOV only"
+    },
+    {
+      "function": "0x00927be0",
+      "address": "0x00927cc6",
+      "mnemonic": "SHR",
+      "operands": [
+        "ECX",
+        "0x6"
+      ],
+      "instruction_class": "other",
+      "reason": "unsupported instruction SHR"
+    },
+    {
+      "function": "0x00927be0",
+      "address": "0x00927cd9",
+      "mnemonic": "SHR",
+      "operands": [
+        "ECX",
+        "0x9"
+      ],
+      "instruction_class": "other",
+      "reason": "unsupported instruction SHR"
+    },
+    {
+      "function": "0x00927be0",
+      "address": "0x00927cec",
+      "mnemonic": "SHR",
+      "operands": [
+        "ECX",
+        "0xc"
+      ],
+      "instruction_class": "other",
+      "reason": "unsupported instruction SHR"
+    },
+    {
+      "function": "0x00927be0",
+      "address": "0x00927cff",
+      "mnemonic": "SHR",
+      "operands": [
+        "ECX",
+        "0xf"
+      ],
+      "instruction_class": "other",
+      "reason": "unsupported instruction SHR"
+    },
+    {
+      "function": "0x00927be0",
+      "address": "0x00927d10",
+      "mnemonic": "SHR",
+      "operands": [
+        "EAX",
+        "0x12"
+      ],
+      "instruction_class": "other",
+      "reason": "unsupported instruction SHR"
+    },
+    {
+      "function": "0x00927be0",
+      "address": "0x00927e3f",
+      "mnemonic": "SAR",
+      "operands": [
+        "EBX",
+        "0x5"
+      ],
+      "instruction_class": "other",
+      "reason": "SAR currently supports immediate counts 1 and 2"
+    },
+    {
+      "function": "0x00927be0",
+      "address": "0x00927e51",
+      "mnemonic": "SHL",
+      "operands": [
+        "ESI",
+        "CL"
+      ],
+      "instruction_class": "other",
+      "reason": "unsupported instruction SHL"
+    },
+    {
+      "function": "0x00927be0",
+      "address": "0x00927e7f",
+      "mnemonic": "SHL",
+      "operands": [
+        "EAX",
+        "0x8"
+      ],
+      "instruction_class": "other",
+      "reason": "unsupported instruction SHL"
+    },
+    {
+      "function": "0x00927be0",
+      "address": "0x00927f53",
+      "mnemonic": "SHR",
+      "operands": [
+        "EAX",
+        "0x3"
+      ],
+      "instruction_class": "other",
+      "reason": "unsupported instruction SHR"
+    },
+    {
+      "function": "0x00927be0",
+      "address": "0x00927fe7",
+      "mnemonic": "OR",
+      "operands": [
+        "dword ptr [ECX + EAX*0x1 + 0x4]",
+        "0x1"
+      ],
+      "instruction_class": "other",
+      "reason": "indexed memory operands currently support MOV only"
+    },
+    {
+      "function": "0x00927be0",
+      "address": "0x0092811e",
+      "mnemonic": "OR",
+      "operands": [
+        "dword ptr [EDX + ECX*0x1 + 0x4]",
+        "0x1"
+      ],
+      "instruction_class": "other",
+      "reason": "indexed memory operands currently support MOV only"
+    },
+    {
+      "function": "0x00927be0",
+      "address": "0x00928167",
+      "mnemonic": "OR",
+      "operands": [
+        "dword ptr [EDX + ECX*0x1 + 0x4]",
+        "0x1"
+      ],
+      "instruction_class": "other",
+      "reason": "indexed memory operands currently support MOV only"
+    },
+    {
+      "function": "0x00927be0",
+      "address": "0x0092824e",
+      "mnemonic": "OR",
+      "operands": [
+        "dword ptr [ECX + EDX*0x1 + 0x4]",
+        "0x1"
+      ],
+      "instruction_class": "other",
+      "reason": "indexed memory operands currently support MOV only"
+    },
+    {
+      "function": "0x00927be0",
+      "address": "0x0092826a",
+      "mnemonic": "OR",
+      "operands": [
+        "dword ptr [ECX + EDX*0x1 + 0x4]",
+        "0x1"
+      ],
+      "instruction_class": "other",
+      "reason": "indexed memory operands currently support MOV only"
+    },
+    {
+      "function": "0x00927be0",
+      "address": "0x009282b8",
+      "mnemonic": "SHR",
+      "operands": [
+        "EDX",
+        "0x1"
+      ],
+      "instruction_class": "other",
+      "reason": "unsupported instruction SHR"
+    },
+    {
+      "function": "0x00926960",
+      "address": "0x00926989",
+      "mnemonic": "SHR",
+      "operands": [
+        "EDI",
+        "0x3"
+      ],
+      "instruction_class": "other",
+      "reason": "unsupported instruction SHR"
+    },
+    {
+      "function": "0x00926960",
+      "address": "0x009269ef",
+      "mnemonic": "SHL",
+      "operands": [
+        "EAX",
+        "CL"
+      ],
+      "instruction_class": "other",
+      "reason": "unsupported instruction SHL"
+    },
+    {
+      "function": "0x00926960",
+      "address": "0x009269f1",
+      "mnemonic": "SAR",
+      "operands": [
+        "EDI",
+        "0x5"
+      ],
+      "instruction_class": "other",
+      "reason": "SAR currently supports immediate counts 1 and 2"
+    },
+    {
+      "function": "0x00926960",
+      "address": "0x009269f4",
+      "mnemonic": "OR",
+      "operands": [
+        "dword ptr [EBX + EDI*0x4 + 0x430]",
+        "EAX"
+      ],
+      "instruction_class": "other",
+      "reason": "indexed memory operands currently support MOV only"
+    },
+    {
+      "function": "0x009272c0",
+      "address": "0x00927325",
+      "mnemonic": "CMOVA",
+      "operands": [
+        "EBX",
+        "EAX"
+      ],
+      "instruction_class": "other",
+      "reason": "unsupported instruction CMOVA"
+    },
+    {
+      "function": "0x009272c0",
+      "address": "0x0092734b",
+      "mnemonic": "TEST",
+      "operands": [
+        "byte ptr [EAX + EDI*0x1 + -0xc]",
+        "0x1"
+      ],
+      "instruction_class": "other",
+      "reason": "indexed memory operands currently support MOV only"
+    },
+    {
+      "function": "0x009272c0",
+      "address": "0x00927494",
+      "mnemonic": "SHR",
+      "operands": [
+        "EDX",
+        "0x1"
+      ],
+      "instruction_class": "other",
+      "reason": "unsupported instruction SHR"
+    },
+    {
+      "function": "0x00927700",
+      "address": "0x00927712",
+      "mnemonic": "SHR",
+      "operands": [
+        "EAX",
+        "0x3"
+      ],
+      "instruction_class": "other",
+      "reason": "unsupported instruction SHR"
+    },
+    {
+      "function": "0x00927700",
+      "address": "0x0092778d",
+      "mnemonic": "TEST",
+      "operands": [
+        "byte ptr [EDI + ESI*0x1 + 0x4]",
+        "0x1"
+      ],
+      "instruction_class": "other",
+      "reason": "indexed memory operands currently support MOV only"
+    },
+    {
+      "function": "0x00927700",
+      "address": "0x00927806",
+      "mnemonic": "SHR",
+      "operands": [
+        "EDX",
+        "0x1"
+      ],
+      "instruction_class": "other",
+      "reason": "unsupported instruction SHR"
+    },
+    {
+      "function": "0x009267f0",
+      "address": "0x009267f6",
+      "mnemonic": "SHR",
+      "operands": [
+        "ECX",
+        "0x6"
+      ],
+      "instruction_class": "other",
+      "reason": "unsupported instruction SHR"
+    },
+    {
+      "function": "0x009267f0",
+      "address": "0x00926804",
+      "mnemonic": "SHR",
+      "operands": [
+        "ECX",
+        "0x9"
+      ],
+      "instruction_class": "other",
+      "reason": "unsupported instruction SHR"
+    },
+    {
+      "function": "0x009267f0",
+      "address": "0x00926812",
+      "mnemonic": "SHR",
+      "operands": [
+        "ECX",
+        "0xc"
+      ],
+      "instruction_class": "other",
+      "reason": "unsupported instruction SHR"
+    },
+    {
+      "function": "0x009267f0",
+      "address": "0x00926820",
+      "mnemonic": "SHR",
+      "operands": [
+        "ECX",
+        "0xf"
+      ],
+      "instruction_class": "other",
+      "reason": "unsupported instruction SHR"
+    },
+    {
+      "function": "0x009267f0",
+      "address": "0x0092682c",
+      "mnemonic": "SHR",
+      "operands": [
+        "EAX",
+        "0x12"
+      ],
+      "instruction_class": "other",
+      "reason": "unsupported instruction SHR"
+    },
+    {
+      "function": "0x00926840",
+      "address": "0x00926890",
+      "mnemonic": "SHR",
+      "operands": [
+        "EDX",
+        "0x1"
+      ],
+      "instruction_class": "other",
+      "reason": "unsupported instruction SHR"
+    },
+    {
+      "function": "0x00926c20",
+      "address": "0x00926cee",
+      "mnemonic": "SHR",
+      "operands": [
+        "EDX",
+        "0x1"
+      ],
+      "instruction_class": "other",
+      "reason": "unsupported instruction SHR"
+    },
+    {
+      "function": "0x00927140",
+      "address": "0x00927190",
+      "mnemonic": "SHR",
+      "operands": [
+        "EBX",
+        "0x4"
+      ],
+      "instruction_class": "other",
+      "reason": "unsupported instruction SHR"
+    },
+    {
+      "function": "0x00927140",
+      "address": "0x00927193",
+      "mnemonic": "SHL",
+      "operands": [
+        "EBX",
+        "0x4"
+      ],
+      "instruction_class": "other",
+      "reason": "unsupported instruction SHL"
+    }
+  ],
+  "unsupported_instruction_groups": [
+    {
+      "instruction_class": "other",
+      "mnemonic": "SHR",
+      "operands": [
+        "EDX",
+        "0x1"
+      ],
+      "reason": "unsupported instruction SHR",
+      "count": 6,
+      "function_count": 6,
+      "examples": [
+        {
+          "function": "0x009268b0",
+          "address": "0x009268dd"
+        },
+        {
+          "function": "0x00927be0",
+          "address": "0x009282b8"
+        },
+        {
+          "function": "0x009272c0",
+          "address": "0x00927494"
+        }
+      ]
+    },
+    {
+      "instruction_class": "other",
+      "mnemonic": "OR",
+      "operands": [
+        "dword ptr [ECX + EAX*0x1 + 0x4]",
+        "0x1"
+      ],
+      "reason": "indexed memory operands currently support MOV only",
+      "count": 2,
+      "function_count": 1,
+      "examples": [
+        {
+          "function": "0x00927be0",
+          "address": "0x00927ca3"
+        },
+        {
+          "function": "0x00927be0",
+          "address": "0x00927fe7"
+        }
+      ]
+    },
+    {
+      "instruction_class": "other",
+      "mnemonic": "OR",
+      "operands": [
+        "dword ptr [ECX + EDX*0x1 + 0x4]",
+        "0x1"
+      ],
+      "reason": "indexed memory operands currently support MOV only",
+      "count": 2,
+      "function_count": 1,
+      "examples": [
+        {
+          "function": "0x00927be0",
+          "address": "0x0092824e"
+        },
+        {
+          "function": "0x00927be0",
+          "address": "0x0092826a"
+        }
+      ]
+    },
+    {
+      "instruction_class": "other",
+      "mnemonic": "OR",
+      "operands": [
+        "dword ptr [EDX + ECX*0x1 + 0x4]",
+        "0x1"
+      ],
+      "reason": "indexed memory operands currently support MOV only",
+      "count": 2,
+      "function_count": 1,
+      "examples": [
+        {
+          "function": "0x00927be0",
+          "address": "0x0092811e"
+        },
+        {
+          "function": "0x00927be0",
+          "address": "0x00928167"
+        }
+      ]
+    },
+    {
+      "instruction_class": "other",
+      "mnemonic": "SHR",
+      "operands": [
+        "EAX",
+        "0x12"
+      ],
+      "reason": "unsupported instruction SHR",
+      "count": 2,
+      "function_count": 2,
+      "examples": [
+        {
+          "function": "0x00927be0",
+          "address": "0x00927d10"
+        },
+        {
+          "function": "0x009267f0",
+          "address": "0x0092682c"
+        }
+      ]
+    },
+    {
+      "instruction_class": "other",
+      "mnemonic": "SHR",
+      "operands": [
+        "EAX",
+        "0x3"
+      ],
+      "reason": "unsupported instruction SHR",
+      "count": 2,
+      "function_count": 2,
+      "examples": [
+        {
+          "function": "0x00927be0",
+          "address": "0x00927f53"
+        },
+        {
+          "function": "0x00927700",
+          "address": "0x00927712"
+        }
+      ]
+    },
+    {
+      "instruction_class": "other",
+      "mnemonic": "SHR",
+      "operands": [
+        "ECX",
+        "0x3"
+      ],
+      "reason": "unsupported instruction SHR",
+      "count": 2,
+      "function_count": 1,
+      "examples": [
+        {
+          "function": "0x00927be0",
+          "address": "0x00927c4e"
+        },
+        {
+          "function": "0x00927be0",
+          "address": "0x00927c68"
+        }
+      ]
+    },
+    {
+      "instruction_class": "other",
+      "mnemonic": "SHR",
+      "operands": [
+        "ECX",
+        "0x6"
+      ],
+      "reason": "unsupported instruction SHR",
+      "count": 2,
+      "function_count": 2,
+      "examples": [
+        {
+          "function": "0x00927be0",
+          "address": "0x00927cc6"
+        },
+        {
+          "function": "0x009267f0",
+          "address": "0x009267f6"
+        }
+      ]
+    },
+    {
+      "instruction_class": "other",
+      "mnemonic": "SHR",
+      "operands": [
+        "ECX",
+        "0x9"
+      ],
+      "reason": "unsupported instruction SHR",
+      "count": 2,
+      "function_count": 2,
+      "examples": [
+        {
+          "function": "0x00927be0",
+          "address": "0x00927cd9"
+        },
+        {
+          "function": "0x009267f0",
+          "address": "0x00926804"
+        }
+      ]
+    },
+    {
+      "instruction_class": "other",
+      "mnemonic": "SHR",
+      "operands": [
+        "ECX",
+        "0xc"
+      ],
+      "reason": "unsupported instruction SHR",
+      "count": 2,
+      "function_count": 2,
+      "examples": [
+        {
+          "function": "0x00927be0",
+          "address": "0x00927cec"
+        },
+        {
+          "function": "0x009267f0",
+          "address": "0x00926812"
+        }
+      ]
+    },
+    {
+      "instruction_class": "other",
+      "mnemonic": "SHR",
+      "operands": [
+        "ECX",
+        "0xf"
+      ],
+      "reason": "unsupported instruction SHR",
+      "count": 2,
+      "function_count": 2,
+      "examples": [
+        {
+          "function": "0x00927be0",
+          "address": "0x00927cff"
+        },
+        {
+          "function": "0x009267f0",
+          "address": "0x00926820"
+        }
+      ]
+    },
+    {
+      "instruction_class": "other",
+      "mnemonic": "SHR",
+      "operands": [
+        "EDI",
+        "0x3"
+      ],
+      "reason": "unsupported instruction SHR",
+      "count": 2,
+      "function_count": 2,
+      "examples": [
+        {
+          "function": "0x00926fd0",
+          "address": "0x0092700f"
+        },
+        {
+          "function": "0x00926960",
+          "address": "0x00926989"
+        }
+      ]
+    },
+    {
+      "instruction_class": "other",
+      "mnemonic": "CMOVA",
+      "operands": [
+        "EBX",
+        "EAX"
+      ],
+      "reason": "unsupported instruction CMOVA",
+      "count": 1,
+      "function_count": 1,
+      "examples": [
+        {
+          "function": "0x009272c0",
+          "address": "0x00927325"
+        }
+      ]
+    },
+    {
+      "instruction_class": "other",
+      "mnemonic": "OR",
+      "operands": [
+        "dword ptr [EBX + EDI*0x4 + 0x430]",
+        "EAX"
+      ],
+      "reason": "indexed memory operands currently support MOV only",
+      "count": 1,
+      "function_count": 1,
+      "examples": [
+        {
+          "function": "0x00926960",
+          "address": "0x009269f4"
+        }
+      ]
+    },
+    {
+      "instruction_class": "other",
+      "mnemonic": "SAR",
+      "operands": [
+        "EBX",
+        "0x5"
+      ],
+      "reason": "SAR currently supports immediate counts 1 and 2",
+      "count": 1,
+      "function_count": 1,
+      "examples": [
+        {
+          "function": "0x00927be0",
+          "address": "0x00927e3f"
+        }
+      ]
+    },
+    {
+      "instruction_class": "other",
+      "mnemonic": "SAR",
+      "operands": [
+        "EDI",
+        "0x5"
+      ],
+      "reason": "SAR currently supports immediate counts 1 and 2",
+      "count": 1,
+      "function_count": 1,
+      "examples": [
+        {
+          "function": "0x00926960",
+          "address": "0x009269f1"
+        }
+      ]
+    },
+    {
+      "instruction_class": "other",
+      "mnemonic": "SHL",
+      "operands": [
+        "EAX",
+        "0x8"
+      ],
+      "reason": "unsupported instruction SHL",
+      "count": 1,
+      "function_count": 1,
+      "examples": [
+        {
+          "function": "0x00927be0",
+          "address": "0x00927e7f"
+        }
+      ]
+    },
+    {
+      "instruction_class": "other",
+      "mnemonic": "SHL",
+      "operands": [
+        "EAX",
+        "CL"
+      ],
+      "reason": "unsupported instruction SHL",
+      "count": 1,
+      "function_count": 1,
+      "examples": [
+        {
+          "function": "0x00926960",
+          "address": "0x009269ef"
+        }
+      ]
+    },
+    {
+      "instruction_class": "other",
+      "mnemonic": "SHL",
+      "operands": [
+        "EBX",
+        "0x4"
+      ],
+      "reason": "unsupported instruction SHL",
+      "count": 1,
+      "function_count": 1,
+      "examples": [
+        {
+          "function": "0x00927140",
+          "address": "0x00927193"
+        }
+      ]
+    },
+    {
+      "instruction_class": "other",
+      "mnemonic": "SHL",
+      "operands": [
+        "ESI",
+        "CL"
+      ],
+      "reason": "unsupported instruction SHL",
+      "count": 1,
+      "function_count": 1,
+      "examples": [
+        {
+          "function": "0x00927be0",
+          "address": "0x00927e51"
+        }
+      ]
+    },
+    {
+      "instruction_class": "other",
+      "mnemonic": "SHR",
+      "operands": [
+        "EAX",
+        "0x1"
+      ],
+      "reason": "unsupported instruction SHR",
+      "count": 1,
+      "function_count": 1,
+      "examples": [
+        {
+          "function": "0x00926db0",
+          "address": "0x00926e36"
+        }
+      ]
+    },
+    {
+      "instruction_class": "other",
+      "mnemonic": "SHR",
+      "operands": [
+        "EBX",
+        "0x4"
+      ],
+      "reason": "unsupported instruction SHR",
+      "count": 1,
+      "function_count": 1,
+      "examples": [
+        {
+          "function": "0x00927140",
+          "address": "0x00927190"
+        }
+      ]
+    },
+    {
+      "instruction_class": "other",
+      "mnemonic": "TEST",
+      "operands": [
+        "byte ptr [EAX + EBP*0x1 + 0x4]",
+        "0x1"
+      ],
+      "reason": "indexed memory operands currently support MOV only",
+      "count": 1,
+      "function_count": 1,
+      "examples": [
+        {
+          "function": "0x00926fd0",
+          "address": "0x00927068"
+        }
+      ]
+    },
+    {
+      "instruction_class": "other",
+      "mnemonic": "TEST",
+      "operands": [
+        "byte ptr [EAX + EDI*0x1 + -0xc]",
+        "0x1"
+      ],
+      "reason": "indexed memory operands currently support MOV only",
+      "count": 1,
+      "function_count": 1,
+      "examples": [
+        {
+          "function": "0x009272c0",
+          "address": "0x0092734b"
+        }
+      ]
+    },
+    {
+      "instruction_class": "other",
+      "mnemonic": "TEST",
+      "operands": [
+        "byte ptr [EDI + ESI*0x1 + 0x4]",
+        "0x1"
+      ],
+      "reason": "indexed memory operands currently support MOV only",
+      "count": 1,
+      "function_count": 1,
+      "examples": [
+        {
+          "function": "0x00927700",
+          "address": "0x0092778d"
+        }
+      ]
+    },
+    {
+      "instruction_class": "other",
+      "mnemonic": "TEST",
+      "operands": [
+        "byte ptr [ESI + EBX*0x1 + -0xc]",
+        "0x1"
+      ],
+      "reason": "indexed memory operands currently support MOV only",
+      "count": 1,
+      "function_count": 1,
+      "examples": [
+        {
+          "function": "0x00926db0",
+          "address": "0x00926dfd"
+        }
+      ]
+    }
+  ],
+  "invalid_functions": [],
+  "unsupported_instruction_class_counts": {
+    "other": 42
+  },
+  "translated_instruction_class_counts": {
+    "other": 2148,
+    "sse_conversion": 5,
+    "sse_scalar_data_transfer": 10,
+    "x87": 12
+  },
+  "counts": {
+    "missing_internal_functions": 1,
+    "import_thunk_call_sites": 0,
+    "indirect_calls": 25,
+    "indirect_iat_import_call_sites": 23,
+    "unresolved_calls": 0,
+    "indirect_calls_without_candidates": 2,
+    "unsupported_instructions": 42,
+    "invalid_functions": 0
+  },
+  "shortest_direct_paths_from_roots": {
+    "0x00a2a210": [
+      "0x00a2a210"
+    ],
+    "0x00921260": [
+      "0x00a2a210",
+      "0x00921260"
+    ],
+    "0x00921340": [
+      "0x00a2a210",
+      "0x00921340"
+    ],
+    "0x009213c0": [
+      "0x00a2a210",
+      "0x009213c0"
+    ],
+    "0x00a22220": [
+      "0x00a2a210",
+      "0x00a22220"
+    ],
+    "0x00a23570": [
+      "0x00a2a210",
+      "0x00a23570"
+    ],
+    "0x009212c0": [
+      "0x00a2a210",
+      "0x00921340",
+      "0x009212c0"
+    ],
+    "0x00921300": [
+      "0x00a2a210",
+      "0x009213c0",
+      "0x00921300"
+    ],
+    "0x00921360": [
+      "0x00a2a210",
+      "0x00a23570",
+      "0x00921360"
+    ],
+    "0x00a221b0": [
+      "0x00a2a210",
+      "0x00a22220",
+      "0x00a221b0"
+    ],
+    "0x00f47380": [
+      "0x00a2a210",
+      "0x00a22220",
+      "0x00f47380"
+    ],
+    "0x00f473a0": [
+      "0x00a2a210",
+      "0x00a22220",
+      "0x00a221b0",
+      "0x00f473a0"
+    ],
+    "0x009276c0": [
+      "0x00a2a210",
+      "0x00a22220",
+      "0x00f47380",
+      "0x009276c0"
+    ],
+    "0x00926fd0": [
+      "0x00a2a210",
+      "0x00a22220",
+      "0x00f47380",
+      "0x009276c0",
+      "0x00926fd0"
+    ],
+    "0x009289f0": [
+      "0x00a2a210",
+      "0x00a22220",
+      "0x00a221b0",
+      "0x00f473a0",
+      "0x009289f0"
+    ],
+    "0x009268b0": [
+      "0x00a2a210",
+      "0x00a22220",
+      "0x00f47380",
+      "0x009276c0",
+      "0x00926fd0",
+      "0x009268b0"
+    ],
+    "0x00926ab0": [
+      "0x00a2a210",
+      "0x00a22220",
+      "0x00f47380",
+      "0x009276c0",
+      "0x00926fd0",
+      "0x00926ab0"
+    ],
+    "0x00926db0": [
+      "0x00a2a210",
+      "0x00a22220",
+      "0x00f47380",
+      "0x009276c0",
+      "0x00926fd0",
+      "0x00926db0"
+    ],
+    "0x00927be0": [
+      "0x00a2a210",
+      "0x00a22220",
+      "0x00a221b0",
+      "0x00f473a0",
+      "0x009289f0",
+      "0x00927be0"
+    ],
+    "0x009267a0": [
+      "0x00a2a210",
+      "0x00a22220",
+      "0x00a221b0",
+      "0x00f473a0",
+      "0x009289f0",
+      "0x00927be0",
+      "0x009267a0"
+    ],
+    "0x009268f0": [
+      "0x00a2a210",
+      "0x00a22220",
+      "0x00f47380",
+      "0x009276c0",
+      "0x00926fd0",
+      "0x00926db0",
+      "0x009268f0"
+    ],
+    "0x00926960": [
+      "0x00a2a210",
+      "0x00a22220",
+      "0x00a221b0",
+      "0x00f473a0",
+      "0x009289f0",
+      "0x00927be0",
+      "0x00926960"
+    ],
+    "0x00926a30": [
+      "0x00a2a210",
+      "0x00a22220",
+      "0x00f47380",
+      "0x009276c0",
+      "0x00926fd0",
+      "0x00926ab0",
+      "0x00926a30"
+    ],
+    "0x00926f10": [
+      "0x00a2a210",
+      "0x00a22220",
+      "0x00a221b0",
+      "0x00f473a0",
+      "0x009289f0",
+      "0x00927be0",
+      "0x00926f10"
+    ],
+    "0x009272c0": [
+      "0x00a2a210",
+      "0x00a22220",
+      "0x00a221b0",
+      "0x00f473a0",
+      "0x009289f0",
+      "0x00927be0",
+      "0x009272c0"
+    ],
+    "0x00927700": [
+      "0x00a2a210",
+      "0x00a22220",
+      "0x00a221b0",
+      "0x00f473a0",
+      "0x009289f0",
+      "0x00927be0",
+      "0x00927700"
+    ],
+    "0x009267f0": [
+      "0x00a2a210",
+      "0x00a22220",
+      "0x00a221b0",
+      "0x00f473a0",
+      "0x009289f0",
+      "0x00927be0",
+      "0x00926960",
+      "0x009267f0"
+    ],
+    "0x00926840": [
+      "0x00a2a210",
+      "0x00a22220",
+      "0x00a221b0",
+      "0x00f473a0",
+      "0x009289f0",
+      "0x00927be0",
+      "0x009272c0",
+      "0x00926840"
+    ],
+    "0x00926c20": [
+      "0x00a2a210",
+      "0x00a22220",
+      "0x00a221b0",
+      "0x00f473a0",
+      "0x009289f0",
+      "0x00927be0",
+      "0x009272c0",
+      "0x00926c20"
+    ],
+    "0x009274d0": [
+      "0x00a2a210",
+      "0x00a22220",
+      "0x00a221b0",
+      "0x00f473a0",
+      "0x009289f0",
+      "0x00927be0",
+      "0x00927700",
+      "0x009274d0"
+    ],
+    "0x00926100": [
+      "0x00a2a210",
+      "0x00a22220",
+      "0x00a221b0",
+      "0x00f473a0",
+      "0x009289f0",
+      "0x00927be0",
+      "0x00927700",
+      "0x009274d0",
+      "0x00926100"
+    ],
+    "0x00927140": [
+      "0x00a2a210",
+      "0x00a22220",
+      "0x00a221b0",
+      "0x00f473a0",
+      "0x009289f0",
+      "0x00927be0",
+      "0x00927700",
+      "0x009274d0",
+      "0x00927140"
+    ],
+    "0x00928df0": [
+      "0x00a2a210",
+      "0x00a22220",
+      "0x00a221b0",
+      "0x00f473a0",
+      "0x009289f0",
+      "0x00927be0",
+      "0x00927700",
+      "0x009274d0",
+      "0x00928df0"
+    ]
+  }
+}

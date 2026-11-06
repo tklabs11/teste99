@@ -1,0 +1,108 @@
+{
+  "schema": "spore-static-lift-call-diagnostic-v1",
+  "source_sha256": "6aec99cb2dc7fd08851a1718e92a60f359fb3fccca3b244a890ae07e93cbe59b",
+  "batch_exports": [
+    "C:\\SporeAnalysis\\spore_batch_all_parts\\spore_batch_all_0034.json"
+  ],
+  "root_entries": [
+    "0x00921340"
+  ],
+  "reachable_exported_function_count": 2,
+  "import_thunk_count_in_pe": 118,
+  "functions": [
+    {
+      "address": "0x009212c0",
+      "name": "FUN_009212c0",
+      "batch": "C:\\SporeAnalysis\\spore_batch_all_parts\\spore_batch_all_0034.json",
+      "instruction_count": 26,
+      "verified_byte_count": 63,
+      "byte_validation_error": null,
+      "translation_reasons": [],
+      "translated_instruction_counts": {
+        "ADD": 1,
+        "CMP": 1,
+        "JC": 1,
+        "JG": 1,
+        "JLE": 1,
+        "JMP": 1,
+        "LEA": 2,
+        "MOV": 6,
+        "OR": 1,
+        "POP": 2,
+        "PUSH": 2,
+        "RET": 1,
+        "SAR": 2,
+        "SUB": 2,
+        "TEST": 2
+      },
+      "direct_calls": []
+    },
+    {
+      "address": "0x00921340",
+      "name": "FUN_00921340",
+      "batch": "C:\\SporeAnalysis\\spore_batch_all_parts\\spore_batch_all_0034.json",
+      "instruction_count": 8,
+      "verified_byte_count": 27,
+      "byte_validation_error": null,
+      "translation_reasons": [],
+      "translated_instruction_counts": {
+        "ADD": 1,
+        "CALL": 1,
+        "LEA": 1,
+        "MOV": 1,
+        "PUSH": 3,
+        "RET": 1
+      },
+      "direct_calls": [
+        {
+          "site": "0x0092134f",
+          "mnemonic": "CALL",
+          "operand": [
+            "0x009212c0"
+          ],
+          "target": {
+            "address": "0x009212c0",
+            "classification": "exported_function"
+          }
+        }
+      ]
+    }
+  ],
+  "direct_call_edges": [
+    {
+      "from": "0x00921340",
+      "to": "0x009212c0",
+      "kind": "direct",
+      "site": "0x0092134f"
+    }
+  ],
+  "missing_dependencies": [],
+  "indirect_calls": [],
+  "unresolved_calls": [],
+  "unsupported_instructions": [],
+  "unsupported_instruction_groups": [],
+  "invalid_functions": [],
+  "unsupported_instruction_class_counts": {},
+  "translated_instruction_class_counts": {
+    "other": 34
+  },
+  "counts": {
+    "missing_internal_functions": 0,
+    "import_thunk_call_sites": 0,
+    "indirect_calls": 0,
+    "indirect_iat_import_call_sites": 0,
+    "unresolved_calls": 0,
+    "indirect_calls_without_candidates": 0,
+    "unsupported_instructions": 0,
+    "invalid_functions": 0
+  },
+  "shortest_direct_paths_from_roots": {
+    "0x00921340": [
+      "0x00921340"
+    ],
+    "0x009212c0": [
+      "0x00921340",
+      "0x009212c0"
+    ]
+  }
+}

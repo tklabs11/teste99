@@ -664,7 +664,7 @@ class StaticBatchLiftTests(unittest.TestCase):
         self.assertNotIn("eflags", source)
         self.assertEqual([item["status"] for item in diagnostics], ["translated"] * 2)
 
-    def test_lea_rejects_indexed_addressing_until_supported(self):
+    def test_lea_indexed_address_wraps_without_memory_access_or_flags(self):
         body = function([
             instruction(
                 0x401000, "8d4488fc", "LEA",
@@ -673,10 +673,82 @@ class StaticBatchLiftTests(unittest.TestCase):
             instruction(0x401004, "c3", "RET", flow="TERMINAL"),
         ])
 
-        with self.assertRaises(lifter.LiftRejected) as raised:
-            lifter.translate_function(body)
+        source, diagnostics = lifter.translate_function(body)
+        self.assertIn("state.regs[0] + state.regs[1] * 4u + 0xfffffffcu", source)
+        self.assertNotIn("memory.load", source)
+        self.assertNotIn("eflags", source)
+        self.assertEqual([item["status"] for item in diagnostics], ["translated"] * 2)
 
-        self.assertIn("unsupported operand syntax", raised.exception.reasons[0])
+    def test_not_register_width_and_flags(self):
+        body = function([
+            instruction(0x401000, "f6d0", "NOT", ("AL",)),
+            instruction(0x401002, "f7d7", "NOT", ("EDI",)),
+            instruction(0x401004, "c3", "RET", flow="TERMINAL"),
+        ])
+        source, diagnostics = lifter.translate_function(body)
+        self.assertIn("(~t0a & 0x000000ffu)", source)
+        self.assertIn("(~t1a & 0xffffffffu)", source)
+        self.assertNotIn("eflags", source)
+        self.assertEqual([item["status"] for item in diagnostics], ["translated"] * 3)
+
+    def test_div_and_imul_32_bit_register_forms(self):
+        body = function([
+            instruction(0x401000, "f7f7", "DIV", ("EDI",)),
+            instruction(0x401002, "0fafc7", "IMUL", ("EAX", "EDI")),
+            instruction(0x401005, "c3", "RET", flow="TERMINAL"),
+        ])
+        source, diagnostics = lifter.translate_function(body)
+        self.assertIn("dividend / t0a", source)
+        self.assertIn("quotient > 0xffffffffull", source)
+        self.assertIn("BatchLiftStatus::divide_error", source)
+        self.assertIn("product < -2147483648ll || product > 2147483647ll", source)
+        self.assertIn("state.eflags &= ~0x801u", source)
+        self.assertEqual([item["status"] for item in diagnostics], ["translated"] * 3)
+
+    def test_sar_and_indexed_cmp_in_binary_search_helper(self):
+        body = function([
+            instruction(0x401000, "c1fa02", "SAR", ("EDX", "0x2")),
+            instruction(0x401003, "3b3488", "CMP", ("ESI", "dword ptr [EAX + ECX*4]")),
+            instruction(0x401006, "c3", "RET", flow="TERMINAL"),
+        ])
+        source, diagnostics = lifter.translate_function(body)
+        self.assertIn("0xffffffffu << 30u", source)
+        self.assertIn("state.eflags |= 0x001u", source)
+        self.assertIn("memory.load32(static_cast<std::uint32_t>(state.regs[0] + state.regs[1] * 4u", source)
+        self.assertEqual([item["status"] for item in diagnostics], ["translated"] * 3)
+
+    def test_float_conversion_path_is_lowered_with_x87_guards(self):
+        body = function([
+            instruction(0x401000, "db0424", "FILD", ("dword ptr [ESP]",)),
+            instruction(0x401003, "d805d04f3f01", "FADD", ("float ptr [0x013f4fd0]",)),
+            instruction(0x401009, "d80e", "FMUL", ("float ptr [ESI]",)),
+            instruction(0x40100b, "d95c2404", "FSTP", ("float ptr [ESP + 0x4]",)),
+            instruction(0x40100f, "f30f2dc0", "CVTSS2SI", ("EAX", "XMM0")),
+            instruction(0x401013, "f30f2ac8", "CVTSI2SS", ("XMM1", "EAX")),
+            instruction(0x401017, "0f2ec8", "UCOMISS", ("XMM1", "XMM0")),
+            instruction(0x40101a, "0f42c1", "CMOVC", ("EAX", "ECX")),
+            instruction(0x40101d, "c3", "RET", flow="TERMINAL"),
+        ])
+        source, diagnostics = lifter.translate_function(body)
+        for helper in ("batch_guest_fild32", "batch_guest_x87_float32_arithmetic",
+                       "batch_guest_fstp32", "batch_guest_cvtss2si",
+                       "batch_guest_cvtsi2ss", "batch_guest_ucomiss"):
+            self.assertIn(helper, source)
+        self.assertIn("state.eflags & 0x001u", source)
+        self.assertEqual([item["status"] for item in diagnostics], ["translated"] * 9)
+
+    def test_float_division_and_truncating_conversion(self):
+        body = function([
+            instruction(0x401000, "d836", "FDIV", ("float ptr [ESI]",)),
+            instruction(0x401002, "f30f2c442418", "CVTTSS2SI",
+                        ("EAX", "dword ptr [ESP + 0x18]")),
+            instruction(0x401008, "c3", "RET", flow="TERMINAL"),
+        ])
+        source, diagnostics = lifter.translate_function(body)
+        self.assertIn("batch_guest_x87_float32_arithmetic(memory, state,", source)
+        self.assertIn(", 2u)", source)
+        self.assertIn("batch_guest_cvttss2si_memory(memory, state, 0u,", source)
+        self.assertEqual([item["status"] for item in diagnostics], ["translated"] * 3)
 
     def test_lea_rejects_non_32_bit_destinations(self):
         body = function([

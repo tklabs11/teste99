@@ -3292,6 +3292,109 @@ The working tree is uncommitted; `HEAD` remains
 `FUN_00921260`, beginning with its unsupported arithmetic and indexed-address
 forms. No broad closure beyond this target was added in Marco 6.
 
+## Marco 7 — bounded `FUN_00921260` closure advance (2026-11-06)
+
+The selected PE was rechecked at SHA-256
+`6aec99cb2dc7fd08851a1718e92a60f359fb3fccca3b244a890ae07e93cbe59b`.
+`NOT` and indexed `LEA` now cover the verified forms in `FUN_00921260`.
+The direct-call closure diagnostic fell from 36 to 30 unsupported instructions;
+this function fell from six blockers to two (`DIV` at `0x00921297` and `IMUL`
+at `0x0092129c`). All 49 Python backend tests and three isolated x86
+instruction differential tests pass. These are bounded translation and
+instruction-test results. The constructor prefix remains validated only
+through `0x00a33816`, before `0x00a33817`. A new run on Android device
+`PJMZAEJRX4YLFIDI` passed x86 original versus lift x86 and lift x86 versus
+ARM64 snapshot comparisons for that same bounded harness prefix; it does not
+establish game startup. See the [device comparison](./test-logs/constructor-prefix-00a33600-20261106-154833961/comparison.log),
+[Marco 7 report](./test-logs/marco7-00921260/report.md),
+[closure diagnostic](./test-logs/marco7-00921260/closure-diagnostic.json),
+[Python test log](./test-logs/marco7-00921260/python-tests.log), and
+[x86 instruction differential log](./test-logs/marco7-00921260/x86-instruction-differential.log).
+
+The next bounded step generated all 38 byte-verified instructions of
+`FUN_00921260`, adding the required 32-bit `DIV` and two-register `IMUL` forms.
+Three full-function `FUN_00921260` fixtures
+matched the original Windows x86 bytes against the ARM64 lift on Android.
+Native x86 arithmetic tests covered `DIV` zero/quotient overflow, signed
+`IMUL` overflow and `SAR` edge values. The next direct-call helper pair,
+`FUN_00921340` and `FUN_009212c0`, was generated with verified PE bytes;
+four x86-versus-Android ARM64 search fixtures matched. The selected closure
+now has 21 unsupported instructions and three missing function bodies. The
+existing constructor-prefix regression passed on Android again, still stopping
+before `0x00a33817`; no game boot has been demonstrated. See the [function comparison](./test-logs/marco7-00921260/function-arm64-differential.log),
+[binary-search comparison](./test-logs/marco7-00921260/009212c0-differential.log),
+[instruction tests](./test-logs/marco7-00921260/arithmetic-x86-differential.log),
+[current closure diagnostic](./test-logs/marco7-00921260/closure-diagnostic-current.json),
+and [constructor regression](./test-logs/constructor-prefix-00a33600-20261106-160932182/comparison.log).
+
+Marco 7 final update: the selected ten-function direct-call closure of
+`FUN_00a2a210` now has **zero unsupported instructions**. The remaining three
+missing internal bodies are `0x011e073e` (called at `0x00a221fc`),
+`0x00f473a0` (at `0x00a221e9`), and `0x00f47380` (at `0x00a222aa`). This is a
+static diagnostic, not an executed constructor. The first missing body jumps
+through a longer PE code chain beginning at `0x00401714`; its behavior has not
+been replaced with a guessed library operation. Adding the entire `0073`
+export batch expands the graph to 33 functions and 42 instruction issues,
+so the next work should recover the actually needed path.
+
+The new x87 and SSE forms were checked against original Windows x86 execution
+at the measured x87 control word `0x027f` and MXCSR `0x1f80`. On the Android
+ARM64 device, full-function fixtures matched for [`FUN_00921360`](./test-logs/marco7-00921260/00921360-differential.log)
+(4 cases) and [`FUN_009213c0`](./test-logs/marco7-00921260/009213c0-differential.log)
+(4 cases); [SSE instruction probes](./test-logs/marco7-00921260/sse-differential.log)
+matched in 8 cases. The backend's [53 Python tests](./test-logs/marco7-00921260/python-tests-current.log)
+pass. The [current closure diagnostic](./test-logs/marco7-00921260/closure-diagnostic-current.json)
+and [full Marco 7 report](./test-logs/marco7-00921260/report.md) separate
+generated code, isolated harness fixtures, and actual execution.
+
+The original constructor-prefix regression still passes on the Android device
+and stops before `0x00a33817`: [latest comparison](./test-logs/constructor-prefix-00a33600-20261106-163054252/comparison.log).
+The existing, unchanged APK was installed and opened on that device; its
+installation-check screen and the matching on-device PE hash are recorded in
+the [APK baseline log](./test-logs/marco7-00921260/apk-baseline-device.log) and
+[screenshot](./test-logs/marco7-00921260/apk-baseline-launch.png). That screen
+does not demonstrate game boot or rendering and does not include this working
+copy's new lift. The validated constructor boundary remains `0x00a33817`.
+
+The missing `0x011e073e` target was inspected further: its PE jump chain
+resolves an IAT call to `KERNEL32.dll!VirtualAlloc` at `0x013cc1c8`, requests
+`0xbfa43` bytes with allocation flags `0x3000` and protection `0x40`, and then
+writes into the returned allocation. The apparent three-argument call site
+cannot yet be treated as a verified `memset` replacement. Details and exact
+addresses are in the [Marco 7 report](./test-logs/marco7-00921260/report.md)
+and the [byte-verified thunk trace](./test-logs/marco7-00921260/protection-thunk-trace.log).
+The Marco 7 working files have been integrated into the Android Studio project at
+`C:\Users\wesll\AndroidStudioProjects\SporeAndroid`. Its Git remote is
+`https://github.com/tklabs11/spore_android`; the original HEAD is unchanged
+and the owner will make the commit. No new APK was built from these backend
+changes because the constructor closure is not connected to the app's JNI
+runtime yet.
+
+A bounded follow-up executed the original `0x011e073e` PE bytes in Unicorn.
+With `VirtualAlloc` supplied as an explicitly labeled fixture, the protected
+code allocated and entered its generated block, then stopped after 1,892,408
+instructions at `0x3005ed82` (`mov eax, dword ptr fs:[0x30]`), which requires
+a Windows process environment. The target buffer was unchanged and the thunk
+did not return: [execution log](./test-logs/marco7-00921260/protection-thunk-unicorn.log).
+A separate native Windows x86 harness could not map the PE at `0x00400000`
+because that address was occupied by a Windows NLS mapping:
+[native attempt](./test-logs/marco7-00921260/protection-thunk-native-attempt.log).
+These results narrow the next blocker but do not extend the constructor
+prefix or demonstrate game boot. The [Marco 7 report](./test-logs/marco7-00921260/report.md)
+records the fixtures and exact addresses.
+
+Further native probes found that other Windows mappings occupy the PE's full
+address range even before the harness C runtime starts:
+[early-address log](./test-logs/marco7-00921260/early-base-probe.log).
+Applying the PE relocation table at an alternate base changes the relative
+`JMP` in `0x011e073e` and faults before the function body:
+[relocation log](./test-logs/marco7-00921260/protection-thunk-relocated-attempt.log).
+A manual map that deliberately skipped relocations returned from two fixture
+calls of `FUN_00a221b0`, but did not clear the target bytes:
+[manual-map log](./test-logs/marco7-00921260/protection-thunk-manual-map.log).
+That last experiment is not an equivalent Windows load of the original PE;
+it cannot establish `0x011e073e` semantics or justify an APK integration.
+
 ## Preserved one-function recursive-call pilot
 
 The earlier recursive pilot and its runtime are retained unchanged as a

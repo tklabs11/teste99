@@ -1,0 +1,4 @@
+case=0 eax=00000002 output=00000002 flags=00000000
+case=1 eax=00000005 output=00000003 flags=00000000
+case=2 eax=fffffffb output=55555580 flags=00000000
+case=3 eax=823f12d9 output=80000001 flags=00000000

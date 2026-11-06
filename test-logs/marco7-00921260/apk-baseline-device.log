@@ -1,0 +1,19 @@
+Marco 7 — existing APK baseline on Android (2026-11-06)
+Device: PJMZAEJRX4YLFIDI, model 2303ERA42L
+ADB: C:\platform-tools\adb.exe
+APK: C:\Users\wesll\AndroidStudioProjects\SporeAndroid\app\build\outputs\apk\debug\app-debug.apk
+APK predates the changes in this working copy and was not rebuilt from Marco 7 sources.
+
+adb devices -l: device connected
+adb install -r <APK>: Success
+adb shell monkey -p dev.sporeport.cellstage.dev -c android.intent.category.LAUNCHER 1: Events injected: 1
+adb shell pidof dev.sporeport.cellstage.dev: 6608
+adb shell dumpsys activity activities: topResumedActivity=dev.sporeport.cellstage.dev/dev.sporeport.cellstage.MainActivity
+adb shell sha256sum /storage/emulated/0/Android/data/dev.sporeport.cellstage.dev/files/Spore/SporeBin/SporeApp.exe:
+  6aec99cb2dc7fd08851a1718e92a60f359fb3fccca3b244a890ae07e93cbe59b
+
+Visible screen: "Spore ARM64", "Recompilação estática — Validação da instalação",
+"Núcleo JNI ARM64 carregado", "EXE encontrado e verificado". Screenshot:
+apk-baseline-launch.png. UI hierarchy: apk-baseline-window.xml.
+This is the existing installation/validation UI. It is not game boot or rendering,
+and it does not execute the new Marco 7 lifted closure.
