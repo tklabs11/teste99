@@ -25,8 +25,10 @@ constexpr std::uint32_t kHeightArgumentOffset = 0xc0;
 constexpr std::uint32_t kWidthFieldOffset = 0x3c;
 constexpr std::uint32_t kHeightFieldOffset = 0x40;
 constexpr std::uint32_t kConfigByteOffset = 0xc4;
-constexpr std::uint32_t kReferenceBlockVa = 0x75f25e;
-constexpr std::uint32_t kReferenceBlockEndVa = 0x75f28f;
+constexpr std::uint32_t kDimensionsBlockVa = 0x75f25e;
+constexpr std::uint32_t kDimensionsBlockEndVa = 0x75f28f;
+constexpr std::uint32_t kPresentationModeBlockVa = 0x75f29f;
+constexpr std::uint32_t kPresentationModeBlockEndVa = 0x75f2b7;
 
 std::uint32_t g_saved_stack_pointer = 0;
 void* g_reference_block = nullptr;
@@ -66,6 +68,8 @@ bool readImage(const std::wstring& path, std::vector<std::uint8_t>* image) {
 
 bool extractReferenceBlock(
     const std::vector<std::uint8_t>& image,
+    std::uint32_t block_va,
+    std::uint32_t block_end_va,
     std::vector<std::uint8_t>* block) {
     IMAGE_DOS_HEADER dos_header{};
     if (image.size() < sizeof(dos_header)) {
@@ -113,8 +117,9 @@ bool extractReferenceBlock(
         std::fprintf(stderr, "Reference PE optional header is not PE32\n");
         return false;
     }
-    if (kReferenceBlockVa < optional_header.ImageBase
-            || kReferenceBlockEndVa < optional_header.ImageBase) {
+    if (block_va < optional_header.ImageBase
+            || block_end_va < optional_header.ImageBase
+            || block_end_va <= block_va) {
         std::fprintf(stderr, "Reference function VA is below the PE image base\n");
         return false;
     }
@@ -131,10 +136,9 @@ bool extractReferenceBlock(
         return false;
     }
 
-    const std::uint32_t block_size =
-        kReferenceBlockEndVa - kReferenceBlockVa;
+    const std::uint32_t block_size = block_end_va - block_va;
     const std::uint64_t block_begin =
-        kReferenceBlockVa - optional_header.ImageBase;
+        block_va - optional_header.ImageBase;
     for (WORD i = 0; i < file_header.NumberOfSections; ++i) {
         IMAGE_SECTION_HEADER section{};
         std::memcpy(
@@ -214,43 +218,142 @@ bool runComparison(
         && translated_height == reference_height;
 }
 
+bool runPresentationModeComparison(
+    void* executable_block) {
+    constexpr std::size_t kFrameWords = 0x60 / sizeof(std::uint32_t);
+    constexpr std::size_t kSetupFieldIndex = 0x48 / sizeof(std::uint32_t);
+    constexpr std::size_t kFormatFieldIndex = 0x4c / sizeof(std::uint32_t);
+    constexpr std::size_t kDepthFormatFieldIndex = 0x50 / sizeof(std::uint32_t);
+    std::array<std::uint32_t, kFrameWords> frame{};
+    frame[0] = static_cast<std::uint32_t>(
+        reinterpret_cast<std::uintptr_t>(&RestoreCallerStack));
+    for (std::size_t i = 1; i < frame.size(); ++i) {
+        frame[i] = 0xa5000000u + static_cast<std::uint32_t>(i);
+    }
+
+    const auto untouched_before = frame;
+    g_reference_block = executable_block;
+    ExecuteReferenceBlock(frame.data());
+    const std::uint32_t reference_setup_field_14 =
+        frame[kSetupFieldIndex];
+    const std::uint32_t reference_format = frame[kFormatFieldIndex];
+    const std::uint32_t reference_depth_format =
+        frame[kDepthFormatFieldIndex];
+
+    std::array<std::uint32_t, kFrameWords> translated_frame = untouched_before;
+    if (!SporeTranslatedSetPresentationModeFields(
+            &translated_frame[kSetupFieldIndex],
+            &translated_frame[kFormatFieldIndex],
+            &translated_frame[kDepthFormatFieldIndex])) {
+        std::fprintf(stderr, "Translated presentation-mode block rejected outputs\n");
+        return false;
+    }
+
+    bool untouched_fields_preserved = true;
+    for (std::size_t i = 1; i < frame.size(); ++i) {
+        if (i != kSetupFieldIndex && i != kFormatFieldIndex
+                && i != kDepthFormatFieldIndex
+                && (frame[i] != untouched_before[i]
+                    || translated_frame[i] != untouched_before[i])) {
+            untouched_fields_preserved = false;
+        }
+    }
+    const bool output_values_match =
+        reference_setup_field_14 == translated_frame[kSetupFieldIndex]
+        && reference_format == translated_frame[kFormatFieldIndex]
+        && reference_depth_format
+            == translated_frame[kDepthFormatFieldIndex];
+    std::printf(
+        "presentation-mode x86-setup-field-14=0x%08x "
+        "translated=0x%08x x86-format=%u translated=%u "
+        "x86-depth-format=%u translated=%u untouched-fields=%s\n",
+        reference_setup_field_14,
+        translated_frame[kSetupFieldIndex],
+        reference_format,
+        translated_frame[kFormatFieldIndex],
+        reference_depth_format,
+        translated_frame[kDepthFormatFieldIndex],
+        untouched_fields_preserved ? "PASS" : "FAIL");
+    return output_values_match && untouched_fields_preserved
+        && reference_setup_field_14 == 0x16
+        && reference_format == 0x15
+        && reference_depth_format == 0x4b;
+}
+
 }
 
 int wmain(int argc, wchar_t** argv) {
+    std::setvbuf(stdout, nullptr, _IONBF, 0);
     if (argc != 2) {
         std::fwprintf(stderr, L"Usage: %ls <SporeApp.exe>\n", argv[0]);
         return 2;
     }
 
     std::vector<std::uint8_t> image;
-    std::vector<std::uint8_t> reference_bytes;
+    std::vector<std::uint8_t> dimensions_reference_bytes;
+    std::vector<std::uint8_t> mode_reference_bytes;
     if (!readImage(argv[1], &image)
-            || !extractReferenceBlock(image, &reference_bytes)) {
+            || !extractReferenceBlock(
+                image,
+                kDimensionsBlockVa,
+                kDimensionsBlockEndVa,
+                &dimensions_reference_bytes)
+            || !extractReferenceBlock(
+                image,
+                kPresentationModeBlockVa,
+                kPresentationModeBlockEndVa,
+                &mode_reference_bytes)) {
         return 1;
     }
 
-    auto* executable_block = static_cast<std::uint8_t*>(VirtualAlloc(
+    auto* dimensions_executable_block = static_cast<std::uint8_t*>(VirtualAlloc(
         nullptr,
-        reference_bytes.size() + 1,
+        dimensions_reference_bytes.size() + 1,
         MEM_COMMIT | MEM_RESERVE,
         PAGE_EXECUTE_READWRITE));
-    if (executable_block == nullptr) {
+    if (dimensions_executable_block == nullptr) {
         std::fprintf(stderr, "VirtualAlloc failed: %lu\n", GetLastError());
         return 1;
     }
-    std::memcpy(executable_block, reference_bytes.data(), reference_bytes.size());
-    executable_block[reference_bytes.size()] = 0xc3;
-    g_reference_block = executable_block;
+    std::memcpy(
+        dimensions_executable_block,
+        dimensions_reference_bytes.data(),
+        dimensions_reference_bytes.size());
+    dimensions_executable_block[dimensions_reference_bytes.size()] = 0xc3;
+    g_reference_block = dimensions_executable_block;
 
     std::printf(
-        "reference-function=FUN_0075f030 block-va=0x%08x-0x%08x "
-        "executed-original-bytes=%zu\n",
-        kReferenceBlockVa,
-        kReferenceBlockEndVa,
-        reference_bytes.size());
+        "reference-function=FUN_0075f030 dimensions-block-va="
+        "0x%08x-0x%08x executed-original-bytes=%zu\n",
+        kDimensionsBlockVa,
+        kDimensionsBlockEndVa,
+        dimensions_reference_bytes.size());
 
     const bool first = runComparison("wide", 1280, 720);
     const bool second = runComparison("portrait-shaped", 480, 900);
+    auto* mode_executable_block = static_cast<std::uint8_t*>(VirtualAlloc(
+        nullptr,
+        mode_reference_bytes.size() + 1,
+        MEM_COMMIT | MEM_RESERVE,
+        PAGE_EXECUTE_READWRITE));
+    if (mode_executable_block == nullptr) {
+        VirtualFree(dimensions_executable_block, 0, MEM_RELEASE);
+        std::fprintf(stderr, "VirtualAlloc failed: %lu\n", GetLastError());
+        return 1;
+    }
+    std::memcpy(
+        mode_executable_block,
+        mode_reference_bytes.data(),
+        mode_reference_bytes.size());
+    mode_executable_block[mode_reference_bytes.size()] = 0xc3;
+    std::printf(
+        "reference-function=FUN_0075f030 presentation-mode-block-va="
+        "0x%08x-0x%08x executed-original-bytes=%zu\n",
+        kPresentationModeBlockVa,
+        kPresentationModeBlockEndVa,
+        mode_reference_bytes.size());
+    const bool presentation_mode =
+        runPresentationModeComparison(mode_executable_block);
     std::uint32_t unused_width = 0;
     const bool null_rejected =
         !SporeTranslatedCopyBackBufferDimensions(
@@ -260,13 +363,16 @@ int wmain(int argc, wchar_t** argv) {
         && !SporeTranslatedCopyBackBufferDimensions(
             &unused_width, &unused_width, 1, 2);
 
-    VirtualFree(executable_block, 0, MEM_RELEASE);
+    VirtualFree(dimensions_executable_block, 0, MEM_RELEASE);
+    VirtualFree(mode_executable_block, 0, MEM_RELEASE);
     g_reference_block = nullptr;
 
-    if (!first || !second || !null_rejected) {
+    if (!first || !second || !presentation_mode || !null_rejected) {
         std::fprintf(stderr, "x86 reference comparison: FAIL\n");
         return 1;
     }
-    std::printf("x86-original-vs-translated=PASS null-output-rejection=PASS\n");
+    std::printf(
+        "x86-original-vs-translated=PASS "
+        "null-output-rejection=PASS presentation-mode=PASS\n");
     return 0;
 }

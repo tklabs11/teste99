@@ -1,0 +1,4 @@
+--------- beginning of main
+11-05 21:31:49.117 I/SDL/APP (31973): DXVK state cache path: /data/data/dev.sporeport.cellstage.dev/files/
+11-05 21:31:49.154 I/SDL/APP (31973): D3D9_CALL CreateDevice input adapter=0 device-type=1 behavior=0x00000040 window-handle-present=1 backbuffer=2400x1080 format=0 count=1 multisample=0 quality=0 swap=1 windowed=1 depth-stencil=0 depth-format=0 flags=0x00000000 refresh=0 interval=1
+11-05 21:31:49.705 I/SDL/APP (31973): DXVK-native D3D9 device created (2400x1080)

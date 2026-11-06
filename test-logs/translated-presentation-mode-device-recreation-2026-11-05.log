@@ -1,0 +1,35 @@
+--------- beginning of main
+11-05 21:26:54.646 I/SDL/APP (31476): DXVK state cache path: /data/data/dev.sporeport.cellstage.dev/files/
+11-05 21:26:55.169 I/SDL/APP (31476): TRANSLATED_STAGE mode=device-global prepared=PASS device-window-param=0 guest-window-global=0 guest-device-global=0 manual-window-token=0x00010001 backbuffer-before-width-copy=640x480
+11-05 21:26:55.169 I/SDL/APP (31476): TRANSLATED_STAGE FUN_0075f030 backbuffer-dimensions=PASS width=1280 height=720
+11-05 21:26:55.169 I/SDL/APP (31476): TRANSLATED_STAGE FUN_0075f030 presentation-mode=PASS setup-field-14=0x00000016 format=21 depth-format=75
+11-05 21:26:55.169 I/SDL/APP (31476): TRANSLATED_STAGE global-window=PASS address=0x016f658c
+11-05 21:26:55.169 I/SDL/APP (31476): TRANSLATED_STAGE FUN_011f8110 global=0x016f658c window-token=0x00010001
+11-05 21:26:55.169 I/SDL/APP (31476): TRANSLATED_STAGE create-device-input adapter=0 device-type=1 behavior=0x00000040 window-token=0x00010001 backbuffer=1280x720 format=21 count=1 multisample=0 quality=0 swap=1 windowed=1 depth-stencil=0 depth-format=75 flags=0x00000000 refresh=0 interval=1
+11-05 21:26:55.169 I/SDL/APP (31476): D3D9_CALL CreateDevice input adapter=0 device-type=1 behavior=0x00000040 window-handle-present=1 backbuffer=1280x720 format=21 count=1 multisample=0 quality=0 swap=1 windowed=1 depth-stencil=0 depth-format=75 flags=0x00000000 refresh=0 interval=1
+11-05 21:26:55.604 I/SDL/APP (31476): TRANSLATED_STAGE create-device=PASS result=0x00000000 guest-window=0x00010001 guest-device=unregistered backbuffer=1280x720
+11-05 21:26:55.604 I/SDL/APP (31476): TRANSLATED_STAGE FUN_011f8680 device-global=PASS address=0x016f89d0 guest-device=0x00010002
+11-05 21:26:55.604 I/SDL/APP (31476): TRANSLATED_STAGE invalid-device-token=zero rejected=PASS device-dispatches=0
+11-05 21:26:55.604 I/SDL/APP (31476): TRANSLATED_STAGE invalid-device-token=unknown rejected=PASS device-dispatches=0
+11-05 21:26:55.604 I/SDL/APP (31476): DXVK-native D3D9 device created (2219x987)
+11-05 21:26:55.605 I/SDL/APP (31476): TRANSLATED_STAGE reset[1]-input backbuffer=2400x1080 format=21 count=1 multisample=0 quality=0 swap=1 windowed=1 depth-stencil=0 depth-format=75 flags=0x00000000 refresh=0 interval=1
+11-05 21:26:55.606 I/SDL/APP (31476): TRANSLATED_STAGE reset[1]-result=0x00000000 backbuffer=2400x1080
+11-05 21:26:55.606 I/SDL/APP (31476): DXVK-native D3D9 device resized (2400x1080)
+11-05 21:26:55.639 I/SDL/APP (31476): TRANSLATED_STAGE FUN_011f8120 device-global=PASS address=0x016f89d0 guest-device=0x00010002
+11-05 21:26:55.639 I/SDL/APP (31476): TRANSLATED_STAGE first-present=PASS result=0x00000000 backbuffer=2400x1080
+11-05 21:26:59.010 I/SDL/APP (31476): TRANSLATED_STAGE reset[2]-input backbuffer=2400x1200 format=21 count=1 multisample=0 quality=0 swap=1 windowed=1 depth-stencil=0 depth-format=75 flags=0x00000000 refresh=0 interval=1
+11-05 21:26:59.046 I/SDL/APP (31476): TRANSLATED_STAGE reset[2]-result=0x00000000 backbuffer=2400x1200
+11-05 21:26:59.047 I/SDL/APP (31476): DXVK-native D3D9 device resized (2400x1200)
+11-05 21:27:02.264 I/SDL/APP (31476): TRANSLATED_STAGE reset[3]-input backbuffer=2400x1080 format=21 count=1 multisample=0 quality=0 swap=1 windowed=1 depth-stencil=0 depth-format=75 flags=0x00000000 refresh=0 interval=1
+11-05 21:27:02.305 I/SDL/APP (31476): TRANSLATED_STAGE reset[3]-result=0x00000000 backbuffer=2400x1080
+11-05 21:27:02.305 I/SDL/APP (31476): DXVK-native D3D9 device resized (2400x1080)
+11-05 21:27:06.096 I/SDL/APP (31476): TRANSLATED_STAGE device-global invalidated address=0x016f89d0 guest-device=0x00010002
+11-05 21:27:06.204 I/SDL/APP (31476): TRANSLATED_STAGE FUN_011f8110 global=0x016f658c window-token=0x00010001
+11-05 21:27:06.204 I/SDL/APP (31476): TRANSLATED_STAGE create-device-input adapter=0 device-type=1 behavior=0x00000040 window-token=0x00010001 backbuffer=1280x720 format=21 count=1 multisample=0 quality=0 swap=1 windowed=1 depth-stencil=0 depth-format=75 flags=0x00000000 refresh=0 interval=1
+11-05 21:27:06.204 I/SDL/APP (31476): D3D9_CALL CreateDevice input adapter=0 device-type=1 behavior=0x00000040 window-handle-present=1 backbuffer=1280x720 format=21 count=1 multisample=0 quality=0 swap=1 windowed=1 depth-stencil=0 depth-format=75 flags=0x00000000 refresh=0 interval=1
+11-05 21:27:06.415 I/SDL/APP (31476): TRANSLATED_STAGE create-device=PASS result=0x00000000 guest-window=0x00010001 guest-device=unregistered backbuffer=1280x720
+11-05 21:27:06.416 I/SDL/APP (31476): TRANSLATED_STAGE FUN_011f8680 device-global=PASS address=0x016f89d0 guest-device=0x00010003
+11-05 21:27:06.451 I/SDL/APP (31476): TRANSLATED_STAGE device-recreation=PASS old-token=0x00010002 new-token=0x00010003 stale-token-rejected=PASS recreated-present=PASS result=0x00000000
+11-05 21:27:06.451 I/SDL/APP (31476): TRANSLATED_STAGE device-global invalidated address=0x016f89d0 guest-device=0x00010003
+11-05 21:27:06.550 I/SDL/APP (31476): TRANSLATED_STAGE reset-count=3
+11-05 21:27:06.550 I/SDL/APP (31476): DXVK-native D3D9 test stopped

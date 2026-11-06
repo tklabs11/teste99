@@ -2,13 +2,30 @@
 
 #include <SDL_log.h>
 
+#include <atomic>
+#include <limits>
+
 #include "spore_d3d9_bridge.h"
 #include "spore_graphics_parameter_translation.h"
 
 namespace {
 
 constexpr std::uint32_t kGuestWindowToken = 0x00010001;
-constexpr std::uint32_t kGuestDeviceToken = 0x00010002;
+std::atomic<std::uint32_t> g_next_guest_device_token{0x00010002};
+
+std::uint32_t allocateGuestDeviceToken() {
+    std::uint32_t candidate = g_next_guest_device_token.load();
+    while (candidate != 0) {
+        const std::uint32_t next = candidate
+                == std::numeric_limits<std::uint32_t>::max()
+            ? 0
+            : candidate + 1;
+        if (g_next_guest_device_token.compare_exchange_weak(candidate, next)) {
+            return candidate;
+        }
+    }
+    return 0;
+}
 
 D3DPRESENT_PARAMETERS toHostPresentationParameters(
     const SporeGuestPresentParameters32& guest) {
@@ -41,7 +58,6 @@ void prepareTranslatedGraphicsProbeState(
     state->window_token = kGuestWindowToken;
     state->presentation.back_buffer_width = 640;
     state->presentation.back_buffer_height = 480;
-    state->presentation.back_buffer_format = D3DFMT_UNKNOWN;
     state->presentation.back_buffer_count = 1;
     state->presentation.multi_sample_type = D3DMULTISAMPLE_NONE;
     state->presentation.swap_effect = D3DSWAPEFFECT_DISCARD;
@@ -109,20 +125,26 @@ void SporeNativeDeviceRegistry::InvalidateAll() {
 }
 
 bool SporeNativeDeviceRegistry::Register(
-    std::uint32_t guest_token,
-    IDirect3DDevice9* device) {
-    if (guest_token == 0 || device == nullptr) {
+    IDirect3DDevice9* device,
+    std::uint32_t* guest_token_out) {
+    if (device == nullptr || guest_token_out == nullptr) {
         return false;
     }
+    *guest_token_out = 0;
 
     std::lock_guard<std::mutex> lock(mutex_);
     if (device_ != nullptr) {
         return false;
     }
 
+    const std::uint32_t guest_token = allocateGuestDeviceToken();
+    if (guest_token == 0) {
+        return false;
+    }
     device->AddRef();
     guest_token_ = guest_token;
     device_ = device;
+    *guest_token_out = guest_token;
     return true;
 }
 
@@ -223,6 +245,25 @@ bool SporeTranslatedSetCreateDeviceBackBufferDimensions(
     return true;
 }
 
+bool SporeTranslatedSetPresentationModeFields(
+    SporeGuestD3D9State32* state) {
+    if (state == nullptr
+            || !SporeTranslatedSetPresentationModeFields(
+                &state->original_setup_field_14,
+                &state->presentation.back_buffer_format,
+                &state->presentation.auto_depth_stencil_format)) {
+        return false;
+    }
+
+    SDL_Log(
+        "TRANSLATED_STAGE FUN_0075f030 presentation-mode=PASS "
+        "setup-field-14=0x%08x format=%u depth-format=%u",
+        state->original_setup_field_14,
+        state->presentation.back_buffer_format,
+        state->presentation.auto_depth_stencil_format);
+    return true;
+}
+
 HRESULT SporeTranslatedCreateDevice(
     SporeGuestD3D9State32* state,
     SDL_Window* window,
@@ -278,13 +319,11 @@ HRESULT SporeTranslatedCreateDevice(
         device_out);
     if (SUCCEEDED(result) && *device_out != nullptr) {
         *host_presentation_out = host_parameters;
-        state->device_token = kGuestDeviceToken;
         SDL_Log(
             "TRANSLATED_STAGE create-device=PASS result=0x%08x "
-            "guest-window=0x%08x guest-device=0x%08x backbuffer=%ux%u",
+            "guest-window=0x%08x guest-device=unregistered backbuffer=%ux%u",
             static_cast<unsigned int>(result),
             state->window_token,
-            state->device_token,
             host_parameters.BackBufferWidth,
             host_parameters.BackBufferHeight);
     } else {
@@ -301,13 +340,15 @@ HRESULT SporeTranslatedCreateDevice(
 bool SporeTranslatedRegisterDeviceGlobal(
     SporeGuestMemory32* memory,
     SporeNativeDeviceRegistry* device_registry,
-    std::uint32_t guest_device_token,
+    std::uint32_t* guest_device_token_out,
     IDirect3DDevice9* host_device) {
     if (memory == nullptr || device_registry == nullptr
-            || guest_device_token == 0 || host_device == nullptr) {
+            || guest_device_token_out == nullptr || host_device == nullptr) {
         return false;
     }
-    if (!device_registry->Register(guest_device_token, host_device)) {
+    *guest_device_token_out = 0;
+    std::uint32_t guest_device_token = 0;
+    if (!device_registry->Register(host_device, &guest_device_token)) {
         return false;
     }
     if (!memory->Write32(kSporeGuestD3DDeviceGlobalAddress, guest_device_token)) {
@@ -315,6 +356,7 @@ bool SporeTranslatedRegisterDeviceGlobal(
         return false;
     }
 
+    *guest_device_token_out = guest_device_token;
     SDL_Log(
         "TRANSLATED_STAGE FUN_011f8680 device-global=PASS "
         "address=0x%08x guest-device=0x%08x",
@@ -331,12 +373,16 @@ HRESULT SporeTranslatedCreateDeviceWithGlobals(
     D3DPRESENT_PARAMETERS* host_presentation_out,
     IDirect3D9** d3d9_out,
     IDirect3DDevice9** device_out) {
-    if (memory != nullptr) {
-        memory->Write32(kSporeGuestD3DDeviceGlobalAddress, 0);
-    }
     if (state == nullptr || memory == nullptr || device_registry == nullptr
             || host_presentation_out == nullptr || d3d9_out == nullptr
             || device_out == nullptr) {
+        return D3DERR_INVALIDCALL;
+    }
+
+    std::uint32_t existing_device_token = 0;
+    if (!memory->Read32(
+            kSporeGuestD3DDeviceGlobalAddress, &existing_device_token)
+            || existing_device_token != 0) {
         return D3DERR_INVALIDCALL;
     }
 
@@ -364,7 +410,7 @@ HRESULT SporeTranslatedCreateDeviceWithGlobals(
     }
 
     if (!SporeTranslatedRegisterDeviceGlobal(
-            memory, device_registry, state->device_token, *device_out)) {
+            memory, device_registry, &state->device_token, *device_out)) {
         (*device_out)->Release();
         *device_out = nullptr;
         if (*d3d9_out != nullptr) {

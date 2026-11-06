@@ -40,6 +40,136 @@ void ReleaseD3D9(
     }
 }
 
+bool RunDeviceRecreationTokenRegression(
+    SporeGuestD3D9State32* state,
+    SporeGuestMemory32* guest_memory,
+    SporeNativeDeviceRegistry* device_registry,
+    SDL_Window* window,
+    D3DPRESENT_PARAMETERS* presentation,
+    const SporeGuestFrameOwner32* frame_owner,
+    IDirect3D9** d3d9,
+    IDirect3DDevice9** device) {
+    if (state == nullptr || guest_memory == nullptr || device_registry == nullptr
+            || window == nullptr || presentation == nullptr || frame_owner == nullptr
+            || d3d9 == nullptr || device == nullptr
+            || *d3d9 == nullptr || *device == nullptr) {
+        return false;
+    }
+
+    std::uint32_t old_token = 0;
+    std::uint32_t invalidated_token = 0;
+    const std::uint64_t dispatches_before_release =
+        device_registry->PresentDispatchCount();
+    if (dispatches_before_release == 0
+            || !guest_memory->Read32(
+                kSporeGuestD3DDeviceGlobalAddress, &old_token)
+            || old_token == 0
+            || !SporeTranslatedReleaseDeviceGlobal(
+                guest_memory, device_registry, &invalidated_token)
+            || invalidated_token != old_token
+            || SporeTranslatedPresentFromDeviceGlobal(
+                guest_memory, device_registry, frame_owner)
+                != D3DERR_INVALIDCALL
+            || device_registry->Present(old_token, frame_owner)
+                != D3DERR_INVALIDCALL
+            || device_registry->PresentDispatchCount()
+                != dispatches_before_release) {
+        SDL_LogError(
+            SDL_LOG_CATEGORY_APPLICATION,
+            "Could not invalidate and reject the first guest device token");
+        return false;
+    }
+
+    (*device)->Release();
+    *device = nullptr;
+    (*d3d9)->Release();
+    *d3d9 = nullptr;
+
+    const HRESULT recreate_result = SporeTranslatedCreateDeviceWithGlobals(
+        state,
+        guest_memory,
+        device_registry,
+        window,
+        presentation,
+        d3d9,
+        device);
+    std::uint32_t new_token = 0;
+    if (FAILED(recreate_result) || *device == nullptr || *d3d9 == nullptr
+            || !guest_memory->Read32(
+                kSporeGuestD3DDeviceGlobalAddress, &new_token)
+            || new_token == 0 || new_token == old_token) {
+        SDL_LogError(
+            SDL_LOG_CATEGORY_APPLICATION,
+            "Device recreation reused the invalidated token or failed");
+        return false;
+    }
+
+    const std::uint64_t dispatches_before_stale_token =
+        device_registry->PresentDispatchCount();
+    const bool stored_old_token =
+        guest_memory->Write32(kSporeGuestD3DDeviceGlobalAddress, old_token);
+    const HRESULT stale_global_result = stored_old_token
+        ? SporeTranslatedPresentFromDeviceGlobal(
+              guest_memory, device_registry, frame_owner)
+        : D3DERR_INVALIDCALL;
+    const HRESULT stale_registry_result =
+        device_registry->Present(old_token, frame_owner);
+    const bool stale_rejected =
+        stored_old_token
+        && stale_global_result == D3DERR_INVALIDCALL
+        && stale_registry_result == D3DERR_INVALIDCALL
+        && device_registry->PresentDispatchCount()
+            == dispatches_before_stale_token
+        && guest_memory->Write32(
+            kSporeGuestD3DDeviceGlobalAddress, new_token);
+    const HRESULT clear_result = stale_rejected
+        ? (*device)->Clear(0, nullptr, D3DCLEAR_TARGET, 0, 1.0f, 0)
+        : D3DERR_INVALIDCALL;
+    const HRESULT recreated_present_result = SUCCEEDED(clear_result)
+        ? SporeTranslatedPresentFromDeviceGlobal(
+              guest_memory, device_registry, frame_owner)
+        : D3DERR_INVALIDCALL;
+    if (!stale_rejected || FAILED(clear_result)
+            || FAILED(recreated_present_result)
+            || device_registry->PresentDispatchCount()
+                != dispatches_before_stale_token + 1) {
+        SDL_LogError(
+            SDL_LOG_CATEGORY_APPLICATION,
+            "The recreated device rejected or misrouted its guest token");
+        return false;
+    }
+
+    SDL_Log(
+        "TRANSLATED_STAGE device-recreation=PASS old-token=0x%08x "
+        "new-token=0x%08x stale-token-rejected=PASS "
+        "recreated-present=PASS result=0x%08x",
+        old_token,
+        new_token,
+        static_cast<unsigned int>(recreated_present_result));
+
+    std::uint32_t final_invalidated_token = 0;
+    const bool released_again = SporeTranslatedReleaseDeviceGlobal(
+            guest_memory, device_registry, &final_invalidated_token)
+        && final_invalidated_token == new_token
+        && SporeTranslatedPresentFromDeviceGlobal(
+            guest_memory, device_registry, frame_owner)
+            == D3DERR_INVALIDCALL
+        && device_registry->Present(new_token, frame_owner)
+            == D3DERR_INVALIDCALL;
+    (*device)->Release();
+    *device = nullptr;
+    (*d3d9)->Release();
+    *d3d9 = nullptr;
+    state->device_token = 0;
+    if (!released_again) {
+        SDL_LogError(
+            SDL_LOG_CATEGORY_APPLICATION,
+            "The recreated guest device token remained usable after release");
+        return false;
+    }
+    return true;
+}
+
 }
 
 namespace {
@@ -129,7 +259,7 @@ int RunD3D9TestImpl(D3D9TestMode mode) {
                 && !SporeTranslatedRegisterDeviceGlobal(
                     &guest_memory,
                     &device_registry,
-                    guest_graphics_state.device_token,
+                    &guest_graphics_state.device_token,
                     device)) {
             SDL_LogError(
                 SDL_LOG_CATEGORY_APPLICATION,
@@ -160,10 +290,17 @@ int RunD3D9TestImpl(D3D9TestMode mode) {
             if (!SporeTranslatedSetCreateDeviceBackBufferDimensions(
                     &guest_graphics_state, 1280, 720)
                     || guest_graphics_state.presentation.back_buffer_width != 1280
-                    || guest_graphics_state.presentation.back_buffer_height != 720) {
+                    || guest_graphics_state.presentation.back_buffer_height != 720
+                    || !SporeTranslatedSetPresentationModeFields(
+                        &guest_graphics_state)
+                    || guest_graphics_state.original_setup_field_14 != 0x16
+                    || guest_graphics_state.presentation.back_buffer_format
+                        != D3DFMT_A8R8G8B8
+                    || guest_graphics_state.presentation.auto_depth_stencil_format
+                        != D3DFMT_D24S8) {
                 SDL_LogError(
                     SDL_LOG_CATEGORY_APPLICATION,
-                    "Translated FUN_0075f030 backbuffer dimensions were not applied");
+                    "Translated FUN_0075f030 parameters were not applied");
                 SDL_DestroyWindow(window);
                 SDL_Quit();
                 return 1;
@@ -430,34 +567,18 @@ int RunD3D9TestImpl(D3D9TestMode mode) {
     }
 
     if (mode == D3D9TestMode::translated_device_global) {
-        std::uint32_t invalidated_token = 0;
-        const std::uint64_t dispatch_count_before_invalidation =
-            device_registry.PresentDispatchCount();
-        if (dispatch_count_before_invalidation == 0
-                || !SporeTranslatedReleaseDeviceGlobal(
-                    &guest_memory, &device_registry, &invalidated_token)
-                || invalidated_token != registered_device_token
-                || SporeTranslatedPresentFromDeviceGlobal(
-                    &guest_memory, &device_registry, &guest_frame_owner)
-                    != D3DERR_INVALIDCALL
-                || device_registry.Present(
-                    invalidated_token, &guest_frame_owner)
-                    != D3DERR_INVALIDCALL
-                || device_registry.PresentDispatchCount()
-                    != dispatch_count_before_invalidation) {
-            SDL_LogError(
-                SDL_LOG_CATEGORY_APPLICATION,
-                "Invalidated guest device token remained usable");
+        if (registered_device_token == 0
+                || !RunDeviceRecreationTokenRegression(
+                    &guest_graphics_state,
+                    &guest_memory,
+                    &device_registry,
+                    window,
+                    &parameters,
+                    &guest_frame_owner,
+                    &d3d9,
+                    &device)) {
             result = 1;
-        } else {
-            SDL_Log(
-                "TRANSLATED_STAGE invalid-device-token=invalidated "
-                "rejected=PASS guest-device=0x%08x device-dispatches=%llu",
-                invalidated_token,
-                static_cast<unsigned long long>(
-                    dispatch_count_before_invalidation));
         }
-        guest_graphics_state.device_token = 0;
     }
     ReleaseD3D9(
         device,

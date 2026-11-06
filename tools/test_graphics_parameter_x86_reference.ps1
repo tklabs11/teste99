@@ -1,10 +1,10 @@
 param(
-    [string]$PePath = "C:\Program Files (x86)\Steam\steamapps\common\Spore\SPOREFILES\SporeBin\SporeApp.exe"
+    [string]$PePath = "C:\Users\wesll\Downloads\SPORE-SteamRIP.com\SPORE\SporeBin\SporeApp.exe"
 )
 
 $ErrorActionPreference = "Stop"
 
-$expectedSha256 = "6aec99cb2dc7fd08851a1718e92a60f359fb3fccca3b244a890ae07e93cbe59b"
+$expectedSha256 = "fb66afc320730dec6f80b79301c7c525689859e3d0a99616b657559e8f11a1ae"
 if (-not (Test-Path -LiteralPath $PePath)) {
     throw "Reference PE not found: $PePath"
 }

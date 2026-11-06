@@ -18,4 +18,23 @@ inline bool SporeTranslatedCopyBackBufferDimensions(
     return true;
 }
 
+inline bool SporeTranslatedSetPresentationModeFields(
+    std::uint32_t* setup_field_14_out,
+    std::uint32_t* back_buffer_format_out,
+    std::uint32_t* depth_stencil_format_out) {
+    if (setup_field_14_out == nullptr
+            || back_buffer_format_out == nullptr
+            || depth_stencil_format_out == nullptr
+            || setup_field_14_out == back_buffer_format_out
+            || setup_field_14_out == depth_stencil_format_out
+            || back_buffer_format_out == depth_stencil_format_out) {
+        return false;
+    }
+
+    *setup_field_14_out = 0x16;
+    *back_buffer_format_out = 0x15;
+    *depth_stencil_format_out = 0x4b;
+    return true;
+}
+
 #endif

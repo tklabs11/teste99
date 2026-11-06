@@ -1,0 +1,5 @@
+--------- beginning of main
+11-05 21:26:08.472 I/SDL/APP (30392): TRANSLATED_STAGE device-global invalidated address=0x016f89d0 guest-device=0x00010002
+11-05 21:26:08.578 I/SDL/APP (30392): TRANSLATED_STAGE FUN_011f8110 global=0x016f658c window-token=0x00010001
+11-05 21:26:08.578 I/SDL/APP (30392): TRANSLATED_STAGE create-device-input adapter=0 device-type=1 behavior=0x00000040 window-token=0x00010001 backbuffer=1280x720 format=21 count=1 multisample=0 quality=0 swap=1 windowed=1 depth-stencil=0 depth-format=75 flags=0x00000000 refresh=0 interval=1
+11-05 21:26:08.579 I/SDL/APP (30392): D3D9_CALL CreateDevice input adapter=0 device-type=1 behavior=0x00000040 window-handle-present=1 backbuffer=1280x720 format=21 count=1 multisample=0 quality=0 swap=1 windowed=1 depth-stencil=0 depth-format=75 flags=0x00000000 refresh=0 interval=1

@@ -1812,6 +1812,107 @@ The earlier ADB blocker remains as historical context in
 [translated-graphics-device-run-blocked-2026-11-05.log](./test-logs/translated-graphics-device-run-blocked-2026-11-05.log); it is superseded by
 the successful device run above.
 
+## FUN_0075f030 presentation-mode block and device recreation — 2026-11-05
+
+This increment was checked against the selected local `SporeApp.exe`
+(SHA-256
+`fb66afc320730dec6f80b79301c7c525689859e3d0a99616b657559e8f11a1ae`).
+After the already validated dimension writes, the x86 instructions at
+`0x75f29f`–`0x75f2b6` write three adjacent dwords in the setup block:
+
+| Setup offset | x86 value | Mapping / Android result |
+|---|---:|---|
+| `+0x14` | `0x16` | Preserved as `original_setup_field_14`; `FUN_011f7d00` does not use this field. |
+| `+0x18` | `0x15` | `BackBufferFormat = D3DFMT_A8R8G8B8` (`21`). |
+| `+0x1c` | `0x4b` | `AutoDepthStencilFormat = D3DFMT_D24S8` (`75`). |
+
+`FUN_011f7d00` supplies the semantic mapping: it copies setup `+0x18` to
+the D3D9 backbuffer format and setup `+0x1c` to the auto-depth format. The
+translation writes only those two D3D fields and the observed, otherwise
+unmapped guest dword. The x86 differential executes these exact 24 original
+bytes and compares all three outputs. Surrounding sentinel fields remain
+unchanged. This block has no conditional branch.
+
+The Android device-global probe now replaces the previous manual
+`BackBufferFormat = UNKNOWN` seed with this translated output. The translated
+depth format is recorded as `75`, but `EnableAutoDepthStencil` remains the
+harness's explicit `FALSE`; the original wrapper's separate initialization of
+that field was not part of this block.
+
+| Preparation | Status after this increment |
+|---|---|
+| Backbuffer width/height (`1280x720` in the phone run) | Translated from the dimensions block of `FUN_0075f030`; no longer seeded manually in the device-global probe. |
+| Setup `+0x14`, backbuffer format, depth format | Translated as `0x16`, `21`, and `75`; `+0x14` has no identified D3D9 consumer. |
+| Adapter `0`, device type `1`, behavior flags `0x40`, window token | Still supplied by the harness; the window token is resolved through the guest-window mapping. |
+| Backbuffer count `1`, multisample/quality `0`, swap effect `1`, windowed `TRUE`, flags `0`, refresh `0`, interval `1` | Still prepared by the harness; configuration-dependent source logic is not translated. |
+| `EnableAutoDepthStencil = FALSE` | Still explicit harness state; the separate original initialization is outside this block. |
+
+Thus, this increment removes manual setup for the translated dimensions and
+the three observed setup dwords only; it does not claim that `CreateDevice`
+parameters as a whole come from translated game logic.
+
+### Device-token recreation regression
+
+Guest device tokens are now allocated from a process-wide monotonic 32-bit
+sequence rather than reusing `0x00010002`. Invalidation and device release do
+not recycle IDs; allocation fails if the nonzero token space is exhausted.
+Creating through the global adapter also requires the guest device global to
+be zero, instead of silently clearing a possibly live token.
+
+The phone regression performs create → invalidate/release → create again,
+then tries the old token both through the guest global and directly through
+the registry. On the `2303ERA42L` phone, old token `0x00010002` was rejected
+without another Present dispatch, new token `0x00010003` presented
+successfully, and the second token was rejected after its release. Zero and
+unknown tokens remain rejected as before.
+
+The final device run sent `CreateDevice` `1280x720`, format `21`, depth format
+`75`; `EnableAutoDepthStencil` was `FALSE`, and refresh rate was `0`. It then
+observed successful Resets at `2400x1080`, `2400x1200` under a temporary
+display-size override, and `2400x1080` after restoring the physical size.
+The first successful Present followed the first Reset. All three Resets and
+the recreated-device Present succeeded. The physical display returned to
+`1080x2400` and density to `440`.
+
+The original parameter getter remains a separate dependency, not a value
+invented by this increment. `FUN_0075f030` obtains the DWORD at guest key
+address `0x00d77e99` through `FUN_006a2660`; `FUN_006a2660` returns a DWORD
+from its cached/typed configuration record and returns zero when no record is
+found. `FUN_006a25a0` is the corresponding boolean lookup used for keys
+`0x00d77e9a`–`0x00d77e9e`; absent/unrecognized boolean entries return false.
+The Android probe has not populated this guest configuration store or observed
+the original values. Full-screen refresh, conditional presentation options,
+and their configuration branches therefore remain the next blocker; they
+must wait for this lookup's inputs and branch outputs to be established.
+
+Static REA Evidence for the selected `fb66afc3...` executable:
+`ev_7d1506aa29a5fffd7c02c0897950a6d96270373ed1929ce9c41874b09907c446`
+(`FUN_0075f030`),
+`ev_15f45565384cef85ec41742b66579ee99dd427d74ebd3432eb5f40648cdbf909`
+(`FUN_011f8680`),
+`ev_c5e9f77ecfe928ef9d212342e152db68b287cda28edc640a0dde5860608f5285`
+(`FUN_011f7d00`),
+`ev_00a03ac85115fff2e49126aeffd9b9819cb83b876616ddf89169f41f88a685e2`
+(`FUN_006a2660`), and
+`ev_f07c78705a4488c04400451914d0d9148471f91e0c752c3e61bad0d58123488d`
+(`FUN_006a25a0`). This is static analysis plus execution of selected original
+x86 instruction blocks; it is not execution of the Spore boot path.
+
+The x86 differential and all three phone regressions were rerun against the
+final debug APK. Its SHA-256 is
+`e01675ee3ab095cb9cbd9e039e9179617d0096ef37c6541992684c9d7679b56a`.
+The earlier incomplete recreation attempt is retained as a diagnostic log,
+superseded by the successful recreation run below.
+
+Logs:
+
+- [translated-graphics-x86-reference-2026-11-05.log](./test-logs/translated-graphics-x86-reference-2026-11-05.log)
+- [translated-presentation-mode-device-recreation-2026-11-05.log](./test-logs/translated-presentation-mode-device-recreation-2026-11-05.log)
+- [translated-presentation-mode-device-recreation-failed-2026-11-05.log](./test-logs/translated-presentation-mode-device-recreation-failed-2026-11-05.log) (incomplete diagnostic attempt; not a pass)
+- [d3d9-bridge-regression-presentation-mode-2026-11-05.log](./test-logs/d3d9-bridge-regression-presentation-mode-2026-11-05.log)
+- [translated-graphics-manual-regression-presentation-mode-2026-11-05.log](./test-logs/translated-graphics-manual-regression-presentation-mode-2026-11-05.log)
+- [translated-window-global-increment-presentation-mode-2026-11-05.log](./test-logs/translated-window-global-increment-presentation-mode-2026-11-05.log)
+
 ## Build
 
 Open the project in Android Studio and sync Gradle. It targets Android API 34,
