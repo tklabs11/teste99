@@ -3221,12 +3221,76 @@ Validation:
   x87, and Android-device regressions passed again:
   [five-function-regression-m5-20261106-135149246.log](./test-logs/five-function-regression-m5-20261106-135149246.log).
 
-`FUN_011e64f0` remains untranslated. Its current diagnostics include an
-unresolved indirect call at `0x011e653f`, unavailable bodies at
-`0x011ecd90`, `0x011ecdd0`, and `0x011ecde0`, and an unsupported indexed
-memory operand at `0x011e65c1`. The smallest next step is to resolve that
-function's indirect-call target from verified PE/import data and recover the
-missing bodies before extending the execution boundary.
+At the Marco 5 checkpoint, `FUN_011e64f0` remained untranslated. Its
+diagnostics included an unresolved indirect call at `0x011e653f`, unavailable
+bodies at `0x011ecd90`, `0x011ecdd0`, and `0x011ecde0`, and an unsupported
+indexed memory operand at `0x011e65c1`. Marco 6 resolves those specific
+blockers; the following section records the verified result.
+
+## Marco 6 — extended verified prefix (2026-11-06)
+
+The original x86 prefix and its generated lift now execute through
+`0x00a33816`, then stop before the direct call at `0x00a33817` to
+`FUN_00a2a210`. The prefix contains 106 translated root instructions and
+executes `FUN_00743b50`, `FUN_00921f00`, `FUN_009222a0`, `FUN_011e64f0`,
+`FUN_00a247f0`, and six calls to `FUN_00a0fdf0`. This is still a bounded
+partial prefix: `FUN_00a2a210` and the rest of `FUN_00a33600` were not run.
+
+`FUN_011e64f0` and its verified dependencies are now part of the 16-function
+generated closure. The indirect call at `0x011e653f` resolves to the PE IAT
+entry for `MSVCR90.dll!strncpy`; the recovered helper bodies at `0x011ecd90`,
+`0x011ecdd0`, and `0x011ecde0` are byte-verified against the selected PE.
+`MOV dword ptr [ESI + EAX*4 + 0x2c], ECX` at `0x011e65c1` is implemented and
+differentially tested, including 32-bit address wrap and an invalid index.
+
+The prefix run uses the PE with SHA-256
+`6aec99cb2dc7fd08851a1718e92a60f359fb3fccca3b244a890ae07e93cbe59b`.
+It maps the verified `.rdata` page at `0x01486000` for the newly reached
+`MOVSS` load at `0x00a337d3` (file offset `17323008`, SHA-256
+`0cecfc05c963aab62a12978059a04ceb0db7bf4216062f03ef0f9e2ca2454fd3`).
+The isolated comparison state is harness-provided: a zeroed 0x404-byte guest
+object with the documented sentinel at `+0x20`, a guard word after the tracked
+object, and PE-backed read-only data. It is not the game's allocator output or
+normal startup state. The object extent was extended to include the verified
+store at `+0x400`; the guard remains outside the compared object.
+
+Windows x86 original-versus-lift snapshots match, and the lifted x86 snapshot
+matches the run on Android ARM64 device `PJMZAEJRX4YLFIDI`. Stack-valued
+registers are normalized relative to entry ESP; ECX and EDX are treated as
+caller-saved for the cross-target comparison. The constructor is not complete;
+this result does not establish game boot, rendering, or gameplay.
+
+The first unresolved boundary is a dependency closure, not an unsupported
+instruction in the root prefix. A targeted closure diagnostic for
+`FUN_00a2a210` reaches 10 exported functions and reports 36 unsupported
+instructions plus three target addresses absent from the selected exports; it
+found no indirect calls.
+The first direct call in that function is at `0x00a2a24e` to
+`FUN_00921260`. That function contains unsupported `NOT`, `DIV`, and `IMUL`
+operations and indexed `LEA` forms, including
+`[EBX + EAX*0x1 + -0x1]` at `0x00921288`. Other closure blockers include x87
+and conversion instructions in `FUN_009213c0`, `DIV` in `FUN_00a22220`, and
+targets absent from the selected exports at `0x00f47380`, `0x00f473a0`, and
+`0x011e073e`. See the saved
+closure report for addresses and the complete classifications.
+
+Validation and reproducible evidence:
+
+- 48 Python backend tests passed:
+  [batch-static-lift-unit-m6-20261106-152213352.log](./test-logs/batch-static-lift-unit-m6-20261106-152213352.log).
+- x86 original-versus-lift, x86-versus-ARM64, and the device run passed:
+  [prefix run](./test-logs/constructor-prefix-00a33600-20261106-152100431/),
+  [comparison](./test-logs/constructor-prefix-00a33600-20261106-152100431/comparison.log),
+  [generated prefix report](./test-logs/constructor-prefix-00a33600-20261106-152100431/generated/report.json),
+  [next-closure diagnostic](./test-logs/constructor-prefix-00a33600-20261106-152100431/generated/closure-blocker-00a2a210.json).
+- The recursive, cross-function, five-function startup-import, XCHG, SSE,
+  x87, import, and critical-section regressions passed on the same device:
+  [five-function regression](./test-logs/five-function-regression-m6-20261106-152213355.log).
+
+The working tree is uncommitted; `HEAD` remains
+`eadb54eb8c679f63a57102f350c8dbc82b5245d6`. The next bounded investigation is the minimum verified closure needed by
+`FUN_00921260`, beginning with its unsupported arithmetic and indexed-address
+forms. No broad closure beyond this target was added in Marco 6.
 
 ## Preserved one-function recursive-call pilot
 

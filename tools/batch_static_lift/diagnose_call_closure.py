@@ -444,14 +444,25 @@ def main():
         )
     )
     parser.add_argument("--exe", type=Path, required=True)
-    parser.add_argument("--batch-dir", type=Path, required=True)
+    batch_selector = parser.add_mutually_exclusive_group(required=True)
+    batch_selector.add_argument("--batch-dir", type=Path)
+    batch_selector.add_argument("--batch", type=Path, action="append")
     parser.add_argument("--batch-pattern", default="spore_batch_all_*.json")
     parser.add_argument("--root", action="append", required=True)
     parser.add_argument("--report", type=Path, required=True)
     args = parser.parse_args()
-    batch_paths = sorted(args.batch_dir.glob(args.batch_pattern))
+    batch_paths = (
+        args.batch
+        if args.batch is not None
+        else sorted(args.batch_dir.glob(args.batch_pattern))
+    )
     if not batch_paths:
-        parser.error(f"no batch exports match {args.batch_dir / args.batch_pattern}")
+        parser.error(
+            "no batch exports were selected"
+            if args.batch is not None
+            else f"no batch exports match "
+            f"{args.batch_dir / args.batch_pattern}"
+        )
     try:
         roots = [lifter.parse_address(value) for value in args.root]
         report = diagnose_call_closure(args.exe, batch_paths, roots)

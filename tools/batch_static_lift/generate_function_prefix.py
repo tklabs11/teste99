@@ -235,9 +235,13 @@ def generate_function_prefix(
     root_bytes = _function_bytes(
         root, verified, entry, prefix_end
     )
-    child_entry = next(iter(included_call_targets)) if len(included_call_targets) == 1 else None
+    child_entry = next(
+        iter(included_call_targets)
+    ) if len(included_call_targets) == 1 else None
     if child_entry is None:
-        raise ValueError("the x86 differential harness currently requires one included call target")
+        raise ValueError(
+            "the x86 differential harness currently requires one included call target"
+        )
     child = exported[child_entry]
     child_instructions = verified[child_entry]
     child_end = max(

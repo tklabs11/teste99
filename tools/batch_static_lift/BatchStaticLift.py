@@ -43,6 +43,14 @@ MEMORY_OPERAND = re.compile(
     r"(?:\s*([+-])\s*(-?(?:0x[0-9a-f]+|[0-9]+)))?\s*\]$",
     re.IGNORECASE,
 )
+INDEXED_MEMORY_OPERAND = re.compile(
+    r"^(?:(byte|word|dword|qword|double) ptr )?\[\s*"
+    r"(EAX|ECX|EDX|EBX|ESP|EBP|ESI|EDI)\s*\+\s*"
+    r"(EAX|ECX|EDX|EBX|EBP|ESI|EDI)\s*\*\s*"
+    r"(0x[0-9a-f]+|[0-9]+)"
+    r"(?:\s*([+-])\s*(0x[0-9a-f]+|[0-9]+))?\s*\]$",
+    re.IGNORECASE,
+)
 FS_MEMORY_OPERAND = re.compile(
     r"^(?:(byte|word|dword|qword|double) ptr )?FS:\[\s*"
     r"([+-]?(?:0x[0-9a-f]+|[0-9]+))\s*\]$",
@@ -205,6 +213,39 @@ def parse_operand(text, infer_memory_width=None):
             displacement,
             memory_width,
         )
+    match = INDEXED_MEMORY_OPERAND.fullmatch(value)
+    if match:
+        scale_token = match.group(4)
+        scale = int(
+            scale_token,
+            16 if scale_token.lower().startswith("0x") else 10,
+        )
+        if scale not in {1, 2, 4, 8}:
+            raise ValueError(f"unsupported x86 index scale in {text!r}")
+        displacement_token = match.group(6)
+        displacement = int(
+            displacement_token,
+            16 if displacement_token.lower().startswith("0x") else 10,
+        ) if displacement_token else 0
+        if match.group(5) == "-":
+            displacement = -displacement
+        memory_width = {
+            "byte": 8,
+            "word": 16,
+            "dword": 32,
+            "qword": 64,
+            "double": 64,
+        }.get((match.group(1) or "").lower(), infer_memory_width)
+        if memory_width is None:
+            raise ValueError(f"memory operand width is ambiguous: {text!r}")
+        return (
+            "indexed_memory",
+            REGISTER_INDEX[match.group(2).upper()],
+            REGISTER_INDEX[match.group(3).upper()],
+            scale,
+            displacement,
+            memory_width,
+        )
     raise ValueError(f"unsupported operand syntax or width: {text!r}")
 
 
@@ -219,6 +260,13 @@ def memory_address(operand):
         return (
             "static_cast<std::uint32_t>(state.fs_base + "
             f"{cpp_u32(operand[1])})"
+        )
+    if operand[0] == "indexed_memory":
+        _, base, index, scale, displacement, _ = operand
+        return (
+            "static_cast<std::uint32_t>("
+            f"state.regs[{base}] + state.regs[{index}] * {scale}u + "
+            f"{cpp_u32(displacement)})"
         )
     _, register, displacement, _ = operand
     return f"static_cast<std::uint32_t>(state.regs[{register}] + {cpp_u32(displacement)})"
@@ -244,7 +292,12 @@ def emit_load(operand, temp):
         return register_read(operand, temp)
     if kind == "immediate":
         return [f"{temp} = {cpp_u32(value)};"]
-    method = {8: "load8", 16: "load16", 32: "load32", 64: "load64"}[operand[3]]
+    method = {
+        8: "load8",
+        16: "load16",
+        32: "load32",
+        64: "load64",
+    }[operand_width(operand)]
     return [f"if (!memory.{method}({memory_address(operand)}, {temp})) "
             "return BatchLiftStatus::invalid_memory;"]
 
@@ -260,13 +313,15 @@ def emit_store(operand, value):
             f"state.regs[{index}] = (state.regs[{index}] & {cpp_u32(~mask)}) | "
             f"(({value} << {shift}u) & {cpp_u32(mask)});"
         ]
-    if kind in {"absolute_memory", "memory", "fs_memory"}:
+    if kind in {
+        "absolute_memory", "memory", "fs_memory", "indexed_memory",
+    }:
         method = {
             8: "store8",
             16: "store16",
             32: "store32",
             64: "store64",
-        }[operand[3]]
+        }[operand_width(operand)]
         return [f"if (!memory.{method}({memory_address(operand)}, {value})) "
                 "return BatchLiftStatus::invalid_memory;"]
     raise ValueError("an immediate cannot be an instruction destination")
@@ -283,7 +338,8 @@ def resolve_operands(text_operands, infer_untyped_memory=True):
             operands.append(None)
     widths = {
         operand[2] if operand[0] == "register" else
-        operand[3] if operand[0] in {"absolute_memory", "memory"} else None
+        operand[3] if operand[0] in {"absolute_memory", "memory"} else
+        operand[5] if operand[0] == "indexed_memory" else None
         for operand in operands if operand is not None
     }
     widths.discard(None)
@@ -306,7 +362,11 @@ def resolve_operands(text_operands, infer_untyped_memory=True):
 def operand_width(operand, default=None):
     if operand[0] == "register":
         return operand[2]
-    if operand[0] in {"absolute_memory", "memory", "fs_memory"}:
+    if operand[0] in {
+        "absolute_memory", "memory", "fs_memory", "indexed_memory",
+    }:
+        if operand[0] == "indexed_memory":
+            return operand[5]
         return operand[3]
     return default
 
@@ -581,6 +641,10 @@ def translate_instruction(
             infer_untyped_memory=mnemonic not in {"MOVZX", "MOVSX"},
         )
     )
+    if mnemonic != "MOV" and any(
+        operand[0] == "indexed_memory" for operand in operands
+    ):
+        raise ValueError("indexed memory operands currently support MOV only")
     temp = f"t{index}"
     lines = []
 
@@ -604,9 +668,9 @@ def translate_instruction(
             raise ValueError("MOV supports only 8-, 16-, or 32-bit operands")
         if operands[0][0] in {"immediate"} or (
             operands[0][0] in {
-                "absolute_memory", "memory", "fs_memory",
+                "absolute_memory", "memory", "fs_memory", "indexed_memory",
             } and operands[1][0] in {
-                "absolute_memory", "memory", "fs_memory",
+                "absolute_memory", "memory", "fs_memory", "indexed_memory",
             }
         ):
             raise ValueError("MOV destination/source operand combination is invalid")

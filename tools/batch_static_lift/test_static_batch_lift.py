@@ -67,6 +67,9 @@ class StaticBatchLiftTests(unittest.TestCase):
         self.assertIn(
             "kSporePrefixDataRanges = {{", header
         )
+        self.assertIn("kSporeChildEntry = 0x00402000u;", header)
+        self.assertIn("kSporeIncludedCallOffset = 0x00000001u;", header)
+        self.assertIn("0x00402000u", header)
 
     def test_prefix_data_ranges_reject_overlap_and_non_file_backed_bytes(self):
         image = bytearray(0x400)
@@ -358,6 +361,67 @@ class StaticBatchLiftTests(unittest.TestCase):
         self.assertEqual(
             lifter.classify_instruction("ADDSS"),
             "sse_arithmetic",
+        )
+
+    def test_mov_indexed_memory_store_preserves_flags_and_wraps_address(self):
+        body = function([
+            instruction(
+                0x401000, "894c862c", "MOV",
+                ("dword ptr [ESI + EAX * 0x4 + 0x2c]", "ECX"),
+            ),
+            instruction(0x401004, "c3", "RET", flow="TERMINAL"),
+        ])
+
+        source, diagnostics = lifter.translate_function(body)
+
+        self.assertIn(
+            "memory.store32(static_cast<std::uint32_t>("
+            "state.regs[6] + state.regs[0] * 4u + 0x0000002cu), t0)",
+            source,
+        )
+        self.assertNotIn("state.eflags =", source)
+        self.assertEqual(
+            [item["status"] for item in diagnostics],
+            ["translated", "translated"],
+        )
+        self.assertEqual(
+            lifter.parse_operand(
+                "dword ptr [ESI + EAX * 0x4 + 0x2c]"
+            ),
+            ("indexed_memory", 6, 0, 4, 0x2c, 32),
+        )
+        self.assertEqual(
+            lifter.parse_operand("dword ptr [ESI + EAX * 4 - 0x4]"),
+            ("indexed_memory", 6, 0, 4, -4, 32),
+        )
+
+    def test_mov_indexed_memory_rejects_unsupported_index_forms(self):
+        for operand in (
+            "dword ptr [ESI + EAX * 0x3 + 0x2c]",
+            "dword ptr [ESI + ESP * 4 + 0x2c]",
+        ):
+            with self.subTest(operand=operand):
+                body = function([
+                    instruction(
+                        0x401000, "894c862c", "MOV", (operand, "ECX"),
+                    ),
+                    instruction(0x401004, "c3", "RET", flow="TERMINAL"),
+                ])
+                with self.assertRaises(lifter.LiftRejected):
+                    lifter.translate_function(body)
+
+        body = function([
+            instruction(
+                0x401000, "030c86", "ADD",
+                ("ECX", "dword ptr [ESI + EAX * 4]"),
+            ),
+            instruction(0x401003, "c3", "RET", flow="TERMINAL"),
+        ])
+        with self.assertRaises(lifter.LiftRejected) as raised:
+            lifter.translate_function(body)
+        self.assertIn(
+            "indexed memory operands currently support MOV only",
+            raised.exception.reasons[0],
         )
 
     def test_xorps_register_forms_are_translated(self):
@@ -793,7 +857,7 @@ class StaticBatchLiftTests(unittest.TestCase):
         body = function([
             instruction(
                 0x401000, "8b0488", "MOV",
-                ("EAX", "dword ptr [EAX + ECX*4]"),
+                ("EAX", "dword ptr [EAX + ECX*4 + EDX]"),
             ),
             instruction(0x401003, "c3", "RET", flow="TERMINAL"),
         ])
@@ -805,7 +869,7 @@ class StaticBatchLiftTests(unittest.TestCase):
             item for item in raised.exception.instruction_diagnostics
             if item.get("status") == "rejected"
         ]
-        self.assertIn("EAX + ECX*4", rejected[0]["reason"])
+        self.assertIn("EAX + ECX*4 + EDX", rejected[0]["reason"])
 
     def test_byte_registers_and_memory_are_translated(self):
         body = function([
