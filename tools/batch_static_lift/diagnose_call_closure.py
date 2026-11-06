@@ -3,7 +3,7 @@ import json
 import re
 import struct
 import sys
-from collections import deque
+from collections import Counter, defaultdict, deque
 from pathlib import Path
 
 import BatchStaticLift as lifter
@@ -155,6 +155,7 @@ def diagnose_call_closure(executable, batch_paths, root_entries):
     invalid_functions = []
     edges = []
     parent = {}
+    translated_instruction_class_counts = Counter()
     pending = deque()
     for entry in root_entries:
         pending.append(entry)
@@ -217,9 +218,22 @@ def diagnose_call_closure(executable, batch_paths, root_entries):
                     ),
                     "byte_validation_error": validation_error,
                     "translation_reasons": translation["reasons"],
+                    "translated_instruction_counts": dict(sorted(
+                        Counter(
+                            diagnostic["mnemonic"]
+                            for diagnostic in translation["diagnostics"]
+                            if diagnostic.get("status") == "translated"
+                        ).items()
+                    )),
                     "direct_calls": [],
                 }
                 for diagnostic in translation["diagnostics"]:
+                    if diagnostic.get("status") == "translated":
+                        translated_instruction_class_counts[
+                            lifter.classify_instruction(
+                                diagnostic.get("mnemonic", "UNKNOWN")
+                            )
+                        ] += 1
                     if diagnostic.get("status") != "rejected":
                         continue
                     mnemonic = diagnostic.get("mnemonic", "UNKNOWN")
@@ -228,6 +242,10 @@ def diagnose_call_closure(executable, batch_paths, root_entries):
                             "function": f"0x{entry:08x}",
                             "address": diagnostic.get("address"),
                             "mnemonic": mnemonic,
+                            "operands": diagnostic.get("operands", []),
+                            "instruction_class": lifter.classify_instruction(
+                                mnemonic
+                            ),
                             "reason": diagnostic.get("reason"),
                         })
 
@@ -320,6 +338,41 @@ def diagnose_call_closure(executable, batch_paths, root_entries):
         report_functions[entry]
         for entry in sorted(report_functions)
     ]
+    unsupported_groups = defaultdict(list)
+    for instruction in unsupported_instructions:
+        key = (
+            instruction["instruction_class"],
+            instruction["mnemonic"],
+            tuple(instruction["operands"]),
+            instruction["reason"],
+        )
+        unsupported_groups[key].append(instruction)
+    grouped_rejections = [
+        {
+            "instruction_class": key[0],
+            "mnemonic": key[1],
+            "operands": list(key[2]),
+            "reason": key[3],
+            "count": len(items),
+            "function_count": len({
+                item["function"] for item in items
+            }),
+            "examples": [
+                {
+                    "function": item["function"],
+                    "address": item["address"],
+                }
+                for item in items[:3]
+            ],
+        }
+        for key, items in sorted(
+            unsupported_groups.items(),
+            key=lambda item: (
+                -len(item[1]), item[0][0], item[0][1],
+                item[0][2], item[0][3],
+            ),
+        )
+    ]
     report = {
         "schema": "spore-static-lift-call-diagnostic-v1",
         "source_sha256": source_hash,
@@ -336,7 +389,17 @@ def diagnose_call_closure(executable, batch_paths, root_entries):
         "indirect_calls": indirect_calls,
         "unresolved_calls": unresolved_calls,
         "unsupported_instructions": unsupported_instructions,
+        "unsupported_instruction_groups": grouped_rejections,
         "invalid_functions": invalid_functions,
+        "unsupported_instruction_class_counts": dict(sorted(
+            Counter(
+                item["instruction_class"]
+                for item in unsupported_instructions
+            ).items()
+        )),
+        "translated_instruction_class_counts": dict(sorted(
+            translated_instruction_class_counts.items()
+        )),
         "counts": {
             "missing_internal_functions": sum(
                 item["classification"] == "missing_internal_function"

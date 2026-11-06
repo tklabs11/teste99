@@ -2929,8 +2929,89 @@ closures, runs the Windows x86 differential and ARM64 build, and executes the
 ARM64 harness over ADB when one authorized device is connected. The complete
 device run is
 [batch-static-lift-import-boundary-2026-11-07.log](./test-logs/batch-static-lift-import-boundary-2026-11-07.log);
-the 30 Python backend regressions pass with
+the 32 Python backend regressions pass with
 `python -m unittest -v test_static_batch_lift`.
+
+## Expanding the startup closure through `FUN_00a33600` — 2026-11-06
+
+The diagnostic report for `FUN_00a33600` and its direct-call closure is
+[call-closure-00a33600-after-sse-move-2026-11-06.json](./test-logs/call-closure-00a33600-after-sse-move-2026-11-06.json).
+It reaches 86 exported functions; 46 still have translation blockers, with
+224 unsupported instruction sites, one missing internal body (`0x011e073e`,
+referenced at six callsites), and two indirect calls with no identified target.
+The report separately recognizes 33 IAT callsites by PE import name and five
+direct calls to import thunks. Recognizing an import does not mean its runtime
+handler is implemented: the batch runtime currently handles critical-section
+operations, explicitly rejects `CreateMutexA`, and reports other imports as
+unsupported.
+
+The root body itself has only four remaining unsupported instructions:
+`XORPS XMM0,XMM0` at `0x00a33741` and `0x00a33c51`, plus x87
+`FLD double ptr [0x01452f38]` and `FSTP double ptr [ESI+0x15b768]`.
+These are SSE logical and x87 operations, not SSE arithmetic. The previous
+51 root-body rejections and 376 closure-wide rejections fell to four and 224,
+respectively, after adding scalar `MOVSS` transfers and absolute memory
+operands. The lowering covers memory-to-XMM, XMM-to-XMM, and XMM-to-memory;
+it preserves the appropriate upper lanes and leaves flags unchanged. It does
+not implement `XORPS` or x87.
+
+Other concrete blockers on the closure include the `XCHG` form in
+`FUN_00921f00`, indexed memory access and an IAT `strncpy` call in
+`FUN_011e64f0`, and unresolved `CALL EDX` / `CALL ECX` sites at
+`0x0092805c` and `0x009276ab`. These are distinct from the calls whose IAT
+slots are known. The diagnostic is not an executable closure: no generated
+`FUN_00a33600` is claimed complete or run.
+
+The static object route provides a bounded next-step target:
+
+- `FUN_00a45f30` requests `0x15bf58` bytes and passes `0x0140a5a0` to
+  `FUN_00f473a0`. The requested extent is `0x15bf58`; this is not yet a
+  recovered C++ type size or layout.
+- `FUN_00f473a0` reads the allocator singleton at `0x016c8b44` and reaches
+  `FUN_009289f0` and the allocator's descendants. The pointer and allocation
+  result have not been executed through this path.
+- `FUN_00a459d0` passes the resulting object to `FUN_00a33600`. Before it
+  reaches the already validated `FUN_00a247f0` at object offset `+0x198`,
+  `FUN_00a33600` calls `FUN_00743b50` for `+0x20`, `FUN_00921f00` for
+  `+0x28`, `FUN_009222a0` for `+0xb8`, and `FUN_011e64f0` for `+0xf8`.
+  These real calls must run; their results are not replaced with fixtures.
+- The largest root-body access observed is the eight-byte store at
+  `+0x15b768` (ending at `+0x15b770`), within the caller's requested extent.
+  This bounds that access but does not establish the complete object layout.
+- Read-only constants used by the root reside in PE-backed `.rdata` at
+  `0x01485718`, `0x01452f50`, `0x01470f14`, `0x01486108`, and `0x01452f38`.
+  Mutable globals at `0x0166da00`, `0x0166da04`, `0x0166da08`, and the
+  allocator singleton at `0x016c8b44` fall in the `.data` virtual range
+  without corresponding raw file bytes. Their runtime values and initialization
+  producers remain unestablished; they must not be guessed as harness state.
+
+The two unclassified calls block allocator-path execution. In addition, the
+closure contains imports that are named but lack handlers, including
+`VirtualAlloc` (five callsites), `VirtualFree` (two), `VirtualQuery`,
+`GetSystemInfo`, `InitializeCriticalSectionAndSpinCount`, `CreateSemaphoreA`,
+`memmove`, and `strncpy` (three). Five direct `memcpy` import-thunk calls also
+remain part of the closure. The existing five-function constructor run remains
+the device regression; it does not validate this broader object path.
+
+The backend's x86 scalar-transfer differential, ARM64 build, and the preserved
+five-function phone regression passed. The Python backend suite now has 32
+passing tests. The saved device log is
+[batch-static-lift-movss-regression-2026-11-06.log](./test-logs/batch-static-lift-movss-regression-2026-11-06.log);
+the Python test log is
+[batch-static-lift-movss-unit-2026-11-06.log](./test-logs/batch-static-lift-movss-unit-2026-11-06.log).
+Reproduce the closure diagnosis with:
+
+```powershell
+python .\tools\batch_static_lift\diagnose_call_closure.py `
+  --exe C:\SporeAnalysis\SporeApp.exe `
+  --batch-dir C:\SporeAnalysis\spore_batch_all_parts `
+  --root 0x00a33600 `
+  --report .\test-logs\call-closure-00a33600-after-sse-move-2026-11-06.json
+```
+
+Run the retained x86/build/device regressions with
+`.\tools\run_batch_static_lift_calls.ps1 -DeviceSerial <serial>`. This does not
+generate or execute the still-blocked `FUN_00a33600` closure.
 
 ## Preserved one-function recursive-call pilot
 

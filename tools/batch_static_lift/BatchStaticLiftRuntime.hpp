@@ -34,6 +34,7 @@ public:
 
 struct BatchLiftState {
     std::uint32_t regs[8]{};
+    std::uint32_t xmm[8][4]{};
     std::uint32_t eflags = 0;
     std::uint32_t eip = 0;
     std::uint32_t fs_base = 0;
@@ -306,6 +307,37 @@ private:
     std::array<std::uint8_t, kStackBytes> stack_{};
     std::size_t region_count_ = 0;
 };
+
+inline bool batch_guest_movss_load(
+    const BatchLiftMemory& memory,
+    BatchLiftState& state,
+    std::uint32_t destination,
+    std::uint32_t address) {
+    std::uint32_t value{};
+    if (destination >= 8u || !memory.load32(address, value)) return false;
+    state.xmm[destination][0] = value;
+    state.xmm[destination][1] = 0u;
+    state.xmm[destination][2] = 0u;
+    state.xmm[destination][3] = 0u;
+    return true;
+}
+
+inline bool batch_guest_movss_store(
+    BatchLiftMemory& memory,
+    const BatchLiftState& state,
+    std::uint32_t source,
+    std::uint32_t address) {
+    return source < 8u && memory.store32(address, state.xmm[source][0]);
+}
+
+inline bool batch_guest_movss_register_move(
+    BatchLiftState& state,
+    std::uint32_t destination,
+    std::uint32_t source) {
+    if (destination >= 8u || source >= 8u) return false;
+    state.xmm[destination][0] = state.xmm[source][0];
+    return true;
+}
 
 inline bool batch_guest_call32(
     BatchLiftMemory& memory,

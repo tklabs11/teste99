@@ -14,6 +14,7 @@
 #if defined(_M_IX86)
 #include <Windows.h>
 #include <memory>
+#include <xmmintrin.h>
 
 static_assert(sizeof(void*) == sizeof(std::uint32_t), "x86 process required");
 #endif
@@ -1389,10 +1390,133 @@ bool run_guest_create_mutex_rejection(bool print_results) {
     return true;
 }
 
+bool run_movss_transfer_regression(bool print_results) {
+    constexpr std::uint32_t kMemoryBase = 0x2000u;
+    constexpr std::uint32_t kSourceAddress = kMemoryBase + 4u;
+    constexpr std::uint32_t kDestinationAddress = kMemoryBase + 12u;
+    constexpr std::uint32_t kScalarBits = 0x3f123456u;
+    constexpr std::uint32_t kMovssInitialFlags = 0x8d5u;
+    std::array<std::uint8_t, 0x20> bytes{};
+    BatchLiftMemory memory;
+    if (!memory.map_region(
+            kMemoryBase, bytes.data(), bytes.size(), true)
+        || !memory.store32(kSourceAddress, kScalarBits)
+        || !memory.store32(kDestinationAddress, 0xaaaaaaaaU)) {
+        return false;
+    }
+
+    BatchLiftState state{};
+    state.eflags = kMovssInitialFlags;
+    state.xmm[0][1] = 0x11111111u;
+    state.xmm[0][2] = 0x22222222u;
+    state.xmm[0][3] = 0x33333333u;
+    state.xmm[1][0] = 0x40506070u;
+    state.xmm[1][1] = 0x41424344u;
+    state.xmm[1][2] = 0x51525354u;
+    state.xmm[1][3] = 0x61626364u;
+    state.xmm[2][1] = 0x71727374u;
+    state.xmm[2][2] = 0x81828384u;
+    state.xmm[2][3] = 0x91929394u;
+
+    bool native_matches = true;
+#if defined(_M_IX86)
+    float native_source{};
+    std::memcpy(&native_source, &kScalarBits, sizeof(kScalarBits));
+    std::array<std::uint32_t, 4> loaded_lanes{};
+    _mm_storeu_ps(
+        reinterpret_cast<float*>(loaded_lanes.data()),
+        _mm_load_ss(&native_source));
+    const __m128 native_destination = _mm_castsi128_ps(
+        _mm_loadu_si128(
+            reinterpret_cast<const __m128i*>(state.xmm[2])));
+    const __m128 native_register_source = _mm_castsi128_ps(
+        _mm_loadu_si128(
+            reinterpret_cast<const __m128i*>(state.xmm[1])));
+    std::array<std::uint32_t, 4> moved_lanes{};
+    _mm_storeu_ps(
+        reinterpret_cast<float*>(moved_lanes.data()),
+        _mm_move_ss(native_destination, native_register_source));
+#else
+    const std::array<std::uint32_t, 4> loaded_lanes{
+        kScalarBits, 0u, 0u, 0u};
+    const std::array<std::uint32_t, 4> moved_lanes{
+        state.xmm[1][0], state.xmm[2][1],
+        state.xmm[2][2], state.xmm[2][3]};
+#endif
+
+    const bool load_passed = batch_guest_movss_load(
+            memory, state, 0u, kSourceAddress)
+        && std::equal(
+            std::begin(loaded_lanes), std::end(loaded_lanes),
+            std::begin(state.xmm[0]));
+    const bool move_passed = batch_guest_movss_register_move(
+            state, 2u, 1u)
+        && std::equal(
+            std::begin(moved_lanes), std::end(moved_lanes),
+            std::begin(state.xmm[2]));
+    const bool store_passed = batch_guest_movss_store(
+            memory, state, 2u, kDestinationAddress);
+    std::uint32_t stored_value{};
+    const bool memory_passed = memory.load32(
+        kDestinationAddress, stored_value)
+        && stored_value == state.xmm[2][0]
+        && bytes[16] == 0u
+        && bytes[17] == 0u
+        && bytes[18] == 0u
+        && bytes[19] == 0u;
+#if defined(_M_IX86)
+    float native_stored{};
+    _mm_store_ss(&native_stored, _mm_move_ss(
+        native_destination, native_register_source));
+    std::uint32_t native_stored_bits{};
+    std::memcpy(&native_stored_bits, &native_stored, sizeof(native_stored_bits));
+    native_matches = std::equal(
+            std::begin(loaded_lanes), std::end(loaded_lanes),
+            std::begin(state.xmm[0]))
+        && std::equal(
+            std::begin(moved_lanes), std::end(moved_lanes),
+            std::begin(state.xmm[2]))
+        && native_stored_bits == stored_value;
+#endif
+    const std::uint32_t low_before_invalid_load = state.xmm[3][0];
+    const bool bounds_passed =
+        !batch_guest_movss_load(
+            memory, state, 3u, kMemoryBase + 0x1eu)
+        && state.xmm[3][0] == low_before_invalid_load
+        && !batch_guest_movss_store(
+            memory, state, 2u, kMemoryBase + 0x1eu);
+    const bool flags_passed = state.eflags == kMovssInitialFlags;
+    if (!load_passed || !move_passed || !store_passed
+        || !memory_passed || !native_matches || !bounds_passed
+        || !flags_passed) {
+        std::cerr << "FAIL movss_transfer load=" << load_passed
+                  << " move=" << move_passed
+                  << " store=" << store_passed
+                  << " memory=" << memory_passed
+                  << " native=" << native_matches
+                  << " bounds=" << bounds_passed
+                  << " flags=" << flags_passed << "\n";
+        return false;
+    }
+    if (print_results) {
+        std::cout << "PASS movss_transfer forms=memory_to_xmm,xmm_to_xmm,"
+                  << "xmm_to_memory upper_lanes=verified flags=preserved "
+                  << "bounds=checked"
+#if defined(_M_IX86)
+                  << " reference=x86_SSE"
+#else
+                  << " reference=verified_scalar_semantics"
+#endif
+                  << "\n";
+    }
+    return true;
+}
+
 } // namespace
 
 int main() {
-    if (!run_recursive_cases(true)
+    if (!run_movss_transfer_regression(true)
+        || !run_recursive_cases(true)
         || !run_distinct_function_calls(true)
         || !run_startup_initialization_chain(true)
         || !run_guest_resman_constructor(true)

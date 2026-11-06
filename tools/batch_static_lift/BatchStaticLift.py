@@ -48,7 +48,32 @@ FS_MEMORY_OPERAND = re.compile(
     r"([+-]?(?:0x[0-9a-f]+|[0-9]+))\s*\]$",
     re.IGNORECASE,
 )
+ABSOLUTE_MEMORY_OPERAND = re.compile(
+    r"^(?:(byte|word|dword) ptr )?\[\s*(0x[0-9a-f]+|[0-9]+)\s*\]$",
+    re.IGNORECASE,
+)
+XMM_REGISTER = re.compile(r"^XMM([0-7])$", re.IGNORECASE)
 ADDRESS = re.compile(r"^0x[0-9a-fA-F]+$")
+SSE_DATA_TRANSFER_MNEMONICS = {
+    "MOVAPS", "MOVAPD", "MOVUPS", "MOVUPD", "MOVSS", "MOVSD",
+    "MOVDQA", "MOVDQU", "MOVD", "MOVQ",
+}
+SSE_ARITHMETIC_MNEMONICS = {
+    "ADDPS", "ADDPD", "ADDSS", "ADDSD", "SUBPS", "SUBPD", "SUBSS",
+    "SUBSD", "MULPS", "MULPD", "MULSS", "MULSD", "DIVPS", "DIVPD",
+    "DIVSS", "DIVSD", "MINPS", "MINPD", "MINSS", "MINSD", "MAXPS",
+    "MAXPD", "MAXSS", "MAXSD", "SQRTPS", "SQRTPD", "SQRTSS",
+    "SQRTSD", "RSQRTPS", "RCPPS",
+}
+SSE_LOGICAL_MNEMONICS = {
+    "ANDPS", "ANDPD", "ANDNPS", "ANDNPD", "ORPS", "ORPD", "XORPS",
+    "XORPD",
+}
+SSE_CONVERSION_MNEMONICS = {
+    "CVTPS2PD", "CVTPD2PS", "CVTPS2DQ", "CVTTPS2DQ", "CVTDQ2PS",
+    "CVTSS2SD", "CVTSD2SS", "CVTSS2SI", "CVTTSS2SI", "CVTSI2SS",
+    "CVTSD2SI", "CVTTSD2SI", "CVTSI2SD",
+}
 CF = "((state.eflags & 0x001u) != 0u)"
 PF = "((state.eflags & 0x004u) != 0u)"
 ZF = "((state.eflags & 0x040u) != 0u)"
@@ -116,6 +141,18 @@ def parse_operand(text, infer_memory_width=None):
         number = number[1:] if number[:1] in "+-" else number
         value_int = int(number, 16 if number.lower().startswith("0x") else 10) * sign
         return ("immediate", value_int & 0xFFFFFFFF, None, 0)
+    match = ABSOLUTE_MEMORY_OPERAND.fullmatch(value)
+    if match:
+        token = match.group(2)
+        address = int(token, 16 if token.lower().startswith("0x") else 10)
+        memory_width = {
+            "byte": 8,
+            "word": 16,
+            "dword": 32,
+        }.get((match.group(1) or "").lower(), infer_memory_width)
+        if memory_width is None:
+            raise ValueError(f"memory operand width is ambiguous: {text!r}")
+        return ("absolute_memory", address, 0, memory_width)
     match = FS_MEMORY_OPERAND.fullmatch(value)
     if match:
         token = match.group(2)
@@ -170,6 +207,8 @@ def cpp_u32(value):
 
 
 def memory_address(operand):
+    if operand[0] == "absolute_memory":
+        return cpp_u32(operand[1])
     if operand[0] == "fs_memory":
         return (
             "static_cast<std::uint32_t>(state.fs_base + "
@@ -215,7 +254,7 @@ def emit_store(operand, value):
             f"state.regs[{index}] = (state.regs[{index}] & {cpp_u32(~mask)}) | "
             f"(({value} << {shift}u) & {cpp_u32(mask)});"
         ]
-    if kind in {"memory", "fs_memory"}:
+    if kind in {"absolute_memory", "memory", "fs_memory"}:
         method = {8: "store8", 16: "store16", 32: "store32"}[operand[3]]
         return [f"if (!memory.{method}({memory_address(operand)}, {value})) "
                 "return BatchLiftStatus::invalid_memory;"]
@@ -233,7 +272,7 @@ def resolve_operands(text_operands, infer_untyped_memory=True):
             operands.append(None)
     widths = {
         operand[2] if operand[0] == "register" else
-        operand[3] if operand[0] == "memory" else None
+        operand[3] if operand[0] in {"absolute_memory", "memory"} else None
         for operand in operands if operand is not None
     }
     widths.discard(None)
@@ -256,9 +295,34 @@ def resolve_operands(text_operands, infer_untyped_memory=True):
 def operand_width(operand, default=None):
     if operand[0] == "register":
         return operand[2]
-    if operand[0] in {"memory", "fs_memory"}:
+    if operand[0] in {"absolute_memory", "memory", "fs_memory"}:
         return operand[3]
     return default
+
+
+def classify_instruction(mnemonic):
+    normalized = str(mnemonic).upper()
+    if normalized == "MOVSS":
+        return "sse_scalar_data_transfer"
+    if normalized in SSE_DATA_TRANSFER_MNEMONICS:
+        return "sse_data_transfer"
+    if normalized in SSE_ARITHMETIC_MNEMONICS:
+        return "sse_arithmetic"
+    if normalized in SSE_LOGICAL_MNEMONICS:
+        return "sse_logical"
+    if normalized in SSE_CONVERSION_MNEMONICS:
+        return "sse_conversion"
+    if normalized.startswith("F"):
+        return "x87"
+    return "other"
+
+
+def parse_movss_operand(text):
+    value = text.strip()
+    xmm = XMM_REGISTER.fullmatch(value)
+    if xmm:
+        return ("xmm", int(xmm.group(1)), 32, 0)
+    return parse_operand(value, 32)
 
 
 def branch_target(instruction, address_set):
@@ -384,6 +448,44 @@ def translate_instruction(
         ]
     if "JUMP" in flow and mnemonic not in {"JMP", *SUPPORTED_CONDITIONS}:
         raise ValueError(f"unsupported jump instruction {mnemonic}")
+    if mnemonic == "MOVSS":
+        if len(operands_text) != 2:
+            raise ValueError(
+                f"MOVSS expects 2 operands; found {len(operands_text)}"
+            )
+        destination = parse_movss_operand(operands_text[0])
+        source = parse_movss_operand(operands_text[1])
+        if destination[0] == "xmm":
+            if source[0] == "xmm":
+                return [
+                    "if (!batch_guest_movss_register_move("
+                    f"state, {destination[1]}u, {source[1]}u)) "
+                    "return BatchLiftStatus::invalid_control_flow;"
+                ]
+            if source[0] in {
+                "absolute_memory", "memory", "fs_memory",
+            } and source[3] == 32:
+                return [
+                    "if (!batch_guest_movss_load("
+                    f"memory, state, {destination[1]}u, "
+                    f"{memory_address(source)})) "
+                    "return BatchLiftStatus::invalid_memory;"
+                ]
+            raise ValueError(
+                "MOVSS XMM destination requires an XMM register or 32-bit memory source"
+            )
+        if destination[0] in {
+            "absolute_memory", "memory", "fs_memory",
+        } and destination[3] == 32 and source[0] == "xmm":
+            return [
+                "if (!batch_guest_movss_store("
+                f"memory, state, {destination[1]}u, "
+                f"{memory_address(destination)})) "
+                "return BatchLiftStatus::invalid_memory;"
+            ]
+        raise ValueError(
+            "MOVSS destination must be an XMM register or 32-bit memory operand"
+        )
 
     set_condition = None
     if mnemonic.startswith("SET") and len(mnemonic) > 3:
@@ -415,7 +517,11 @@ def translate_instruction(
     elif mnemonic == "MOV":
         require(2)
         if operands[0][0] in {"immediate"} or (
-            operands[0][0] == "memory" and operands[1][0] == "memory"
+            operands[0][0] in {
+                "absolute_memory", "memory", "fs_memory",
+            } and operands[1][0] in {
+                "absolute_memory", "memory", "fs_memory",
+            }
         ):
             raise ValueError("MOV destination/source operand combination is invalid")
         destination_width = operand_width(operands[0])

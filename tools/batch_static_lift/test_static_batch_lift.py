@@ -162,6 +162,66 @@ class StaticBatchLiftTests(unittest.TestCase):
 
         self.assertIn("indirect or unresolved call", raised.exception.reasons[0])
 
+    def test_movss_transfers_and_absolute_memory_are_translated(self):
+        body = function([
+            instruction(
+                0x401000, "8b1500da6601", "MOV",
+                ("EDX", "dword ptr [0x0166da00]"),
+            ),
+            instruction(
+                0x401006, "f30f100500304000", "MOVSS",
+                ("XMM0", "dword ptr [0x00403000]"),
+            ),
+            instruction(
+                0x40100E, "f30f118110000000", "MOVSS",
+                ("dword ptr [ECX + 0x10]", "XMM0"),
+            ),
+            instruction(
+                0x401016, "f30f10c8", "MOVSS", ("XMM1", "XMM0"),
+            ),
+            instruction(0x40101A, "c3", "RET", flow="TERMINAL"),
+        ])
+
+        source, diagnostics = lifter.translate_function(body)
+
+        self.assertIn("memory.load32(0x0166da00u", source)
+        self.assertIn("batch_guest_movss_load", source)
+        self.assertIn("batch_guest_movss_store", source)
+        self.assertIn("batch_guest_movss_register_move", source)
+        self.assertEqual(
+            [item["status"] for item in diagnostics],
+            ["translated"] * len(body["instructions"]),
+        )
+        self.assertEqual(
+            lifter.classify_instruction("MOVSS"),
+            "sse_scalar_data_transfer",
+        )
+        self.assertEqual(
+            lifter.classify_instruction("ADDSS"),
+            "sse_arithmetic",
+        )
+
+    def test_sse_arithmetic_remains_rejected(self):
+        body = function([
+            instruction(
+                0x401000, "f30f58c1", "ADDSS", ("XMM0", "XMM1"),
+            ),
+            instruction(0x401004, "c3", "RET", flow="TERMINAL"),
+        ])
+
+        with self.assertRaises(lifter.LiftRejected) as raised:
+            lifter.translate_function(body)
+
+        rejected = [
+            item for item in raised.exception.instruction_diagnostics
+            if item.get("status") == "rejected"
+        ]
+        self.assertEqual(rejected[0]["mnemonic"], "ADDSS")
+        self.assertEqual(
+            lifter.classify_instruction(rejected[0]["mnemonic"]),
+            "sse_arithmetic",
+        )
+
     def test_pilot_manifest_accepts_baseline_and_nested_100_plan(self):
         baseline = [
             {"selection_stratum": stratum}
