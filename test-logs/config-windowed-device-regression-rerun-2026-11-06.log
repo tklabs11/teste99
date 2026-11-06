@@ -1,0 +1,31 @@
+﻿test=config-windowed-device-regression-rerun-2026-11-06
+device_model=2303ERA42L
+result=PASS
+11-06 00:15:42.896 32411 32532 I SDL/APP : TRANSLATED_STAGE mode=device-global prepared=PASS device-window-param=0 guest-window-global=0 guest-device-global=0 manual-window-token=0x00010001 backbuffer-before-width-copy=640x480
+11-06 00:15:42.896 32411 32532 I SDL/APP : TRANSLATED_STAGE FUN_0075f030 config-query key=0x00d77e9b origin=test-fixture status=found result=true d3d.Windowed=true
+11-06 00:15:42.897 32411 32532 I SDL/APP : TRANSLATED_STAGE FUN_0075f030 backbuffer-dimensions=PASS width=1280 height=720
+11-06 00:15:42.897 32411 32532 I SDL/APP : TRANSLATED_STAGE FUN_0075f030 presentation-mode=PASS setup-field-14=0x00000016 format=21 depth-format=75
+11-06 00:15:42.897 32411 32532 I SDL/APP : TRANSLATED_STAGE global-window=PASS address=0x016f658c
+11-06 00:15:42.897 32411 32532 I SDL/APP : TRANSLATED_STAGE FUN_011f8110 global=0x016f658c window-token=0x00010001
+11-06 00:15:42.897 32411 32532 I SDL/APP : TRANSLATED_STAGE create-device-input adapter=0 device-type=1 behavior=0x00000040 window-token=0x00010001 backbuffer=1280x720 format=21 count=1 multisample=0 quality=0 swap=1 windowed=1 depth-stencil=0 depth-format=75 flags=0x00000000 refresh=0 interval=1
+11-06 00:15:42.897 32411 32532 I SDL/APP : D3D9_CALL CreateDevice input adapter=0 device-type=1 behavior=0x00000040 window-handle-present=1 backbuffer=1280x720 format=21 count=1 multisample=0 quality=0 swap=1 windowed=1 depth-stencil=0 depth-format=75 flags=0x00000000 refresh=0 interval=1
+11-06 00:15:43.332 32411 32532 I SDL/APP : TRANSLATED_STAGE create-device=PASS result=0x00000000 guest-window=0x00010001 guest-device=unregistered backbuffer=1280x720
+11-06 00:15:43.332 32411 32532 I SDL/APP : TRANSLATED_STAGE FUN_011f8680 device-global=PASS address=0x016f89d0 guest-device=0x00010002
+11-06 00:15:43.333 32411 32532 I SDL/APP : TRANSLATED_STAGE invalid-device-token=zero rejected=PASS device-dispatches=0
+11-06 00:15:43.333 32411 32532 I SDL/APP : TRANSLATED_STAGE invalid-device-token=unknown rejected=PASS device-dispatches=0
+11-06 00:15:43.333 32411 32532 I SDL/APP : DXVK-native D3D9 device created (2400x1080)
+11-06 00:15:43.333 32411 32532 I SDL/APP : TRANSLATED_STAGE reset[1]-input backbuffer=2400x1080 format=21 count=1 multisample=0 quality=0 swap=1 windowed=1 depth-stencil=0 depth-format=75 flags=0x00000000 refresh=0 interval=1
+11-06 00:15:43.334 32411 32532 I SDL/APP : TRANSLATED_STAGE reset[1]-result=0x00000000 backbuffer=2400x1080
+11-06 00:15:43.334 32411 32532 I SDL/APP : DXVK-native D3D9 device resized (2400x1080)
+11-06 00:15:43.364 32411 32532 I SDL/APP : TRANSLATED_STAGE FUN_011f8120 device-global=PASS address=0x016f89d0 guest-device=0x00010002
+11-06 00:15:43.364 32411 32532 I SDL/APP : TRANSLATED_STAGE first-present=PASS result=0x00000000 backbuffer=2400x1080
+11-06 00:15:45.867 32411 32532 I SDL/APP : TRANSLATED_STAGE device-global invalidated address=0x016f89d0 guest-device=0x00010002
+11-06 00:15:45.958 32411 32532 I SDL/APP : TRANSLATED_STAGE FUN_011f8110 global=0x016f658c window-token=0x00010001
+11-06 00:15:45.958 32411 32532 I SDL/APP : TRANSLATED_STAGE create-device-input adapter=0 device-type=1 behavior=0x00000040 window-token=0x00010001 backbuffer=1280x720 format=21 count=1 multisample=0 quality=0 swap=1 windowed=1 depth-stencil=0 depth-format=75 flags=0x00000000 refresh=0 interval=1
+11-06 00:15:45.958 32411 32532 I SDL/APP : D3D9_CALL CreateDevice input adapter=0 device-type=1 behavior=0x00000040 window-handle-present=1 backbuffer=1280x720 format=21 count=1 multisample=0 quality=0 swap=1 windowed=1 depth-stencil=0 depth-format=75 flags=0x00000000 refresh=0 interval=1
+11-06 00:15:46.150 32411 32532 I SDL/APP : TRANSLATED_STAGE create-device=PASS result=0x00000000 guest-window=0x00010001 guest-device=unregistered backbuffer=1280x720
+11-06 00:15:46.150 32411 32532 I SDL/APP : TRANSLATED_STAGE FUN_011f8680 device-global=PASS address=0x016f89d0 guest-device=0x00010003
+11-06 00:15:46.179 32411 32532 I SDL/APP : TRANSLATED_STAGE device-recreation=PASS old-token=0x00010002 new-token=0x00010003 stale-token-rejected=PASS recreated-present=PASS result=0x00000000
+11-06 00:15:46.179 32411 32532 I SDL/APP : TRANSLATED_STAGE device-global invalidated address=0x016f89d0 guest-device=0x00010003
+11-06 00:15:46.264 32411 32532 I SDL/APP : TRANSLATED_STAGE reset-count=1
+11-06 00:15:46.264 32411 32532 I SDL/APP : DXVK-native D3D9 test stopped

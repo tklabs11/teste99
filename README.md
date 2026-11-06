@@ -2704,3 +2704,69 @@ SDL's app-private preference directory.
 - `:app:assembleDebug :app:lintDebug` succeeded. The APK SHA-256 is
   `175757260a43130368954479569339729be92e0fb9cdfebbbf61c44be59beed0`.
   The on-device capture is `files/marco2-fnv-dbpf-pass.png`.
+
+## Executing a generated recursive call lift
+
+The earlier `BatchStaticLift.py` generator was not recovered. The existing
+`tools/x86_lift_differential/BatchStaticLiftRuntime.hpp` is reused; the new
+`tools/generate_recursive_call_lift.py` is deliberately limited to
+`FUN_006237a0`. Before emission, it verifies the complete reference PE SHA-256,
+the function's 33 bytes, and that the direct `CALL` at `0x006237aa` targets
+`0x006237a0`. It emits the C++ lift and a byte header used by the x86 native
+reference harness.
+
+The translated body executes the recursive call through shared guest memory,
+registers, EIP, and ESP. Each guest `CALL` pushes return address
+`0x006237af`; nested-call depth distinguishes recursive returns from the
+external return, which is also tested with the same address to prevent a
+sentinel collision. The object fields read are `[ESI+0x30]` (the next-node
+pointer) and `[ESI+0x34]` (the value); the harness supplies those objects as
+explicit fixtures. The base case returns the current node's value; each
+recursive caller adds its own value to the returned child sum. The routine
+preserves ESI and leaves the object graph unchanged. Unknown control flow and
+guest-memory failures return an error status rather than a prepared result.
+
+Validation on 2026-11-06:
+
+- The x86 harness executed the verified function bytes and compared them with
+  the generated guest lift for chain depths 0 through 3. Return values, ECX,
+  arithmetic flags, recursive call count and stack balance matched; the
+  harness also checked native return addresses, callee-saved registers,
+  unchanged object memory, guest stack canaries and the rejection paths.
+- The same harness compiled successfully for `aarch64-linux-android29`.
+- The ARM64 binary then ran successfully on the connected `2303ERA42L` phone.
+  Depths 0 through 3, guest CALL/RET, the external return-address collision,
+  stack canaries, and both rejection paths passed.
+- The existing x86 graphics-parameter regression was rerun and passed,
+  including the dimensions, presentation-mode and configuration-query fixture
+  cases. Its configuration test still uses fixture stubs, not the original
+  configuration loader:
+  [graphics-parameter-x86-reference-2026-11-06.log](./test-logs/graphics-parameter-x86-reference-2026-11-06.log).
+- On the phone, the D3D9 bridge, manual graphics probe, window-global probe,
+  and device-global configuration-fixture/recreation regressions all passed:
+  [D3D9](./test-logs/d3d9-bridge-regression-rerun-2026-11-06.log),
+  [manual probe](./test-logs/translated-graphics-manual-regression-rerun-2026-11-06.log),
+  [window-global](./test-logs/translated-window-global-increment-regression-rerun-2026-11-06.log),
+  [fixture and stale-token recreation](./test-logs/config-windowed-device-regression-rerun-2026-11-06.log).
+- This pilot is not wired into the Android graphics probe and does not replace
+  the configuration fixture. Existing Android graphics and fixture
+  sources/logs were left intact.
+
+Reproduce generation, x86 comparison and ARM64 compilation from PowerShell:
+
+```powershell
+.\tools\run_recursive_call_lift.ps1 -BuildOnly
+```
+
+With one authorized ARM64 device connected, run the same chain through ADB:
+
+```powershell
+.\tools\run_recursive_call_lift.ps1 -DeviceSerial <serial>
+```
+
+The run records are
+[call-chain-006237a0-2026-11-06.log](./test-logs/call-chain-006237a0-2026-11-06.log)
+and
+[call-chain-006237a0-device-2026-11-06.log](./test-logs/call-chain-006237a0-device-2026-11-06.log).
+The remaining scope is a general static-lift generator and integration with
+game initialization; this one-function pilot does not cover either.

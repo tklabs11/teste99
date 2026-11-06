@@ -16,6 +16,7 @@ runtime-r4/
 __pycache__/
 /tools/lifting_harness_arm64
 /tools/x86_candidate_differential
-/tools/x86_lift_differential
+/tools/x86_lift_differential/*
+!/tools/x86_lift_differential/BatchStaticLiftRuntime.hpp
 /tools/x86_name_hash_differential
 /tools/x86_sort_differential

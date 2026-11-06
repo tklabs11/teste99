@@ -1,0 +1,13 @@
+﻿test=translated-graphics-manual-regression-rerun-2026-11-06
+device_model=2303ERA42L
+result=PASS
+11-06 00:13:07.653 30984 31241 I SDL/APP : TRANSLATED_STAGE mode=manual-regression prepared=PASS (manual pre-boot state; 640x480 from FUN_007e7380)
+11-06 00:13:07.654 30984 31241 I SDL/APP : TRANSLATED_STAGE create-device-input adapter=0 device-type=1 behavior=0x00000040 window-token=0x00010001 backbuffer=640x480 format=0 count=1 multisample=0 quality=0 swap=1 windowed=1 depth-stencil=0 depth-format=0 flags=0x00000000 refresh=0 interval=1
+11-06 00:13:07.654 30984 31241 I SDL/APP : D3D9_CALL CreateDevice input adapter=0 device-type=1 behavior=0x00000040 window-handle-present=1 backbuffer=640x480 format=0 count=1 multisample=0 quality=0 swap=1 windowed=1 depth-stencil=0 depth-format=0 flags=0x00000000 refresh=0 interval=1
+11-06 00:13:08.239 30984 31241 I SDL/APP : TRANSLATED_STAGE create-device=PASS result=0x00000000 guest-window=0x00010001 guest-device=unregistered backbuffer=640x480
+11-06 00:13:08.239 30984 31241 I SDL/APP : TRANSLATED_STAGE FUN_011f8680 device-global=PASS address=0x016f89d0 guest-device=0x00010002
+11-06 00:13:08.239 30984 31241 I SDL/APP : DXVK-native D3D9 device created (2177x987)
+11-06 00:13:08.239 30984 31241 I SDL/APP : TRANSLATED_STAGE reset[1]-input backbuffer=2400x1080 format=22 count=1 multisample=0 quality=0 swap=1 windowed=1 depth-stencil=0 depth-format=0 flags=0x00000000 refresh=0 interval=1
+11-06 00:13:08.240 30984 31241 I SDL/APP : TRANSLATED_STAGE reset[1]-result=0x00000000 backbuffer=2400x1080
+11-06 00:13:08.240 30984 31241 I SDL/APP : DXVK-native D3D9 device resized (2400x1080)
+11-06 00:13:08.285 30984 31241 I SDL/APP : TRANSLATED_STAGE first-present=PASS result=0x00000000 backbuffer=2400x1080

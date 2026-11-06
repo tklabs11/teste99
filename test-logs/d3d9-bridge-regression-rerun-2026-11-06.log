@@ -1,0 +1,8 @@
+﻿test=d3d9-bridge-regression
+device_model=2303ERA42L
+result=PASS
+11-06 00:12:33.993 30239 30781 I SDL/APP : D3D9_CALL CreateDevice input adapter=0 device-type=1 behavior=0x00000040 window-handle-present=1 backbuffer=2177x987 format=0 count=1 multisample=0 quality=0 swap=1 windowed=1 depth-stencil=0 depth-format=0 flags=0x00000000 refresh=0 interval=1
+11-06 00:12:35.280 30239 30781 I SDL/APP : DXVK-native D3D9 device created (2177x987)
+11-06 00:12:35.281 30239 30781 I SDL/APP : TRANSLATED_STAGE reset[1]-input backbuffer=2400x1080 format=22 count=1 multisample=0 quality=0 swap=1 windowed=1 depth-stencil=0 depth-format=0 flags=0x00000000 refresh=0 interval=1
+11-06 00:12:35.282 30239 30781 I SDL/APP : TRANSLATED_STAGE reset[1]-result=0x00000000 backbuffer=2400x1080
+11-06 00:12:35.282 30239 30781 I SDL/APP : DXVK-native D3D9 device resized (2400x1080)
