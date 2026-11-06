@@ -29,12 +29,19 @@ constexpr std::uint32_t kDimensionsBlockVa = 0x75f25e;
 constexpr std::uint32_t kDimensionsBlockEndVa = 0x75f28f;
 constexpr std::uint32_t kPresentationModeBlockVa = 0x75f29f;
 constexpr std::uint32_t kPresentationModeBlockEndVa = 0x75f2b7;
+constexpr std::uint32_t kBooleanGetterBlockVa = 0x6a25a0;
+constexpr std::uint32_t kBooleanGetterBlockEndVa = 0x6a2655;
 
 std::uint32_t g_saved_stack_pointer = 0;
+std::uint32_t g_reference_ecx = 0;
 void* g_reference_block = nullptr;
+std::uint32_t g_config_lookup_result = 0;
+std::uint8_t g_reference_return_value = 0;
+std::uint8_t g_default_config_boolean = 0;
 
 __declspec(naked) void RestoreCallerStack() {
     __asm {
+        mov byte ptr [g_reference_return_value], al
         mov esp, dword ptr [g_saved_stack_pointer]
         ret
     }
@@ -45,8 +52,75 @@ __declspec(naked) void ExecuteReferenceBlock(std::uint32_t*) {
         mov eax, esp
         mov dword ptr [g_saved_stack_pointer], eax
         mov esp, dword ptr [esp + 4]
+        mov ecx, dword ptr [g_reference_ecx]
         jmp dword ptr [g_reference_block]
     }
+}
+
+__declspec(naked) void ConfigLookupStub() {
+    __asm {
+        mov eax, dword ptr [g_config_lookup_result]
+        ret
+    }
+}
+
+__declspec(naked) void ConfigValueConstructionStub() {
+    __asm {
+        mov eax, dword ptr [esp + 4]
+        mov edx, dword ptr [eax]
+        mov dword ptr [ecx], edx
+        mov dl, byte ptr [eax + 0xc]
+        mov byte ptr [ecx + 0x10], dl
+        mov dx, word ptr [eax + 0xe]
+        mov word ptr [ecx + 0x12], dx
+        mov eax, ecx
+        ret 4
+    }
+}
+
+__declspec(naked) void ConfigCleanupStub() {
+    __asm {
+        ret 4
+    }
+}
+
+bool patchRelativeCall(
+    std::uint8_t* block,
+    std::size_t call_offset,
+    const void* target) {
+    if (block == nullptr || target == nullptr) {
+        return false;
+    }
+
+    const std::intptr_t next_instruction =
+        reinterpret_cast<std::intptr_t>(block + call_offset + 5);
+    const std::intptr_t displacement =
+        reinterpret_cast<std::intptr_t>(target) - next_instruction;
+    if (displacement < std::numeric_limits<std::int32_t>::min()
+            || displacement > std::numeric_limits<std::int32_t>::max()) {
+        return false;
+    }
+
+    const std::int32_t relative = static_cast<std::int32_t>(displacement);
+    std::memcpy(block + call_offset + 1, &relative, sizeof(relative));
+    return block[call_offset] == 0xe8;
+}
+
+const char* configLookupStatusName(
+    SporeGuestConfigBooleanLookupStatus status) {
+    switch (status) {
+    case SporeGuestConfigBooleanLookupStatus::found:
+        return "found";
+    case SporeGuestConfigBooleanLookupStatus::missing:
+        return "missing";
+    case SporeGuestConfigBooleanLookupStatus::unsupported_type:
+        return "unsupported-type";
+    case SporeGuestConfigBooleanLookupStatus::not_initialized:
+        return "not-initialized";
+    case SporeGuestConfigBooleanLookupStatus::invalid_fixture:
+        return "invalid-fixture";
+    }
+    return "invalid-status";
 }
 
 bool readImage(const std::wstring& path, std::vector<std::uint8_t>* image) {
@@ -280,6 +354,224 @@ bool runPresentationModeComparison(
         && reference_depth_format == 0x4b;
 }
 
+bool runConfigBooleanComparison(void* executable_block) {
+    constexpr std::uint32_t kWindowedKey = 0x00d77e9b;
+    constexpr std::size_t kStackTopIndex = 16;
+    constexpr std::size_t kMapSize = 0x40;
+    constexpr std::size_t kRecordSize = 0x18;
+    constexpr std::size_t kLookupCallOffset =
+        0x006a25d8 - kBooleanGetterBlockVa;
+    constexpr std::size_t kConstructionCallOffset =
+        0x006a25fe - kBooleanGetterBlockVa;
+    constexpr std::size_t kCleanupCallOffset =
+        0x006a263c - kBooleanGetterBlockVa;
+    constexpr std::size_t kDefaultBooleanImmediateOffset =
+        0x006a2614 - kBooleanGetterBlockVa;
+
+    struct ConfigBooleanCase {
+        const char* name;
+        bool present;
+        std::uint16_t value_type;
+        std::uint8_t value_flags;
+        std::uint8_t inline_value;
+        std::uint8_t indirect_value;
+        SporeGuestConfigBooleanLookupStatus expected_status;
+    };
+
+    constexpr ConfigBooleanCase cases[] = {
+        {"present-false", true, 1, 0, 0, 0,
+            SporeGuestConfigBooleanLookupStatus::found},
+        {"present-true", true, 1, 0, 1, 0,
+            SporeGuestConfigBooleanLookupStatus::found},
+        {"present-noncanonical-true", true, 1, 0, 2, 0,
+            SporeGuestConfigBooleanLookupStatus::found},
+        {"generic-indirect-true", true, 0x10, 0x30, 0, 1,
+            SporeGuestConfigBooleanLookupStatus::found},
+        {"generic-indirect-false", true, 0x10, 0x30, 0, 0,
+            SporeGuestConfigBooleanLookupStatus::found},
+        {"unsupported-type", true, 9, 0, 1, 0,
+            SporeGuestConfigBooleanLookupStatus::unsupported_type},
+        {"missing", false, 0, 0, 0, 0,
+            SporeGuestConfigBooleanLookupStatus::missing}
+    };
+
+    auto* getter_block = static_cast<std::uint8_t*>(executable_block);
+    if (getter_block == nullptr
+            || !patchRelativeCall(
+                getter_block, kLookupCallOffset,
+                reinterpret_cast<const void*>(&ConfigLookupStub))
+            || !patchRelativeCall(
+                getter_block, kConstructionCallOffset,
+                reinterpret_cast<const void*>(&ConfigValueConstructionStub))
+            || !patchRelativeCall(
+                getter_block, kCleanupCallOffset,
+                reinterpret_cast<const void*>(&ConfigCleanupStub))) {
+        std::fprintf(stderr, "Could not patch config getter fixture calls\n");
+        return false;
+    }
+
+    const std::uint32_t default_boolean_address =
+        static_cast<std::uint32_t>(
+            reinterpret_cast<std::uintptr_t>(&g_default_config_boolean));
+    std::memcpy(
+        getter_block + kDefaultBooleanImmediateOffset,
+        &default_boolean_address,
+        sizeof(default_boolean_address));
+    g_reference_block = getter_block;
+
+    bool all_cases_passed = true;
+    for (const ConfigBooleanCase& test_case : cases) {
+        std::array<std::uint8_t, kRecordSize> record{};
+        std::array<std::uint8_t, kMapSize> map{};
+        std::uint8_t indirect_value = test_case.indirect_value;
+        std::uint32_t record_key = kWindowedKey;
+        std::memcpy(record.data(), &record_key, sizeof(record_key));
+
+        const std::uint32_t raw_value = test_case.value_type == 0x10
+                && (test_case.value_flags & 0x30) != 0
+            ? static_cast<std::uint32_t>(
+                reinterpret_cast<std::uintptr_t>(&indirect_value))
+            : test_case.inline_value;
+        std::memcpy(
+            record.data() + 4, &raw_value, sizeof(raw_value));
+        record[0x10] = test_case.value_flags;
+        std::memcpy(
+            record.data() + 0x12,
+            &test_case.value_type,
+            sizeof(test_case.value_type));
+
+        const std::uint32_t record_address =
+            static_cast<std::uint32_t>(
+                reinterpret_cast<std::uintptr_t>(record.data()));
+        const std::uint32_t vector_end =
+            record_address + (test_case.present ? kRecordSize : 0);
+        std::memcpy(map.data() + 0x18, &record_address, sizeof(record_address));
+        std::memcpy(map.data() + 0x1c, &vector_end, sizeof(vector_end));
+        const std::uint32_t no_cached_values = 0;
+        std::memcpy(
+            map.data() + 0x38,
+            &no_cached_values,
+            sizeof(no_cached_values));
+        g_config_lookup_result =
+            test_case.present ? record_address : vector_end;
+        g_reference_ecx = static_cast<std::uint32_t>(
+            reinterpret_cast<std::uintptr_t>(map.data()));
+
+        std::array<std::uint32_t, 0x80 / sizeof(std::uint32_t)> frame{};
+        frame[kStackTopIndex] = static_cast<std::uint32_t>(
+            reinterpret_cast<std::uintptr_t>(&RestoreCallerStack));
+        frame[kStackTopIndex + 1] = kWindowedKey;
+        g_reference_return_value = 0;
+        ExecuteReferenceBlock(frame.data() + kStackTopIndex);
+        const bool reference_value = g_reference_return_value != 0;
+
+        SporeGuestConfigBooleanFixtureRecord translated_record{
+            kWindowedKey,
+            test_case.value_type,
+            test_case.value_flags,
+            test_case.inline_value,
+            test_case.indirect_value
+        };
+        const SporeGuestConfigBooleanFixtureView config_view{
+            test_case.present ? &translated_record : nullptr,
+            test_case.present ? 1u : 0u,
+            nullptr,
+            0,
+            true
+        };
+        bool translated_value = false;
+        const SporeGuestConfigBooleanLookupStatus translated_status =
+            SporeTranslatedLookupConfigBoolean(
+                config_view, kWindowedKey, &translated_value);
+
+        const bool case_passed =
+            translated_status == test_case.expected_status
+            && reference_value == translated_value;
+        std::printf(
+            "config-query case=%s key=0x%08x type=0x%x flags=0x%02x "
+            "x86=%s/0x%02x translated=%s status=%s result=%s\n",
+            test_case.name,
+            kWindowedKey,
+            test_case.value_type,
+            test_case.value_flags,
+            reference_value ? "true" : "false",
+            g_reference_return_value,
+            translated_value ? "true" : "false",
+            configLookupStatusName(translated_status),
+            case_passed ? "PASS" : "FAIL");
+        all_cases_passed = all_cases_passed && case_passed;
+    }
+
+    const SporeGuestConfigBooleanFixtureView uninitialized_view{
+        nullptr, 0, nullptr, 0, false
+    };
+    bool unchanged_value = true;
+    const SporeGuestConfigBooleanLookupStatus uninitialized_status =
+        SporeTranslatedLookupConfigBoolean(
+            uninitialized_view, kWindowedKey, &unchanged_value);
+    const bool uninitialized_passed =
+        uninitialized_status
+            == SporeGuestConfigBooleanLookupStatus::not_initialized
+        && unchanged_value;
+    std::printf(
+        "config-query case=uninitialized status=%s output-unchanged=%s result=%s\n",
+        configLookupStatusName(uninitialized_status),
+        unchanged_value ? "PASS" : "FAIL",
+        uninitialized_passed ? "PASS" : "FAIL");
+
+    const std::uint32_t cached_values[] = {0, 7};
+    bool cached_cases_passed = true;
+    for (std::uint32_t key = 0; key < 2; ++key) {
+        std::array<std::uint8_t, kMapSize> map{};
+        const std::uint32_t record_begin = 0;
+        const std::uint32_t record_end = 0;
+        const std::uint32_t cached_count = 2;
+        const std::uint32_t cached_address =
+            static_cast<std::uint32_t>(
+                reinterpret_cast<std::uintptr_t>(cached_values));
+        std::memcpy(
+            map.data() + 0x18, &record_begin, sizeof(record_begin));
+        std::memcpy(
+            map.data() + 0x1c, &record_end, sizeof(record_end));
+        std::memcpy(
+            map.data() + 0x38, &cached_count, sizeof(cached_count));
+        std::memcpy(
+            map.data() + 0x3c, &cached_address, sizeof(cached_address));
+        g_reference_ecx = static_cast<std::uint32_t>(
+            reinterpret_cast<std::uintptr_t>(map.data()));
+
+        std::array<std::uint32_t, 0x80 / sizeof(std::uint32_t)> frame{};
+        frame[kStackTopIndex] = static_cast<std::uint32_t>(
+            reinterpret_cast<std::uintptr_t>(&RestoreCallerStack));
+        frame[kStackTopIndex + 1] = key;
+        g_reference_return_value = 0;
+        ExecuteReferenceBlock(frame.data() + kStackTopIndex);
+        const bool reference_value = g_reference_return_value != 0;
+
+        const SporeGuestConfigBooleanFixtureView cached_view{
+            nullptr, 0, cached_values, 2, true
+        };
+        bool translated_value = false;
+        const SporeGuestConfigBooleanLookupStatus status =
+            SporeTranslatedLookupConfigBoolean(
+                cached_view, key, &translated_value);
+        const bool case_passed =
+            status == SporeGuestConfigBooleanLookupStatus::found
+            && reference_value == translated_value;
+        std::printf(
+            "config-query case=cached-index-%u x86=%s translated=%s "
+            "status=%s result=%s\n",
+            key,
+            reference_value ? "true" : "false",
+            translated_value ? "true" : "false",
+            configLookupStatusName(status),
+            case_passed ? "PASS" : "FAIL");
+        cached_cases_passed = cached_cases_passed && case_passed;
+    }
+
+    return all_cases_passed && uninitialized_passed && cached_cases_passed;
+}
+
 }
 
 int wmain(int argc, wchar_t** argv) {
@@ -292,6 +584,7 @@ int wmain(int argc, wchar_t** argv) {
     std::vector<std::uint8_t> image;
     std::vector<std::uint8_t> dimensions_reference_bytes;
     std::vector<std::uint8_t> mode_reference_bytes;
+    std::vector<std::uint8_t> config_reference_bytes;
     if (!readImage(argv[1], &image)
             || !extractReferenceBlock(
                 image,
@@ -302,7 +595,12 @@ int wmain(int argc, wchar_t** argv) {
                 image,
                 kPresentationModeBlockVa,
                 kPresentationModeBlockEndVa,
-                &mode_reference_bytes)) {
+                &mode_reference_bytes)
+            || !extractReferenceBlock(
+                image,
+                kBooleanGetterBlockVa,
+                kBooleanGetterBlockEndVa,
+                &config_reference_bytes)) {
         return 1;
     }
 
@@ -354,6 +652,31 @@ int wmain(int argc, wchar_t** argv) {
         mode_reference_bytes.size());
     const bool presentation_mode =
         runPresentationModeComparison(mode_executable_block);
+    auto* config_executable_block = static_cast<std::uint8_t*>(VirtualAlloc(
+        nullptr,
+        config_reference_bytes.size() + 1,
+        MEM_COMMIT | MEM_RESERVE,
+        PAGE_EXECUTE_READWRITE));
+    if (config_executable_block == nullptr) {
+        VirtualFree(dimensions_executable_block, 0, MEM_RELEASE);
+        VirtualFree(mode_executable_block, 0, MEM_RELEASE);
+        std::fprintf(stderr, "VirtualAlloc failed: %lu\n", GetLastError());
+        return 1;
+    }
+    std::memcpy(
+        config_executable_block,
+        config_reference_bytes.data(),
+        config_reference_bytes.size());
+    config_executable_block[config_reference_bytes.size()] = 0xc3;
+    std::printf(
+        "reference-function=FUN_006a25a0 config-boolean-block-va="
+        "0x%08x-0x%08x executed-original-bytes=%zu "
+        "search-and-value-construction=fixture-stubs\n",
+        kBooleanGetterBlockVa,
+        kBooleanGetterBlockEndVa,
+        config_reference_bytes.size());
+    const bool config_boolean =
+        runConfigBooleanComparison(config_executable_block);
     std::uint32_t unused_width = 0;
     const bool null_rejected =
         !SporeTranslatedCopyBackBufferDimensions(
@@ -365,14 +688,17 @@ int wmain(int argc, wchar_t** argv) {
 
     VirtualFree(dimensions_executable_block, 0, MEM_RELEASE);
     VirtualFree(mode_executable_block, 0, MEM_RELEASE);
+    VirtualFree(config_executable_block, 0, MEM_RELEASE);
     g_reference_block = nullptr;
 
-    if (!first || !second || !presentation_mode || !null_rejected) {
+    if (!first || !second || !presentation_mode || !config_boolean
+            || !null_rejected) {
         std::fprintf(stderr, "x86 reference comparison: FAIL\n");
         return 1;
     }
     std::printf(
         "x86-original-vs-translated=PASS "
-        "null-output-rejection=PASS presentation-mode=PASS\n");
+        "null-output-rejection=PASS presentation-mode=PASS "
+        "config-boolean=PASS\n");
     return 0;
 }

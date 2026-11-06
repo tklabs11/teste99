@@ -8,6 +8,8 @@
 #include <cstdint>
 #include <mutex>
 
+#include "spore_graphics_parameter_translation.h"
+
 struct SporeGuestPresentParameters32 {
     std::uint32_t back_buffer_width;
     std::uint32_t back_buffer_height;
@@ -101,6 +103,11 @@ bool SporeTranslatedSetCreateDeviceBackBufferDimensions(
     std::uint32_t guest_height);
 bool SporeTranslatedSetPresentationModeFields(
     SporeGuestD3D9State32* state);
+SporeGuestConfigBooleanLookupStatus SporeTranslatedSetWindowedFromConfig(
+    SporeGuestD3D9State32* state,
+    const SporeGuestConfigBooleanFixtureView& config,
+    std::uint32_t key,
+    bool* query_value_out);
 
 HRESULT SporeTranslatedCreateDevice(
     SporeGuestD3D9State32* state,

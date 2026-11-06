@@ -3,12 +3,43 @@
 
 #include <d3d9.h>
 
+#include <array>
 #include <cstdint>
 
 #include "spore_d3d9_bridge.h"
 #include "spore_translated_graphics.h"
 
 namespace {
+
+constexpr std::uint32_t kWindowedConfigKey = 0x00d77e9b;
+constexpr std::array<SporeGuestConfigBooleanFixtureRecord, 1>
+    kDeviceGlobalConfigRecords = {{
+        {kWindowedConfigKey, 1, 0, 1, 0}
+    }};
+constexpr SporeGuestConfigBooleanFixtureView kDeviceGlobalConfig{
+    kDeviceGlobalConfigRecords.data(),
+    kDeviceGlobalConfigRecords.size(),
+    nullptr,
+    0,
+    true
+};
+
+const char* configLookupStatusName(
+    SporeGuestConfigBooleanLookupStatus status) {
+    switch (status) {
+    case SporeGuestConfigBooleanLookupStatus::found:
+        return "found";
+    case SporeGuestConfigBooleanLookupStatus::missing:
+        return "missing";
+    case SporeGuestConfigBooleanLookupStatus::unsupported_type:
+        return "unsupported-type";
+    case SporeGuestConfigBooleanLookupStatus::not_initialized:
+        return "not-initialized";
+    case SporeGuestConfigBooleanLookupStatus::invalid_fixture:
+        return "invalid-fixture";
+    }
+    return "invalid-status";
+}
 
 void ReleaseD3D9(
     IDirect3DDevice9* device,
@@ -287,6 +318,33 @@ int RunD3D9TestImpl(D3D9TestMode mode) {
                 guest_graphics_state.window_token,
                 guest_graphics_state.presentation.back_buffer_width,
                 guest_graphics_state.presentation.back_buffer_height);
+            bool windowed_query_value = false;
+            const SporeGuestConfigBooleanLookupStatus config_status =
+                SporeTranslatedSetWindowedFromConfig(
+                    &guest_graphics_state,
+                    kDeviceGlobalConfig,
+                    kWindowedConfigKey,
+                    &windowed_query_value);
+            if (config_status != SporeGuestConfigBooleanLookupStatus::found
+                    || !windowed_query_value
+                    || guest_graphics_state.presentation.windowed != TRUE) {
+                SDL_LogError(
+                    SDL_LOG_CATEGORY_APPLICATION,
+                    "Translated config query failed: key=0x%08x status=%s",
+                    kWindowedConfigKey,
+                    configLookupStatusName(config_status));
+                SDL_DestroyWindow(window);
+                SDL_Quit();
+                return 1;
+            }
+            SDL_Log(
+                "TRANSLATED_STAGE FUN_0075f030 config-query "
+                "key=0x%08x origin=test-fixture status=%s result=%s "
+                "d3d.Windowed=%s",
+                kWindowedConfigKey,
+                configLookupStatusName(config_status),
+                windowed_query_value ? "true" : "false",
+                guest_graphics_state.presentation.windowed ? "true" : "false");
             if (!SporeTranslatedSetCreateDeviceBackBufferDimensions(
                     &guest_graphics_state, 1280, 720)
                     || guest_graphics_state.presentation.back_buffer_width != 1280
@@ -306,9 +364,11 @@ int RunD3D9TestImpl(D3D9TestMode mode) {
                 return 1;
             }
         } else {
+            guest_graphics_state.presentation.windowed = TRUE;
             SDL_Log(
                 "TRANSLATED_STAGE mode=window-global prepared=PASS "
-                "device-window-param=0 guest-global=0 manual-window-token=0x%08x",
+                "device-window-param=0 guest-global=0 manual-window-token=0x%08x "
+                "manual-windowed=TRUE",
                 guest_graphics_state.window_token);
         }
         std::uint32_t initial_window_token = 0;

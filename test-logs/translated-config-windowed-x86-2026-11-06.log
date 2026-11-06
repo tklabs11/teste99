@@ -1,0 +1,19 @@
+test_graphics_parameter_x86_reference.cpp
+reference_pe_sha256=fb66afc320730dec6f80b79301c7c525689859e3d0a99616b657559e8f11a1ae
+reference-function=FUN_0075f030 dimensions-block-va=0x0075f25e-0x0075f28f executed-original-bytes=49
+case=wide input-width=1280 input-height=720 x86-width=1280 x86-height=720 translated-width=1280 translated-height=720
+case=portrait-shaped input-width=480 input-height=900 x86-width=480 x86-height=900 translated-width=480 translated-height=900
+reference-function=FUN_0075f030 presentation-mode-block-va=0x0075f29f-0x0075f2b7 executed-original-bytes=24
+presentation-mode x86-setup-field-14=0x00000016 translated=0x00000016 x86-format=21 translated=21 x86-depth-format=75 translated=75 untouched-fields=PASS
+reference-function=FUN_006a25a0 config-boolean-block-va=0x006a25a0-0x006a2655 executed-original-bytes=181 search-and-value-construction=fixture-stubs
+config-query case=present-false key=0x00d77e9b type=0x1 flags=0x00 x86=false/0x00 translated=false status=found result=PASS
+config-query case=present-true key=0x00d77e9b type=0x1 flags=0x00 x86=true/0x01 translated=true status=found result=PASS
+config-query case=present-noncanonical-true key=0x00d77e9b type=0x1 flags=0x00 x86=true/0x02 translated=true status=found result=PASS
+config-query case=generic-indirect-true key=0x00d77e9b type=0x10 flags=0x30 x86=true/0x01 translated=true status=found result=PASS
+config-query case=generic-indirect-false key=0x00d77e9b type=0x10 flags=0x30 x86=false/0x00 translated=false status=found result=PASS
+config-query case=unsupported-type key=0x00d77e9b type=0x9 flags=0x00 x86=false/0x00 translated=false status=unsupported-type result=PASS
+config-query case=missing key=0x00d77e9b type=0x0 flags=0x00 x86=false/0x00 translated=false status=missing result=PASS
+config-query case=uninitialized status=not-initialized output-unchanged=PASS result=PASS
+config-query case=cached-index-0 x86=false translated=false status=found result=PASS
+config-query case=cached-index-1 x86=true translated=true status=found result=PASS
+x86-original-vs-translated=PASS null-output-rejection=PASS presentation-mode=PASS config-boolean=PASS

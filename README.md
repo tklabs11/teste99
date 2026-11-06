@@ -1844,12 +1844,15 @@ that field was not part of this block.
 | Backbuffer width/height (`1280x720` in the phone run) | Translated from the dimensions block of `FUN_0075f030`; no longer seeded manually in the device-global probe. |
 | Setup `+0x14`, backbuffer format, depth format | Translated as `0x16`, `21`, and `75`; `+0x14` has no identified D3D9 consumer. |
 | Adapter `0`, device type `1`, behavior flags `0x40`, window token | Still supplied by the harness; the window token is resolved through the guest-window mapping. |
-| Backbuffer count `1`, multisample/quality `0`, swap effect `1`, windowed `TRUE`, flags `0`, refresh `0`, interval `1` | Still prepared by the harness; configuration-dependent source logic is not translated. |
+| Backbuffer count `1`, multisample/quality `0`, swap effect `1`, flags `0`, refresh `0`, interval `1` | Still prepared by the harness. |
+| Device-global `Windowed` | Now set by the translated boolean lookup for key `0x00d77e9b`; the current Android input is an explicit test fixture, not the original configuration loader. The separate manual/window-global regressions retain their manual `TRUE` seed. |
 | `EnableAutoDepthStencil = FALSE` | Still explicit harness state; the separate original initialization is outside this block. |
 
 Thus, this increment removes manual setup for the translated dimensions and
-the three observed setup dwords only; it does not claim that `CreateDevice`
-parameters as a whole come from translated game logic.
+the three observed setup dwords. The following boolean-lookup increment also
+removes the manual `Windowed = TRUE` assignment from the device-global path,
+but supplies the lookup with a test fixture; it does not claim that the
+original configuration store or all `CreateDevice` parameters are translated.
 
 ### Device-token recreation regression
 
@@ -1874,16 +1877,74 @@ The first successful Present followed the first Reset. All three Resets and
 the recreated-device Present succeeded. The physical display returned to
 `1080x2400` and density to `440`.
 
-The original parameter getter remains a separate dependency, not a value
-invented by this increment. `FUN_0075f030` obtains the DWORD at guest key
-address `0x00d77e99` through `FUN_006a2660`; `FUN_006a2660` returns a DWORD
-from its cached/typed configuration record and returns zero when no record is
-found. `FUN_006a25a0` is the corresponding boolean lookup used for keys
-`0x00d77e9a`–`0x00d77e9e`; absent/unrecognized boolean entries return false.
-The Android probe has not populated this guest configuration store or observed
-the original values. Full-screen refresh, conditional presentation options,
-and their configuration branches therefore remain the next blocker; they
-must wait for this lookup's inputs and branch outputs to be established.
+`FUN_0075f030` also obtains the DWORD at guest key address `0x00d77e99`
+through `FUN_006a2660`; that getter returns zero when no record is found.
+`FUN_006a25a0` is the boolean getter used by the graphics path, and a missing
+or unsupported typed record produces false. This Android increment supplies
+one explicit record to the translated query; the original game's store remains
+unloaded and its value for this key is still unobserved.
+
+## Boolean configuration query for `Windowed` — 2026-11-06
+
+The graphics callsite at `0x75f1cb` calls `FUN_006a25a0` with key
+`0x00d77e9b`. In `FUN_0075f030`, that result is inverted in the temporary
+presentation setup; `FUN_011f7d00` maps the temporary field back to the D3D9
+`Windowed` parameter. This key is an address in `.text`, not a confirmed
+user-facing setting name.
+
+The x86 getter's relevant behavior is:
+
+- If the key argument is below the cached count at object `+0x38`, it reads
+  the cached dword from `+0x3c` and returns whether it is nonzero. The graphics
+  key is outside that small index range, so the original call follows the
+  record-search path.
+- The sorted record vector uses begin/end pointers at `+0x18` and `+0x1c`;
+  each record is `0x18` bytes, with its key at `+0`, value flags at `+0x10`,
+  and type at `+0x12`. `FUN_006a2e20` inserts or updates records, and
+  `FUN_006a30c0` selects the indexed-value or record path.
+- Typed records `1` and `0x10` are accepted. Flag bits `0x30` select the
+  indirect byte at the record's value pointer; otherwise the first inline
+  byte is used. Any nonzero byte is true. Unsupported types read the observed
+  zero default at `DAT_015d115d`; an absent key returns false.
+- `DAT_015fd918` is assigned by `FUN_0067e050`, whose direct call is at
+  `0x7e8bd2`. The insertion routine has observed callers including
+  `FUN_006a30c0`, `FUN_00bed460`, and `FUN_00bed920`; the latter two insert
+  key `0x049b48ee`. These facts establish the generic storage path, not who
+  supplies `0x00d77e9b` during original game startup.
+
+The x86 differential executes the original 181-byte getter body from
+`0x6a25a0` through `0x6a2654`. The harness replaces its binary-search and
+typed-value-construction callees with fixture stubs, then compares the getter
+result with the translated lookup for inline false/true/noncanonical true,
+indirect true/false, cached false/true, unsupported type, missing key, and
+uninitialized-store cases. Uninitialized is kept distinct from the original's
+legitimate false defaults; it does not update the translated `Windowed` field.
+
+The device-global Android probe now translates the query-to-`Windowed` chain.
+Its record (`key=0x00d77e9b`, `type=1`, inline value `1`) is marked
+`origin=test-fixture` in the log. It is not evidence that the game loader
+populates this key. `1280x720` remains input supplied by the test and passes
+through the translated dimension block. The translated depth format remains
+`75`, while `EnableAutoDepthStencil` remains false.
+
+On phone `2303ERA42L`, the fixture produced `Windowed=1` in the successful
+`CreateDevice` call (`1280x720`, format `21`, depth format `75`, depth stencil
+disabled). One `Reset` succeeded at `2400x1080`, followed by the first
+successful `Present`. The device-token zero/unknown rejection and
+create-invalidate-recreate/stale-token checks also passed. The original
+configuration loader and its value for this key remain the next blocker;
+other configuration-dependent presentation fields remain manual.
+
+The rebuilt debug APK SHA-256 is
+`fd4be7903f5c864c0339a9595e3815e0c1929fefd146a5656985dd837fd77dcc`.
+
+Logs:
+
+- [translated-config-windowed-x86-2026-11-06.log](./test-logs/translated-config-windowed-x86-2026-11-06.log)
+- [translated-config-windowed-device-2026-11-06.log](./test-logs/translated-config-windowed-device-2026-11-06.log)
+- [config-windowed-regression-d3d9-bridge-2026-11-06.log](./test-logs/config-windowed-regression-d3d9-bridge-2026-11-06.log)
+- [config-windowed-regression-translated-graphics-manual-regression-2026-11-06.log](./test-logs/config-windowed-regression-translated-graphics-manual-regression-2026-11-06.log)
+- [config-windowed-regression-translated-window-global-increment-2026-11-06.log](./test-logs/config-windowed-regression-translated-window-global-increment-2026-11-06.log)
 
 Static REA Evidence for the selected `fb66afc3...` executable:
 `ev_7d1506aa29a5fffd7c02c0897950a6d96270373ed1929ce9c41874b09907c446`
@@ -1895,7 +1956,17 @@ Static REA Evidence for the selected `fb66afc3...` executable:
 `ev_00a03ac85115fff2e49126aeffd9b9819cb83b876616ddf89169f41f88a685e2`
 (`FUN_006a2660`), and
 `ev_f07c78705a4488c04400451914d0d9148471f91e0c752c3e61bad0d58123488d`
-(`FUN_006a25a0`). This is static analysis plus execution of selected original
+(`FUN_006a25a0`). The query/storage follow-up uses
+`ev_aaa860779ea206790700990a744482184727c5d6379238e79df4e4901304e7e7`
+(`FUN_006a25a0` assembly),
+`ev_dcdf64b47221a9bafd9d2cf7adfe81592e60fa39175d94c6bc93fe4e30969f3f`
+(`FUN_006a30c0`),
+`ev_dbf48abdf9e99364426630af77b2e245f7139fc7733c00ab279f10927f93871`
+(`FUN_006a2e20`),
+`ev_7e44cbc4b6b2651d13b99f4b325c23fd2a84fbcb2a7638c5fd39daf923ad9661`
+(`FUN_0067e050`), and
+`ev_27179cee85a7e5ec23d2848738a077ed60fb93a9412b70a2a9e82a33ea99acbf`
+(setter xrefs). This is static analysis plus execution of selected original
 x86 instruction blocks; it is not execution of the Spore boot path.
 
 The x86 differential and all three phone regressions were rerun against the

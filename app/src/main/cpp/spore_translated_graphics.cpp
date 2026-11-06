@@ -61,7 +61,6 @@ void prepareTranslatedGraphicsProbeState(
     state->presentation.back_buffer_count = 1;
     state->presentation.multi_sample_type = D3DMULTISAMPLE_NONE;
     state->presentation.swap_effect = D3DSWAPEFFECT_DISCARD;
-    state->presentation.windowed = TRUE;
     state->presentation.presentation_interval = D3DPRESENT_INTERVAL_ONE;
     if (initialize_device_window_token) {
         state->presentation.device_window_token = kGuestWindowToken;
@@ -198,6 +197,7 @@ void SporePrepareTranslatedGraphicsProbe(SporeGuestD3D9State32* state) {
     }
 
     prepareTranslatedGraphicsProbeState(state, true);
+    state->presentation.windowed = TRUE;
 }
 
 void SporePrepareTranslatedWindowGlobalProbe(
@@ -262,6 +262,28 @@ bool SporeTranslatedSetPresentationModeFields(
         state->presentation.back_buffer_format,
         state->presentation.auto_depth_stencil_format);
     return true;
+}
+
+SporeGuestConfigBooleanLookupStatus SporeTranslatedSetWindowedFromConfig(
+    SporeGuestD3D9State32* state,
+    const SporeGuestConfigBooleanFixtureView& config,
+    std::uint32_t key,
+    bool* query_value_out) {
+    if (state == nullptr || query_value_out == nullptr) {
+        return SporeGuestConfigBooleanLookupStatus::invalid_fixture;
+    }
+
+    bool query_value = false;
+    const SporeGuestConfigBooleanLookupStatus status =
+        SporeTranslatedLookupConfigBoolean(config, key, &query_value);
+    if (status == SporeGuestConfigBooleanLookupStatus::not_initialized
+            || status == SporeGuestConfigBooleanLookupStatus::invalid_fixture) {
+        return status;
+    }
+
+    *query_value_out = query_value;
+    state->presentation.windowed = query_value ? TRUE : FALSE;
+    return status;
 }
 
 HRESULT SporeTranslatedCreateDevice(
