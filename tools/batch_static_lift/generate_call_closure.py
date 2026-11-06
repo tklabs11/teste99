@@ -7,27 +7,31 @@ from pathlib import Path
 import BatchStaticLift as lifter
 
 
+def _validate_batch(batch, batch_path, source_hash):
+    if batch.get("schema") != "spore-ghidra-function-batch-v1":
+        raise ValueError(f"unsupported batch schema in {batch_path}")
+    if batch.get("selected_source_sha256") != source_hash:
+        raise ValueError(f"batch export source SHA-256 differs in {batch_path}")
+    if batch.get("selected_source_is_phase4_build") is not True:
+        raise ValueError(f"batch export does not identify the approved build: {batch_path}")
+    if batch.get("user_confirmed_source_for_open_program") is not True:
+        raise ValueError(f"batch export has no Ghidra source confirmation: {batch_path}")
+    if batch.get("language_id") != lifter.EXPECTED_LANGUAGE:
+        raise ValueError(f"unexpected Ghidra language in {batch_path}")
+    if batch.get("functions_truncated") is not False:
+        raise ValueError(f"batch function list is incomplete: {batch_path}")
+    if not isinstance(batch.get("functions"), list):
+        raise ValueError(f"batch export is missing its function list: {batch_path}")
+
+
 def load_exported_functions(batch_paths, source_hash):
     functions = {}
     for batch_path in batch_paths:
         if batch_path.stat().st_size > lifter.MAX_BATCH_BYTES:
             raise ValueError(f"batch export exceeds the 128 MiB input limit: {batch_path}")
         batch = json.loads(batch_path.read_text(encoding="utf-8"))
-        if batch.get("schema") != "spore-ghidra-function-batch-v1":
-            raise ValueError(f"unsupported batch schema in {batch_path}")
-        if batch.get("selected_source_sha256") != source_hash:
-            raise ValueError(f"batch export source SHA-256 differs in {batch_path}")
-        if batch.get("selected_source_is_phase4_build") is not True:
-            raise ValueError(f"batch export does not identify the approved build: {batch_path}")
-        if batch.get("user_confirmed_source_for_open_program") is not True:
-            raise ValueError(f"batch export has no Ghidra source confirmation: {batch_path}")
-        if batch.get("language_id") != lifter.EXPECTED_LANGUAGE:
-            raise ValueError(f"unexpected Ghidra language in {batch_path}")
-        if batch.get("functions_truncated") is not False:
-            raise ValueError(f"batch function list is incomplete: {batch_path}")
-        records = batch.get("functions")
-        if not isinstance(records, list):
-            raise ValueError(f"batch export is missing its function list: {batch_path}")
+        _validate_batch(batch, batch_path, source_hash)
+        records = batch["functions"]
         for record in records:
             function = record.get("function")
             if not isinstance(function, dict):

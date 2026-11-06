@@ -2771,21 +2771,86 @@ With one authorized ARM64 device connected, run the same harness on-device:
 ```
 
 This proves reusable direct-call execution for a recursive function and a
-two-function chain; neither is an Android startup chain. Selecting and
-translating the next initialization-linked chain remains the next step.
+two-function chain; the additional startup-linked slice is documented below.
 
-The next initialization-linked candidate is `FUN_00f47ed0`, already identified
-above as the boot initializer. Its export contains 797 instructions; the first
-call is `0x00f47ed9: CALL 0x006b4f20` (`SteamAPI_Init`). The supplied Ghidra
-function export has no function body at `0x006b4f20`, so the closure generator
-rejects it instead of inventing a return. The PE bytes at that thunk are
-`ff 25 04 c8 3c 01 cc cc`: an indirect jump through the `SteamAPI_Init` IAT
-slot at `0x013cc804`, which is outside the current direct-call subset. The
-chain is therefore selected but not translated. Reproducing startup requires
-an explicit import-thunk/API contract and its real Android initialization
-behavior; returning success alone would not demonstrate that initialization.
-The expected fail-closed attempt is recorded in
-[startup-call-closure-blocker-2026-11-07.log](./test-logs/startup-call-closure-blocker-2026-11-07.log).
+`FUN_00f47ed0` remains too broad to translate as a whole. Its first call,
+`0x00f47ed9: CALL 0x006b4f20`, is now classified from the PE import table as
+the `steam_api.dll!SteamAPI_Init` import thunk, rather than a missing internal
+function. The thunk bytes `ff 25 04 c8 3c 01 cc cc` jump indirectly through IAT
+slot `0x013cc804`. This diagnosis does not define an Android substitute or
+claim that a success return reproduces Steam initialization.
+
+## Initialization closure diagnosis and first translated slice — 2026-11-06
+
+`diagnose_call_closure.py` walks the direct-call closure of
+`FUN_00f47ed0` over all 116 available batch exports and writes a report only;
+it never invokes code generation. It verified and examined 570 exported
+functions. The report distinguishes exported bodies, PE import thunks, missing
+functions in `.text`, and addresses outside known code/imports. The observed
+totals are 118 import-thunk stubs in the PE, 72 direct calls to those stubs,
+470 indirect calls (444 without even a static reference candidate), two
+missing internal function bodies, 2,250 unsupported instruction records, and
+two functions whose exported body byte counts do not match their decoded
+instructions.
+
+The two missing internal entries are `0x0081d470`, called by the initializer
+at `0x00f47ef9`, and `0x011e073e`, referenced from 25 reachable callsites.
+Indirect-call references are retained only as candidates, not treated as
+resolved runtime targets. This is a direct-call closure, so it does not claim
+to cover functions reachable only through those indirect calls. The complete
+diagnostic, including callsites and instruction-level reasons, is
+[startup-call-diagnostic-2026-11-06.json](./test-logs/startup-call-diagnostic-2026-11-06.json);
+the concise interpretation is
+[startup-call-diagnostic-2026-11-06.log](./test-logs/startup-call-diagnostic-2026-11-06.log).
+
+The selected slice is
+`FUN_011e5d80` → `FUN_011e8b20`. Its static direct-call path from the startup
+initializer is `FUN_00f47ed0` → `FUN_00a45f30` → `FUN_00a459d0` →
+`FUN_00a33600` → `FUN_00a247f0` → `FUN_011e5d80` → `FUN_011e8b20`;
+the corresponding callsites are in the diagnostic JSON. In particular,
+`FUN_00a247f0` calls the selected constructor at `0x00a24812`, and that
+constructor calls the string-copy routine at `0x011e5d92`. This is static
+linkage evidence, not proof those calls executed in a game session.
+
+The two selected bodies total 28 instructions and 65 PE-verified bytes.
+`FUN_011e5d80` sets the object vtable to `0x01452998`, passes the object's
+inline string buffer and its source to `FUN_011e8b20`, and returns with
+`RET 4`. The callee copies bytes through the NUL terminator. The backend
+generated both functions with a real shared-state guest `CALL` and preserved
+the callee's return address.
+
+The harness deliberately starts at the internal constructor, not the game or
+initializer entry. It supplies a zeroed object at guest `0x5000`, a
+read-only source buffer at `0x6000`, the source pointer at `[ESP+4]`, a return
+sentinel, and initialized guest registers/flags. Empty, one-byte, and
+17-byte source fixtures exercised both loop outcomes. Windows x86 execution of
+the byte-verified PE bodies matched the translated result, object contents,
+flags, nested return address, and stack cleanup. The same source compiled for
+ARM64 and ran on the reconnected `2303ERA42L` phone. All three string fixtures
+passed on ARM64, along with the recursive and distinct-function regressions.
+The successful run is
+[startup-chain-device-2026-11-06.log](./test-logs/startup-chain-device-2026-11-06.log);
+the earlier disconnected attempt is retained at
+[startup-chain-device-disconnected-2026-11-06.log](./test-logs/startup-chain-device-disconnected-2026-11-06.log).
+The standalone x86/build-only record is
+[startup-chain-x86-arm64-build-2026-11-06.log](./test-logs/startup-chain-x86-arm64-build-2026-11-06.log).
+
+The persistent generated sources and their byte-verification report are in
+[`tools/batch_static_lift/generated/startup_init_string_copy/`](./tools/batch_static_lift/generated/startup_init_string_copy/).
+Reproduce the full diagnostic with:
+
+```powershell
+python .\tools\batch_static_lift\diagnose_call_closure.py `
+  --exe C:\SporeAnalysis\SporeApp.exe `
+  --batch-dir C:\SporeAnalysis\spore_batch_all_parts `
+  --root 0x00f47ed0 `
+  --report .\test-logs\startup-call-diagnostic-2026-11-06.json
+```
+
+Reproduce generation, x86 differential checks, and ARM64 compilation with
+`.\tools\run_batch_static_lift_calls.ps1 -BuildOnly`; add
+`-DeviceSerial <serial>` to run the harness when an authorized device is
+connected. These remain isolated compatibility tests, not game startup.
 
 ## Preserved one-function recursive-call pilot
 

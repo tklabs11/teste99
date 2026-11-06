@@ -7,6 +7,7 @@ import unittest
 from pathlib import Path
 
 import BatchStaticLift as lifter
+import diagnose_call_closure as diagnostic
 
 
 def instruction(address, encoded, mnemonic, operands=(), flow="FALL_THROUGH", flows_to=(), references=()):
@@ -35,6 +36,77 @@ def function(instructions):
 
 
 class StaticBatchLiftTests(unittest.TestCase):
+    def test_import_thunk_diagnostic_resolves_pe_import_and_text_stub(self):
+        image = bytearray(0x600)
+        image[:2] = b"MZ"
+        struct.pack_into("<I", image, 0x3C, 0x80)
+        image[0x80:0x84] = b"PE\0\0"
+        struct.pack_into("<HHIIIHH", image, 0x84, 0x14C, 2, 0, 0, 0, 0xE0, 0)
+        optional = 0x98
+        struct.pack_into("<H", image, optional, 0x10B)
+        struct.pack_into("<I", image, optional + 28, 0x400000)
+        struct.pack_into("<I", image, optional + 92, 16)
+        struct.pack_into("<II", image, optional + 96 + 8, 0x2000, 40)
+        section_table = optional + 0xE0
+        image[section_table:section_table + 8] = b".text\0\0\0"
+        struct.pack_into(
+            "<IIII", image, section_table + 8, 0x200, 0x1000, 0x200, 0x200
+        )
+        second = section_table + 40
+        image[second:second + 8] = b".idata\0\0"
+        struct.pack_into(
+            "<IIII", image, second + 8, 0x200, 0x2000, 0x200, 0x400
+        )
+
+        struct.pack_into("<IIIII", image, 0x400, 0x2040, 0, 0, 0x2060, 0x2050)
+        struct.pack_into("<I", image, 0x440, 0x2080)
+        struct.pack_into("<I", image, 0x450, 0x2080)
+        image[0x460:0x46B] = b"sample.dll\0"
+        struct.pack_into("<H", image, 0x480, 0)
+        image[0x482:0x490] = b"ImportedThing\0"
+        image[0x200:0x202] = b"\xff\x25"
+        struct.pack_into("<I", image, 0x202, 0x402050)
+
+        with tempfile.TemporaryDirectory(prefix="spore_import_diagnostic_") as temporary:
+            executable = Path(temporary) / "imports.exe"
+            executable.write_bytes(image)
+            pe = lifter.parse_pe(executable)
+
+        import_stubs = diagnostic.parse_import_thunks(pe)
+        self.assertEqual(
+            import_stubs,
+            {
+                0x401000: {
+                    "symbol": "sample.dll!ImportedThing",
+                    "iat_address": "0x00402050",
+                }
+            },
+        )
+        self.assertEqual(
+            diagnostic._target_record(0x401000, {}, import_stubs, pe)[
+                "classification"
+            ],
+            "import_thunk",
+        )
+        self.assertEqual(
+            diagnostic._target_record(0x401100, {}, import_stubs, pe)[
+                "classification"
+            ],
+            "missing_internal_function",
+        )
+        self.assertEqual(
+            diagnostic._target_record(0x402000, {}, import_stubs, pe)[
+                "classification"
+            ],
+            "unresolved_destination",
+        )
+        self.assertEqual(
+            diagnostic._target_record(
+                0x401100, {0x401100: Path("export.json")}, import_stubs, pe
+            )["classification"],
+            "exported_function",
+        )
+
     def test_pilot_manifest_accepts_baseline_and_nested_100_plan(self):
         baseline = [
             {"selection_stratum": stratum}

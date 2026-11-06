@@ -12,6 +12,8 @@ $harness = Join-Path $backendDirectory "call_closure_harness.cpp"
 $recursiveBatch = "C:\SporeAnalysis\spore_batch_pilot_100.json"
 $callerBatch = "C:\SporeAnalysis\spore_batch_all_parts\spore_batch_all_0051.json"
 $calleeBatch = "C:\SporeAnalysis\spore_batch_all_parts\spore_batch_all_0050.json"
+$startupOuterBatch = "C:\SporeAnalysis\spore_batch_all_parts\spore_batch_all_0041.json"
+$startupInnerBatch = "C:\SporeAnalysis\spore_batch_all_parts\spore_batch_all_0086.json"
 $python = (Get-Command python.exe -ErrorAction Stop).Source
 $sdkRoot = if ($env:ANDROID_SDK_ROOT) {
     $env:ANDROID_SDK_ROOT
@@ -28,7 +30,10 @@ $ndkRoot = if ($env:ANDROID_NDK_HOME) {
 }
 $clang = Join-Path $ndkRoot "toolchains\llvm\prebuilt\windows-x86_64\bin\clang++.exe"
 
-foreach ($requiredPath in @($PePath, $recursiveBatch, $callerBatch, $calleeBatch, $adb, $clang)) {
+foreach ($requiredPath in @(
+    $PePath, $recursiveBatch, $callerBatch, $calleeBatch,
+    $startupOuterBatch, $startupInnerBatch, $adb, $clang
+)) {
     if (-not (Test-Path -LiteralPath $requiredPath)) {
         throw "Required input or tool was not found: $requiredPath"
     }
@@ -51,11 +56,15 @@ $buildDirectory = Join-Path $env:TEMP ("spore-batch-call-lift-" + [Guid]::NewGui
 New-Item -ItemType Directory -Path $buildDirectory | Out-Null
 $recursiveOutput = Join-Path $buildDirectory "recursive"
 $crossCallOutput = Join-Path $buildDirectory "cross_call"
+$startupOutput = Join-Path $buildDirectory "startup_init_string_copy"
 $recursiveSource = Join-Path $recursiveOutput "spore_006237a0_arm64.cpp"
 $calleeSource = Join-Path $crossCallOutput "spore_00b8dab0_arm64.cpp"
 $callerSource = Join-Path $crossCallOutput "spore_00bb9b70_arm64.cpp"
+$startupSource = Join-Path $startupOutput "spore_011e5d80_arm64.cpp"
+$startupCalleeSource = Join-Path $startupOutput "spore_011e8b20_arm64.cpp"
 $recursiveBytes = Join-Path $buildDirectory "recursive_reference_bytes.hpp"
 $crossCallBytes = Join-Path $buildDirectory "cross_call_reference_bytes.hpp"
+$startupBytes = Join-Path $buildDirectory "startup_reference_bytes.hpp"
 $x86Executable = Join-Path $buildDirectory "batch_call_lift_x86.exe"
 $arm64Executable = Join-Path $buildDirectory "batch_call_lift_arm64"
 $remoteExecutable = "/data/local/tmp/spore_batch_call_lift"
@@ -77,13 +86,22 @@ try {
     if ($LASTEXITCODE -ne 0) {
         throw "Distinct-function call-closure generation failed"
     }
+    & $python $generator --exe $PePath `
+        --batch $startupOuterBatch --batch $startupInnerBatch `
+        --entry 0x011e5d80 --output-dir $startupOutput `
+        --report (Join-Path $startupOutput "report.json") `
+        --byte-header $startupBytes
+    if ($LASTEXITCODE -ne 0) {
+        throw "Startup-linked call-closure generation failed"
+    }
 
     $buildCommand = 'call "' + $vsDevCmd +
         '" -no_logo -arch=x86 -host_arch=x64 && pushd "' + $buildDirectory +
         '" && cl /nologo /std:c++17 /EHsc /O2 /W4 /I"' +
         $backendDirectory + '" /I"' + $buildDirectory + '" /Fe:"' +
         $x86Executable + '" "' + $harness + '" "' + $recursiveSource +
-        '" "' + $calleeSource + '" "' + $callerSource + '"'
+        '" "' + $calleeSource + '" "' + $callerSource + '" "' +
+        $startupSource + '" "' + $startupCalleeSource + '"'
     & $env:ComSpec /d /s /c $buildCommand
     if ($LASTEXITCODE -ne 0) {
         throw "Windows x86 reference-vs-generated-lift build failed"
@@ -96,6 +114,7 @@ try {
     & $clang "--target=aarch64-linux-android29" "-std=c++17" "-O2" `
         "-Wall" "-Wextra" "-Werror" "-I$backendDirectory" "-I$buildDirectory" `
         $harness $recursiveSource $calleeSource $callerSource `
+        $startupSource $startupCalleeSource `
         "-o" $arm64Executable
     if ($LASTEXITCODE -ne 0) {
         throw "Android ARM64 generated-lift harness build failed"

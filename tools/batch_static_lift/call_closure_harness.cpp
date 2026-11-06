@@ -2,6 +2,7 @@
 #if defined(_M_IX86)
 #include "recursive_reference_bytes.hpp"
 #include "cross_call_reference_bytes.hpp"
+#include "startup_reference_bytes.hpp"
 #endif
 
 #include <array>
@@ -21,6 +22,9 @@ BatchLiftStatus spore_lift_006237a0(
     BatchLiftMemory& memory,
     BatchLiftState& state);
 BatchLiftStatus spore_lift_00bb9b70(
+    BatchLiftMemory& memory,
+    BatchLiftState& state);
+BatchLiftStatus spore_lift_011e5d80(
     BatchLiftMemory& memory,
     BatchLiftState& state);
 
@@ -180,6 +184,81 @@ GuestResult run_guest_cross_call(std::uint32_t value) {
         passed,
         state.regs[0],
         0u,
+        state.eflags,
+        state.regs[4],
+        state.eip,
+    };
+}
+
+struct StartupCopyResult {
+    bool passed{};
+    std::uint32_t result{};
+    std::uint32_t destination{};
+    std::uint32_t flags{};
+    std::uint32_t final_esp{};
+    std::uint32_t final_eip{};
+};
+
+StartupCopyResult run_guest_startup_string_copy(
+    const char* source,
+    std::uint32_t startup_stack_esp) {
+    constexpr std::uint32_t kStringObjectBase = 0x5000u;
+    constexpr std::uint32_t kStringSourceBase = 0x6000u;
+    constexpr std::uint32_t kStringObjectVtable = 0x01452998u;
+    constexpr std::uint32_t kStringCallReturn = 0x011e5d97u;
+    constexpr std::uint32_t kStringReturnSentinel = 0xfedcbau;
+
+    BatchLiftMemory memory;
+    std::array<std::uint8_t, 0x40> object{};
+    std::array<std::uint8_t, 0x40> source_bytes{};
+    const std::size_t source_length = std::strlen(source);
+    if (source_length >= source_bytes.size()) return {};
+    std::memcpy(source_bytes.data(), source, source_length + 1u);
+    if (!memory.map_region(kStringObjectBase, object.data(), object.size(), true)
+        || !memory.map_region(
+            kStringSourceBase, source_bytes.data(), source_bytes.size(), false)) {
+        return {};
+    }
+
+    BatchLiftState state{};
+    for (std::uint32_t index = 0; index < 8u; ++index) {
+        state.regs[index] = kRegisterSeed + index * 0x01010101u;
+    }
+    state.regs[1] = kStringObjectBase;
+    state.regs[4] = startup_stack_esp;
+    state.regs[6] = kInitialEsi;
+    state.eflags = kInitialFlags;
+    state.eip = 0x011e5d80u;
+    if (!memory.store32(startup_stack_esp, kStringReturnSentinel)
+        || !memory.store32(state.regs[4] + 4u, kStringSourceBase)) {
+        return {};
+    }
+
+    const BatchLiftStatus status = spore_lift_011e5d80(memory, state);
+    std::uint32_t vtable{};
+    std::uint32_t nested_return{};
+    bool copied = memory.load32(kStringObjectBase, vtable)
+        && vtable == kStringObjectVtable;
+    for (std::size_t index = 0; index <= source_length && copied; ++index) {
+        std::uint32_t byte{};
+        copied = memory.load8(
+            kStringObjectBase + 4u + static_cast<std::uint32_t>(index), byte)
+            && byte == static_cast<std::uint8_t>(source_bytes[index]);
+    }
+    const bool passed = status == BatchLiftStatus::returned
+        && state.regs[0] == kStringObjectBase
+        && state.regs[1] == ((kStringObjectBase + 4u) & 0xffffff00u)
+        && state.regs[6] == kInitialEsi
+        && state.regs[4] == startup_stack_esp + 8u
+        && state.eip == kStringReturnSentinel
+        && memory.load32(
+            startup_stack_esp - 16u, nested_return)
+        && nested_return == kStringCallReturn
+        && copied;
+    return {
+        passed,
+        state.regs[0],
+        state.regs[1],
         state.eflags,
         state.regs[4],
         state.eip,
@@ -403,6 +482,84 @@ NativeCrossResult run_native_cross_call(
     };
 }
 
+struct NativeStartupCopyResult {
+    bool passed{};
+    std::uint32_t result{};
+    std::uint32_t ecx{};
+    std::uint32_t esi{};
+    std::uint32_t flags{};
+    std::uint32_t nested_return{};
+    std::uint32_t entry_esp{};
+    bool esp_balanced{};
+};
+
+NativeStartupCopyResult run_native_startup_string_copy(
+    const std::uint8_t* function,
+    const char* source) {
+    constexpr std::uint32_t kStringObjectVtable = 0x01452998u;
+    std::array<std::uint8_t, 0x40> object{};
+    const std::uint32_t function_address = static_cast<std::uint32_t>(
+        reinterpret_cast<std::uintptr_t>(function));
+    const std::uint32_t object_address = static_cast<std::uint32_t>(
+        reinterpret_cast<std::uintptr_t>(object.data()));
+    const std::uint32_t source_address = static_cast<std::uint32_t>(
+        reinterpret_cast<std::uintptr_t>(source));
+    const std::uint32_t initial_esi = kInitialEsi;
+    std::uint32_t saved_esi{};
+    std::uint32_t native_result{};
+    std::uint32_t native_ecx{};
+    std::uint32_t native_esi{};
+    std::uint32_t native_flags{};
+    std::uint32_t esp_before{};
+    std::uint32_t esp_after{};
+    std::uint32_t nested_return{};
+
+    __asm {
+        mov saved_esi, esi
+        mov esi, initial_esi
+        mov ecx, object_address
+        mov eax, function_address
+        mov esp_before, esp
+        push source_address
+        push 0xa5a50002
+        popfd
+        call eax
+        mov native_result, eax
+        mov native_ecx, ecx
+        mov native_esi, esi
+        pushfd
+        pop eax
+        mov native_flags, eax
+        mov esp_after, esp
+        mov edx, esp
+        mov eax, dword ptr [edx - 24]
+        mov nested_return, eax
+        mov esi, saved_esi
+    }
+
+    const std::size_t source_length = std::strlen(source);
+    bool copied = object.size() >= 4u + source_length + 1u;
+    std::uint32_t vtable{};
+    if (copied) std::memcpy(&vtable, object.data(), sizeof(vtable));
+    copied = copied && vtable == kStringObjectVtable
+        && std::memcmp(object.data() + 4u, source, source_length + 1u) == 0;
+    return {
+        esp_before == esp_after
+            && native_result == object_address
+            && native_ecx == ((object_address + 4u) & 0xffffff00u)
+            && native_esi == initial_esi
+            && nested_return == function_address + 0x17u
+            && copied,
+        native_result,
+        native_ecx,
+        native_esi,
+        native_flags,
+        nested_return,
+        static_cast<std::uint32_t>(esp_before - 8u),
+        esp_before == esp_after,
+    };
+}
+
 #endif
 
 bool run_recursive_cases(bool print_results) {
@@ -508,13 +665,81 @@ bool run_distinct_function_calls(bool print_results) {
     return true;
 }
 
+bool run_startup_initialization_chain(bool print_results) {
+    const std::array<const char*, 3> inputs = {
+        "", "A", "Spore_Init_Config",
+    };
+#if defined(_M_IX86)
+    ExecutableCode code(0x011e5d80u, 0x011e8b41u);
+    if (!code.valid()
+        || !code.copy(kSporeInstructions_011e5d80)
+        || !code.copy(kSporeInstructions_011e8b20)
+        || !code.make_executable()) {
+        std::cerr << "ERROR could not map verified startup-chain PE bytes\n";
+        return false;
+    }
+#endif
+    for (const char* source : inputs) {
+#if defined(_M_IX86)
+        const NativeStartupCopyResult native =
+            run_native_startup_string_copy(code.at(0x011e5d80u), source);
+        const std::uint32_t guest_entry_esp =
+            (BatchLiftMemory::kEntryEsp & 0xffffff00u)
+            | (native.entry_esp & 0xffu);
+#else
+        const std::uint32_t guest_entry_esp = BatchLiftMemory::kEntryEsp;
+#endif
+        const StartupCopyResult guest =
+            run_guest_startup_string_copy(source, guest_entry_esp);
+        if (!guest.passed) {
+            std::cerr << "FAIL startup string-copy guest input="
+                      << (source[0] == '\0' ? "<empty>" : source) << "\n";
+            return false;
+        }
+#if defined(_M_IX86)
+        if (!native.passed
+            || (guest.flags & kStatusFlags) != (native.flags & kStatusFlags)) {
+            std::cerr << "FAIL startup string-copy x86 differential input="
+                      << (source[0] == '\0' ? "<empty>" : source)
+                      << " native_result=0x" << std::hex << native.result
+                      << " native_ecx=0x" << native.ecx
+                      << " native_esi=0x" << native.esi
+                      << " native_flags=0x" << (native.flags & kStatusFlags)
+                      << " native_nested_return=0x" << native.nested_return
+                      << std::dec << " native_esp_balanced="
+                      << (native.esp_balanced ? "yes" : "no")
+                      << " guest_flags=0x" << std::hex
+                      << (guest.flags & kStatusFlags) << std::dec << "\n";
+            return false;
+        }
+        if (print_results) {
+            std::cout << "PASS x86 differential startup_init_string_copy "
+                      << "input_bytes=" << std::strlen(source)
+                      << " return=object nested_target=0x011e8b20 "
+                      << "nested_return=0x011e5d97 esp_balanced=yes\n";
+        }
+#else
+        if (print_results) {
+            std::cout << "PASS arm64 guest startup_init_string_copy "
+                      << "input_bytes=" << std::strlen(source)
+                      << " return=object nested_target=0x011e8b20 "
+                      << "nested_return=0x011e5d97 esp_balanced=yes\n";
+        }
+#endif
+    }
+    return true;
+}
+
 } // namespace
 
 int main() {
-    if (!run_recursive_cases(true) || !run_distinct_function_calls(true)) {
+    if (!run_recursive_cases(true)
+        || !run_distinct_function_calls(true)
+        || !run_startup_initialization_chain(true)) {
         return 1;
     }
     std::cout << "PASS generated_backend_call_closures recursive=1 "
-              << "distinct_functions=2 shared_state=yes verified_pe_bytes=yes\n";
+              << "distinct_functions=2 startup_linked_functions=2 "
+              << "shared_state=yes verified_pe_bytes=yes\n";
     return 0;
 }

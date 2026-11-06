@@ -1,0 +1,61 @@
+Startup call-closure diagnostic
+Reference PE: C:\SporeAnalysis\SporeApp.exe
+Root: FUN_00f47ed0
+Batch exports scanned: 116 files
+Reachable exported functions visited by direct CALL edges: 570
+Code emitted: no
+Functions with no recorded translation rejection and verified bytes: 147
+Functions with at least one translation rejection: 423
+FUN_00f47ed0 alone has 68 translation rejection reasons.
+
+Summary:
+- PE import thunk stubs recognized: 118
+- Direct calls to recognized import thunks in the closure: 72
+- Indirect calls: 470
+  - with a static reference candidate: 26 (24 exported functions, 2 import thunks)
+  - without a candidate destination: 444
+- Missing internal functions in .text: 2
+  - 0x0081d470, called by FUN_00f47ed0 at 0x00f47ef9
+  - 0x011e073e, referenced from 25 reachable callsites
+- Unsupported instruction records: 2250
+  - most frequent: MOV 546, MOVSS 403, LEA 309, SAR 213, SHR 122, SHL 97
+- Functions with exported body-byte-count mismatches: 2
+  - 0x0118a7d0: exported 10201 bytes, decoded 7143
+  - 0x0118cfb0: exported 11356 bytes, decoded 6731
+- Direct calls outside exports, recognized imports, and .text: 0
+
+FUN_00f47ed0 direct calls: 102 (100 exported bodies, 1 import thunk,
+1 missing internal body). It also contains 49 indirect calls. The call at
+0x00f47ed9 to 0x006b4f20 is classified from the PE import table as
+steam_api.dll!SteamAPI_Init, with IAT slot 0x013cc804. The import is not
+implemented or replaced by this diagnostic.
+
+Selected statically linked slice:
+FUN_00f47ed0 --0x00f480ca--> FUN_00a45f30
+  --0x00a45f71--> FUN_00a459d0
+  --0x00a459f0--> FUN_00a33600
+  --0x00a33736--> FUN_00a247f0
+  --0x00a24812--> FUN_011e5d80
+  --0x011e5d92--> FUN_011e8b20
+
+The selected pair is 28 instructions and 65 PE-verified bytes. FUN_00a247f0
+pushes source pointer 0x01449334 before calling FUN_011e5d80. The harness
+starts directly at FUN_011e5d80 and does not execute this ancestor path or the
+game entry point. It supplies a zeroed guest object at 0x5000, a read-only
+string buffer at 0x6000, [ESP+4] source pointer, return sentinel, and initial
+registers/flags. Empty, one-byte, and 17-byte strings exercise the copy loop.
+The source is a test fixture; the original global at 0x01449334 is not mapped.
+
+Windows x86 differential: passed all three inputs, matching output object,
+string bytes, relevant flags, nested return address, and stack cleanup.
+ARM64 target build: passed.
+Phone run: passed after reconnecting ADB device PJMZAEJRX4YLFIDI
+(Xiaomi 2303ERA42L). All three startup string-copy fixtures and the recursive
+and distinct-function CALL regressions passed on ARM64. The initial disconnect
+attempt is retained in startup-chain-device-disconnected-2026-11-06.log.
+The successful run is startup-chain-device-2026-11-06.log.
+
+Complete machine-readable findings:
+test-logs/startup-call-diagnostic-2026-11-06.json
+Persistent generated sources:
+tools/batch_static_lift/generated/startup_init_string_copy/
