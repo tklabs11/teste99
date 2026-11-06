@@ -56,6 +56,8 @@ constexpr std::uint32_t kResmanIatInitializeCriticalSection = 0x013cc2d0u;
 constexpr std::uint32_t kResmanIatDeleteCriticalSection = 0x013cc2d4u;
 constexpr std::uint32_t kResmanIatEnterCriticalSection = 0x013cc2d8u;
 constexpr std::uint32_t kResmanIatLeaveCriticalSection = 0x013cc2dcu;
+constexpr std::uint32_t kClosureIatCreateSemaphoreA = 0x013cc198u;
+constexpr std::uint32_t kClosureIatStrncpy = 0x013cc4f4u;
 
 struct NativeNode {
     std::uint8_t prefix[0x30]{};
@@ -1022,7 +1024,8 @@ bool guest_import_call(
     std::uint32_t return_address,
     const std::uint32_t* arguments,
     std::size_t argument_count,
-    std::uint32_t stack_before) {
+    std::uint32_t stack_before,
+    std::uint32_t callee_cleanup_bytes = 0xffffffffu) {
     state.regs[4] = stack_before;
     for (std::size_t index = 0; index < argument_count; ++index) {
         if (!memory.store32(
@@ -1033,10 +1036,13 @@ bool guest_import_call(
     }
     const BatchLiftStatus status = batch_guest_import_call32(
         memory, state, symbol, iat_address, return_address);
+    const std::uint32_t expected_cleanup =
+        callee_cleanup_bytes == 0xffffffffu
+        ? static_cast<std::uint32_t>(argument_count * 4u)
+        : callee_cleanup_bytes;
     return status == BatchLiftStatus::returned
         && state.eip == return_address
-        && state.regs[4] == stack_before
-            + static_cast<std::uint32_t>(argument_count * 4u);
+        && state.regs[4] == stack_before + expected_cleanup;
 }
 
 bool run_guest_critical_section_lifecycle(
@@ -1343,15 +1349,23 @@ bool run_guest_resman_constructor(bool print_results) {
     return true;
 }
 
-bool run_guest_create_mutex_rejection(bool print_results) {
+bool run_guest_create_mutex_handler(bool print_results) {
     constexpr std::uint32_t kMutexConfig = kResmanObjectBase + 0x60u;
     std::array<std::uint8_t, 0x100> object{};
+    constexpr char kMutexName[] = "SporeAndroid.Marco5.mutex";
     BatchLiftMemory memory;
     if (!memory.map_region(
             kResmanObjectBase, object.data(), object.size(), true)
         || !memory.store8(kMutexConfig, 0u)
-        || !memory.store8(kMutexConfig + 1u, 1u)) {
+        || !memory.store8(kMutexConfig + 1u, kMutexName[0])) {
         return false;
+    }
+    for (std::size_t index = 1u; index < sizeof(kMutexName); ++index) {
+        if (!memory.store8(
+                kMutexConfig + 1u + static_cast<std::uint32_t>(index),
+                static_cast<std::uint8_t>(kMutexName[index]))) {
+            return false;
+        }
     }
 
     BatchGuestRuntime runtime;
@@ -1365,9 +1379,11 @@ bool run_guest_create_mutex_rejection(bool print_results) {
         return false;
     }
     const BatchLiftStatus status = spore_lift_00922150(memory, state);
-    const bool passed = status == BatchLiftStatus::unsupported_import
-        && state.eip == kResmanIatCreateMutexA
-        && state.regs[4] != BatchLiftMemory::kEntryEsp + 4u
+    std::uint32_t guest_handle{};
+    const bool passed = status == BatchLiftStatus::returned
+        && state.eip == kStackSentinel
+        && (state.regs[0] & 0xffu) == 1u
+        && state.regs[4] == BatchLiftMemory::kEntryEsp + 8u
         && runtime.calls().size() == 1u
         && runtime.calls()[0].symbol == "KERNEL32.dll!CreateMutexA"
         && runtime.calls()[0].iat_address == kResmanIatCreateMutexA
@@ -1375,20 +1391,225 @@ bool run_guest_create_mutex_rejection(bool print_results) {
         && runtime.calls()[0].arguments[0] == 0u
         && runtime.calls()[0].arguments[1] == 0u
         && runtime.calls()[0].arguments[2] == kMutexConfig + 1u
-        && runtime.last_error().find("not implemented")
-            != std::string::npos;
+        && memory.load32(kResmanObjectBase, guest_handle)
+        && guest_handle != 0u
+        && guest_handle == runtime.calls()[0].result
+        && runtime.calls()[0].last_error == 0u;
     if (!passed) {
-        std::cerr << "FAIL CreateMutexA rejection status="
+        std::cerr << "FAIL CreateMutexA handler status="
                   << static_cast<int>(status)
                   << " import_count=" << runtime.calls().size()
+                  << " eax=0x" << std::hex << state.regs[0]
+                  << " eip=0x" << state.eip
+                  << " esp=0x" << state.regs[4]
+                  << " handle=0x" << std::hex << guest_handle
+                  << " state_last_error=0x" << state.last_error
+                  << std::dec
+                  << " call_result=0x"
+                  << (runtime.calls().empty() ? 0u
+                      : runtime.calls()[0].result)
+                  << " call_last_error="
+                  << (runtime.calls().empty() ? 0u
+                      : runtime.calls()[0].last_error)
                   << " error=" << runtime.last_error() << "\n";
         return false;
     }
     if (print_results) {
-        std::cout << "PASS explicit import rejection "
-                  << "import=KERNEL32.dll!CreateMutexA "
-                  << "diagnostic=\"" << runtime.last_error()
-                  << "\" execution_stopped=yes\n";
+        std::cout << "PASS guest import CreateMutexA "
+                  << "name=SporeAndroid.Marco5.mutex handle=nonzero "
+                  << "last_error=" << state.last_error
+#if defined(_M_IX86)
+                  << " backend=Win32"
+#else
+                  << " backend=ARM64_guest_handle"
+#endif
+                  << "\n";
+    }
+    return true;
+}
+
+bool run_guest_import_handler_regressions(bool print_results) {
+    constexpr std::uint32_t kDataBase = 0x51000u;
+    constexpr std::uint32_t kDestination = kDataBase + 0x10u;
+    constexpr std::uint32_t kSource = kDataBase + 0x40u;
+    constexpr std::uint32_t kStack = BatchLiftMemory::kEntryEsp - 0x40u;
+    constexpr std::uint32_t kReturn = 0xe1110001u;
+    constexpr char kMutexName[] = "SporeAndroid.Marco5.imports.mutex";
+    constexpr char kSemaphoreName[] =
+        "SporeAndroid.Marco5.imports.semaphore";
+    std::array<std::uint8_t, 0x100> bytes{};
+    BatchLiftMemory memory;
+    if (!memory.map_region(kDataBase, bytes.data(), bytes.size(), true)) {
+        return false;
+    }
+
+    BatchGuestRuntime runtime;
+    BatchLiftState state{};
+    state.regs[4] = kStack;
+    state.imports = &runtime;
+    std::uint32_t strncpy_arguments[] = {kDestination, kSource, 6u};
+    constexpr char kShortSource[] = "abc";
+    for (std::size_t index = 0; index < sizeof(kShortSource); ++index) {
+        if (!memory.store8(
+                kSource + static_cast<std::uint32_t>(index),
+                static_cast<std::uint8_t>(kShortSource[index]))) {
+            return false;
+        }
+    }
+    std::array<std::uint8_t, 6> expected_copy{};
+    std::strncpy(
+        reinterpret_cast<char*>(expected_copy.data()), kShortSource,
+        expected_copy.size());
+#if defined(_M_IX86)
+    std::array<char, 6> native_copy{};
+#pragma warning(push)
+#pragma warning(disable: 4996)
+    std::strncpy(native_copy.data(), kShortSource, native_copy.size());
+#pragma warning(pop)
+    const bool native_strncpy_matches =
+        std::memcmp(expected_copy.data(), native_copy.data(),
+            expected_copy.size()) == 0;
+#else
+    const bool native_strncpy_matches = true;
+#endif
+    const bool strncpy_called = guest_import_call(
+        memory, state, "MSVCR90.dll!strncpy", kClosureIatStrncpy,
+        kReturn, strncpy_arguments, 3u, kStack, 0u);
+    std::array<std::uint8_t, 6> guest_copy{};
+    for (std::size_t index = 0; index < guest_copy.size(); ++index) {
+        std::uint32_t byte{};
+        if (!memory.load8(
+                kDestination + static_cast<std::uint32_t>(index), byte)) {
+            return false;
+        }
+        guest_copy[index] = static_cast<std::uint8_t>(byte);
+    }
+    const bool strncpy_passed = strncpy_called
+        && state.regs[0] == kDestination
+        && state.regs[4] == kStack
+        && state.eip == kReturn
+        && std::equal(
+            expected_copy.begin(), expected_copy.end(), guest_copy.begin())
+        && runtime.calls().size() == 1u
+        && runtime.calls()[0].arguments == std::vector<std::uint32_t>(
+            std::begin(strncpy_arguments), std::end(strncpy_arguments))
+        && runtime.calls()[0].result == kDestination
+        && native_strncpy_matches;
+
+    std::uint32_t semaphore_name_address = kDataBase + 0x80u;
+    for (std::size_t index = 0; index < sizeof(kSemaphoreName); ++index) {
+        if (!memory.store8(
+                semaphore_name_address + static_cast<std::uint32_t>(index),
+                static_cast<std::uint8_t>(kSemaphoreName[index]))) {
+            return false;
+        }
+    }
+    std::uint32_t semaphore_arguments[] = {
+        0u, 2u, 5u, semaphore_name_address,
+    };
+    const bool semaphore_created = guest_import_call(
+        memory, state, "KERNEL32.dll!CreateSemaphoreA",
+        kClosureIatCreateSemaphoreA, kReturn, semaphore_arguments, 4u, kStack);
+    const std::uint32_t first_semaphore = state.regs[0];
+    std::uint32_t semaphore_count{};
+    std::uint32_t semaphore_maximum{};
+    const bool initial_semaphore_state = semaphore_created
+        && runtime.semaphore_state(
+            first_semaphore, semaphore_count, semaphore_maximum)
+        && semaphore_count == 2u && semaphore_maximum == 5u;
+
+    std::uint32_t duplicate_semaphore_arguments[] = {
+        0u, 4u, 6u, semaphore_name_address,
+    };
+    const bool semaphore_opened = guest_import_call(
+        memory, state, "KERNEL32.dll!CreateSemaphoreA",
+        kClosureIatCreateSemaphoreA, kReturn,
+        duplicate_semaphore_arguments, 4u, kStack);
+    const std::uint32_t second_semaphore = state.regs[0];
+    std::uint32_t preserved_count{};
+    std::uint32_t preserved_maximum{};
+    const bool named_semaphore_semantics =
+        semaphore_opened
+        && second_semaphore != 0u
+        && state.last_error == 183u
+        && runtime.same_kernel_object(first_semaphore, second_semaphore)
+        && runtime.semaphore_state(
+            second_semaphore, preserved_count, preserved_maximum)
+        && preserved_count == 2u && preserved_maximum == 5u;
+
+    std::uint32_t invalid_semaphore_arguments[] = {0u, 6u, 5u, 0u};
+    const bool invalid_semaphore_call = guest_import_call(
+        memory, state, "KERNEL32.dll!CreateSemaphoreA",
+        kClosureIatCreateSemaphoreA, kReturn,
+        invalid_semaphore_arguments, 4u, kStack);
+    const bool invalid_semaphore_rejected =
+        invalid_semaphore_call
+        && state.regs[0] == 0u
+        && state.last_error == 87u;
+
+    const std::uint32_t mutex_name_address = kDataBase + 0xc0u;
+    for (std::size_t index = 0; index < sizeof(kMutexName); ++index) {
+        if (!memory.store8(
+                mutex_name_address + static_cast<std::uint32_t>(index),
+                static_cast<std::uint8_t>(kMutexName[index]))) {
+            return false;
+        }
+    }
+    std::uint32_t mutex_arguments[] = {
+        0u, 0u, mutex_name_address,
+    };
+    const bool mutex_created = guest_import_call(
+        memory, state, "KERNEL32.dll!CreateMutexA", 0x013cc180u,
+        kReturn, mutex_arguments, 3u, kStack);
+    const std::uint32_t first_mutex = state.regs[0];
+    const bool mutex_opened = guest_import_call(
+        memory, state, "KERNEL32.dll!CreateMutexA", 0x013cc180u,
+        kReturn, mutex_arguments, 3u, kStack);
+    const std::uint32_t second_mutex = state.regs[0];
+    const bool named_mutex_semantics =
+        mutex_created && mutex_opened
+        && first_mutex != 0u && second_mutex != 0u
+        && state.last_error == 183u
+        && runtime.same_kernel_object(first_mutex, second_mutex);
+
+    std::uint32_t conflicting_semaphore_arguments[] = {
+        0u, 0u, 5u, mutex_name_address,
+    };
+    const bool conflicting_type_call = guest_import_call(
+        memory, state, "KERNEL32.dll!CreateSemaphoreA",
+        kClosureIatCreateSemaphoreA, kReturn,
+        conflicting_semaphore_arguments, 4u, kStack);
+    const bool conflicting_type_rejected =
+        conflicting_type_call
+        && state.regs[0] == 0u && state.last_error == 6u;
+
+    const bool all_passed = strncpy_passed
+        && initial_semaphore_state && named_semaphore_semantics
+        && invalid_semaphore_rejected && named_mutex_semantics
+        && conflicting_type_rejected;
+    if (!all_passed) {
+        std::cerr << "FAIL import handlers strncpy=" << strncpy_passed
+                  << " semaphore_init=" << initial_semaphore_state
+                  << " semaphore_named=" << named_semaphore_semantics
+                  << " semaphore_invalid=" << invalid_semaphore_rejected
+                  << " mutex_named=" << named_mutex_semantics
+                  << " type_conflict=" << conflicting_type_rejected
+                  << " error=" << runtime.last_error()
+                  << " last_error=" << state.last_error << "\n";
+        return false;
+    }
+    if (print_results) {
+        std::cout << "PASS guest imports strncpy=bounded_zero_pad "
+                  << "callee_cleanup=none CreateSemaphoreA=count_and_named "
+                  << "CreateMutexA=named_and_last_error "
+                  << "type_conflict=ERROR_INVALID_HANDLE invalid_count="
+                  << "ERROR_INVALID_PARAMETER"
+#if defined(_M_IX86)
+                  << " reference=Windows_x86_CRT_and_Win32"
+#else
+                  << " runtime=Android_guest_objects"
+#endif
+                  << "\n";
     }
     return true;
 }
@@ -1814,7 +2035,8 @@ int main() {
         || !run_distinct_function_calls(true)
         || !run_startup_initialization_chain(true)
         || !run_guest_resman_constructor(true)
-        || !run_guest_create_mutex_rejection(true)) {
+        || !run_guest_create_mutex_handler(true)
+        || !run_guest_import_handler_regressions(true)) {
         return 1;
     }
     std::cout << "PASS generated_backend_call_closures recursive=1 "

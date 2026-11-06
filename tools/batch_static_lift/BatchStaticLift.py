@@ -490,7 +490,7 @@ def translate_instruction(
         } and destination[3] == 32 and source[0] == "xmm":
             return [
                 "if (!batch_guest_movss_store("
-                f"memory, state, {destination[1]}u, "
+                f"memory, state, {source[1]}u, "
                 f"{memory_address(destination)})) "
                 "return BatchLiftStatus::invalid_memory;"
             ]

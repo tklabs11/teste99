@@ -10,10 +10,12 @@ $toolsDirectory = $PSScriptRoot
 $repoRoot = Split-Path $toolsDirectory -Parent
 $backendDirectory = Join-Path $toolsDirectory "batch_static_lift"
 $generator = Join-Path $backendDirectory "generate_function_prefix.py"
+$closureGenerator = Join-Path $backendDirectory "generate_call_closure.py"
 $harness = Join-Path $backendDirectory "constructor_prefix_harness.cpp"
 $rootBatch = Join-Path $BatchDirectory "spore_batch_all_0041.json"
 $childBatch = Join-Path $BatchDirectory "spore_batch_all_0021.json"
 $boundaryBatch = Join-Path $BatchDirectory "spore_batch_all_0034.json"
+$helperBatch = Join-Path $BatchDirectory "spore_batch_all_0086.json"
 $python = (Get-Command python.exe -ErrorAction Stop).Source
 $sdkRoot = if ($env:ANDROID_SDK_ROOT) {
     $env:ANDROID_SDK_ROOT
@@ -34,6 +36,7 @@ $logsRoot = Join-Path $repoRoot "test-logs"
 $runName = "constructor-prefix-00a33600-" + (Get-Date -Format "yyyyMMdd-HHmmssfff")
 $runDirectory = Join-Path $logsRoot $runName
 $generatedDirectory = Join-Path $runDirectory "generated"
+$closureGeneratedDirectory = Join-Path $generatedDirectory "closure"
 $buildDirectory = Join-Path $env:TEMP ("spore-constructor-prefix-" + [Guid]::NewGuid().ToString("N"))
 $remoteExecutable = "/data/local/tmp/spore_constructor_prefix_" + [Guid]::NewGuid().ToString("N")
 $deviceSelected = $false
@@ -56,8 +59,8 @@ function Invoke-AdbCommand {
 }
 
 foreach ($requiredPath in @(
-    $PePath, $rootBatch, $childBatch, $boundaryBatch,
-    $generator, $harness, $adb, $clang, $vswhere
+    $PePath, $rootBatch, $childBatch, $boundaryBatch, $helperBatch,
+    $generator, $closureGenerator, $harness, $adb, $clang, $vswhere
 )) {
     if (-not (Test-Path -LiteralPath $requiredPath)) {
         throw "Required input or tool was not found: $requiredPath"
@@ -72,6 +75,8 @@ New-Item -ItemType Directory -Path $buildDirectory | Out-Null
 $source = Join-Path $generatedDirectory "spore_00a33600_prefix.cpp"
 $byteHeader = Join-Path $generatedDirectory "prefix_reference_bytes.hpp"
 $report = Join-Path $generatedDirectory "report.json"
+$closureReport = Join-Path $closureGeneratedDirectory "report.json"
+$closureByteHeader = Join-Path $closureGeneratedDirectory "closure_reference_bytes.hpp"
 $x86Log = Join-Path $runDirectory "windows-x86.log"
 $arm64Log = Join-Path $runDirectory "android-arm64.log"
 $comparisonLog = Join-Path $runDirectory "comparison.log"
@@ -85,9 +90,14 @@ try {
         "--batch", $rootBatch,
         "--batch", $childBatch,
         "--batch", $boundaryBatch,
+        "--batch", $helperBatch,
         "--entry", "0x00a33600",
-        "--stop-at", "0x00a3366a",
+        "--stop-at", "0x00a33726",
         "--include-call-target", "0x00743b50",
+        "--allow-call-target", "0x00921f00",
+        "--allow-call-target", "0x009222a0",
+        "--data-range", "0x01452000:0x1000",
+        "--data-range", "0x01485000:0x1000",
         "--output-dir", $generatedDirectory,
         "--report", $report,
         "--byte-header", $byteHeader
@@ -104,6 +114,31 @@ try {
         throw "Partial-prefix generation failed (exit code $generatorCode)"
     }
 
+    New-Item -ItemType Directory -Path $closureGeneratedDirectory |
+        Out-Null
+    $closureOutput = & $python $closureGenerator `
+        --exe $PePath --batch $boundaryBatch --entry 0x00921f00 `
+        --output-dir $closureGeneratedDirectory `
+        --report $closureReport --byte-header $closureByteHeader 2>&1
+    $closureCode = $LASTEXITCODE
+    $closureOutput |
+        Tee-Object -FilePath (Join-Path $runDirectory "closure-generation.log")
+    if ($closureCode -ne 0) {
+        throw "FUN_00921f00 dependency closure generation failed (exit code $closureCode)"
+    }
+    $closureMetadata = Get-Content -LiteralPath $closureReport -Raw |
+        ConvertFrom-Json
+    if ($closureMetadata.function_count -ne 8 -or
+        $closureMetadata.source_sha256 -ne
+            "6aec99cb2dc7fd08851a1718e92a60f359fb3fccca3b244a890ae07e93cbe59b") {
+        throw "Expected eight verified FUN_00921f00 closure functions"
+    }
+    $closureSources = @(
+        $closureMetadata.functions | ForEach-Object {
+            Join-Path $closureGeneratedDirectory $_.generated_source
+        }
+    )
+
     $vsInstall = & $vswhere -latest -products "*" -property installationPath
     if ($LASTEXITCODE -ne 0 -or -not $vsInstall) {
         throw "Could not locate Visual Studio Build Tools"
@@ -115,8 +150,10 @@ try {
     $buildCommand = 'call "' + $vsDevCmd +
         '" -no_logo -arch=x86 -host_arch=x64 && pushd "' + $buildDirectory +
         '" && cl /nologo /std:c++17 /EHsc /O2 /W4 /I"' +
-        $backendDirectory + '" /I"' + $generatedDirectory + '" /Fe:"' +
+        $backendDirectory + '" /I"' + $generatedDirectory + '" /I"' +
+        $closureGeneratedDirectory + '" /Fe:"' +
         $x86Executable + '" "' + $harness + '" "' + $source + '"'
+    $buildCommand += ' "' + ($closureSources -join '" "') + '"'
     $buildOutput = & $env:ComSpec /d /s /c $buildCommand 2>&1
     $buildCode = $LASTEXITCODE
     $buildOutput | Tee-Object -FilePath (Join-Path $runDirectory "windows-x86-build.log")
@@ -138,8 +175,10 @@ try {
     }
 
     & $clang "--target=aarch64-linux-android29" "-std=c++17" "-O2" `
-        "-Wall" "-Wextra" "-Werror" "-I$backendDirectory" "-I$generatedDirectory" `
-        $harness $source "-o" $arm64Executable 2>&1 |
+        "-Wall" "-Wextra" "-Werror" "-static-libstdc++" "-static-libgcc" `
+        "-fPIE" "-pie" "-I$backendDirectory" "-I$generatedDirectory" `
+        "-I$closureGeneratedDirectory" `
+        $harness $source $closureSources "-o" $arm64Executable 2>&1 |
         Tee-Object -FilePath (Join-Path $runDirectory "android-arm64-build.log")
     if ($LASTEXITCODE -ne 0) {
         throw "Android ARM64 prefix harness build failed"
@@ -205,7 +244,7 @@ try {
     $arm64Output = $arm64Result.Output
     $arm64Output | Tee-Object -FilePath $arm64Log
     if ($arm64Result.ExitCode -ne 0) {
-        throw "Android ARM64 prefix harness failed on $DeviceSerial (exit code $arm64Code)"
+        throw "Android ARM64 prefix harness failed on $DeviceSerial (exit code $($arm64Result.ExitCode))"
     }
     $arm64LiftLine = @($arm64Output | Where-Object { "$_" -match '^case=lifted_arm64 ' })[0]
     if (-not $arm64LiftLine) {
@@ -213,6 +252,12 @@ try {
     }
     $x86Canonical = "$x86LiftLine" -replace '^case=\S+\s+', ''
     $arm64Canonical = "$arm64LiftLine" -replace '^case=\S+\s+', ''
+    foreach ($register in @("ecx", "edx")) {
+        $x86Canonical = $x86Canonical -replace `
+            "$register=[0-9a-f]{8}", "$register=<volatile>"
+        $arm64Canonical = $arm64Canonical -replace `
+            "$register=[0-9a-f]{8}", "$register=<volatile>"
+    }
     if ($x86Canonical -ne $arm64Canonical) {
         "FAIL x86-versus-ARM64 snapshot mismatch" |
             Tee-Object -FilePath $comparisonLog
@@ -224,7 +269,9 @@ try {
         "PASS original_x86_vs_lifted_x86"
         "PASS lifted_x86_vs_lifted_arm64"
         "PASS arm64_device_run serial=$DeviceSerial"
-        "BOUNDARY=0x00a3366a target=FUN_00921f00 status=unsupported_dependency"
+        "EXECUTED=FUN_00921f00,FUN_009222a0"
+        "BOUNDARY=0x00a33726 target=0x011e64f0 status=unsupported_dependency"
+        "REGISTER_POLICY=ECX,EDX recorded_as_caller_saved_not_compared"
     ) | Tee-Object -FilePath $comparisonLog
 } finally {
     if ($deviceSelected) {

@@ -1,0 +1,10 @@
+﻿Generated 8 byte-verified function(s) from 1 root(s).
+0x00921e00 FUN_00921e00: 21 instructions, calls=none
+0x00921e60 FUN_00921e60: 58 instructions, calls=0x009225d0,0x009225d0,0x00921e00,0x00922620,0x00922620,0x00922150
+0x00921f00 FUN_00921f00: 41 instructions, calls=0x00922820,0x00922820,0x009222a0,0x00921e60,0x00921e60
+0x00922150 FUN_00922150: 34 instructions, calls=none
+0x009222a0 FUN_009222a0: 38 instructions, calls=0x00922150,0x00922150
+0x009225d0 FUN_009225d0: 23 instructions, calls=none
+0x00922620 FUN_00922620: 40 instructions, calls=none
+0x00922820 FUN_00922820: 32 instructions, calls=0x00922620,0x00922620
+Report: C:\Users\wesll\AndroidStudioProjects\SporeAndroid\tools\..\test-logs\closure-00921f00-m5-20261106-130817673\generated\report.json

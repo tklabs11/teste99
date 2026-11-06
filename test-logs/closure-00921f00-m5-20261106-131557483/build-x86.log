@@ -1,0 +1,12 @@
+﻿closure_execution_harness.cpp
+spore_00921e00_arm64.cpp
+spore_00921e60_arm64.cpp
+spore_00921f00_arm64.cpp
+spore_00922150_arm64.cpp
+spore_009222a0_arm64.cpp
+spore_009225d0_arm64.cpp
+spore_00922620_arm64.cpp
+spore_00922820_arm64.cpp
+Gerando Código...
+C:\Users\wesll\AndroidStudioProjects\SporeAndroid\tools\batch_static_lift\closure_execution_harness.cpp(419) : warning C4731: '`anonymous namespace'::run_original_x86': registro de ponteiro de quadro 'ebp' modificado por código de assembly embutido
+C:\Users\wesll\AndroidStudioProjects\SporeAndroid\tools\batch_static_lift\closure_execution_harness.cpp(441) : warning C4731: '`anonymous namespace'::run_original_x86': registro de ponteiro de quadro 'ebp' modificado por código de assembly embutido

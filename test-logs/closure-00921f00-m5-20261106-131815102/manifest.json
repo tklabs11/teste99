@@ -1,0 +1,35 @@
+﻿{
+    "schema":  "spore-closure-execution-m5-v1",
+    "source_sha256":  "6aec99cb2dc7fd08851a1718e92a60f359fb3fccca3b244a890ae07e93cbe59b",
+    "root":  "0x00921f00",
+    "function_count":  8,
+    "imports_observed":  "KERNEL32.dll!CreateSemaphoreA@00922673(00000000,00000000,3fffffff,00000000)-\u003ec0000001!0;KERNEL32.dll!CreateSemaphoreA@00922673(00000000,00000000,3fffffff,00000000)-\u003ec0000002!0;KERNEL32.dll!InitializeCriticalSection@00922172(20000058)-\u003e00000000;",
+    "comparisons":  [
+                        "status",
+                        "eip",
+                        "esp_delta",
+                        "eflags",
+                        "calls",
+                        "object",
+                        "stack_entry_frame"
+                    ],
+    "compared_registers":  [
+                               "EAX",
+                               "EBX",
+                               "ESP",
+                               "EBP",
+                               "ESI",
+                               "EDI"
+                           ],
+    "recorded_but_volatile_registers":  [
+                                            "ECX",
+                                            "EDX"
+                                        ],
+    "stack_comparison":  "root return address and two caller argument slots at [entry ESP, entry ESP+4, entry ESP+8]; native Win32 API private stack scratch is excluded",
+    "object_normalization":  "guest addresses and handles normalized; x86 CRITICAL_SECTION DebugInfo pointer and implementation-specific SpinCount excluded",
+    "x86_original_vs_lift":  "passed",
+    "x86_lift_vs_android_arm64":  "passed",
+    "android_serial":  "PJMZAEJRX4YLFIDI",
+    "test_state":  "isolated zeroed 0x400-byte object with boundary canary and separate 16 KiB stack with bottom canary; ECX=object+0x28, ESI=object, stack args=[EBX=0,EDI=1]",
+    "limitation":  "Harness state is a controlled closure test, not captured from full game initialization."
+}

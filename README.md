@@ -3173,9 +3173,60 @@ The reproducible command is
 prior runs by creating a new timestamped directory. The five-function
 x86/ARM64/device regression also passed on `PJMZAEJRX4YLFIDI`; its fresh log is
 [five-function-regression-20261106-113845944.log](./test-logs/five-function-regression-20261106-113845944.log).
-The current Python backend suite has 41 tests. These results validate the
-implemented prefix and preserve earlier behavior; they do not complete the
-allocator path or initialize the game.
+That earlier run had 41 Python tests. These results validate the implemented
+prefix and preserve earlier behavior; they do not complete the allocator path
+or initialize the game.
+
+## Marco 5 — extended `FUN_00a33600` prefix (2026-11-06)
+
+The verified prefix now reaches the call boundary at `0x00a33726` and stops
+before calling `FUN_011e64f0` (`0x011e64f0`). This is a partial execution, not
+completion of `FUN_00a33600`, game initialization, or gameplay.
+
+The x86-to-ARM64 backend's `MOVSS` memory-store lowering was corrected to read
+the XMM source operand rather than the memory base-register index. The added
+regression covers this source selection. The prefix generator also accepts
+explicit PE-backed data ranges and records their file offsets and SHA-256
+hashes. The harness maps the verified `.rdata` bytes read-only at guest
+addresses; for the Windows x86 reference, it maps host aliases and relocates
+only the two validated absolute references at `0x00a336be` and `0x00a336cf`.
+The guest address space retains the original PE virtual addresses.
+
+The source PE SHA-256 is
+`6aec99cb2dc7fd08851a1718e92a60f359fb3fccca3b244a890ae07e93cbe59b`. The two
+file-backed data pages supplied to the run were:
+
+- `0x01452000`, 4096 bytes, PE file offset `17110016`, SHA-256
+  `31254c71d707cb3b42f92f1eefa554868f027cacaeef970f4c702e1442d3f567`.
+- `0x01485000`, 4096 bytes, PE file offset `17318912`, SHA-256
+  `bbbdc92c27935fd49f04ca0e427e25e64096845e3c733f673187388efa89984f`.
+
+The x86 reference and generated x86 snapshots match, as do the generated x86
+and ARM64 snapshots. The harness canonicalizes process-specific handle values
+by import-creation order; it also aligns the reference stack's low byte and
+captures stack fields relative to entry ESP so flags and stack snapshots
+compare the same guest state. On device `PJMZAEJRX4YLFIDI`, the prefix ran on
+ARM64 and recorded two `CreateSemaphoreA` calls and two
+`InitializeCriticalSection` calls, each with `GetLastError() == 0`. The
+`CreateMutexA` path was not reached by this prefix.
+
+Validation:
+
+- 46 Python backend tests passed:
+  [batch-static-lift-unit-m5-20261106-135448303.log](./test-logs/batch-static-lift-unit-m5-20261106-135448303.log).
+- Windows x86 original-versus-lift and x86-versus-ARM64 comparisons passed;
+  the ARM64 device run passed and stopped at the declared boundary:
+  [constructor-prefix-00a33600-20261106-134917041](./test-logs/constructor-prefix-00a33600-20261106-134917041/).
+- The recursive, cross-function, five-function startup-import, XCHG, SSE,
+  x87, and Android-device regressions passed again:
+  [five-function-regression-m5-20261106-135149246.log](./test-logs/five-function-regression-m5-20261106-135149246.log).
+
+`FUN_011e64f0` remains untranslated. Its current diagnostics include an
+unresolved indirect call at `0x011e653f`, unavailable bodies at
+`0x011ecd90`, `0x011ecdd0`, and `0x011ecde0`, and an unsupported indexed
+memory operand at `0x011e65c1`. The smallest next step is to resolve that
+function's indirect-call target from verified PE/import data and recover the
+missing bodies before extending the execution boundary.
 
 ## Preserved one-function recursive-call pilot
 

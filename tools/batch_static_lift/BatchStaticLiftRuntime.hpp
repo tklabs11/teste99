@@ -3,12 +3,25 @@
 #include <array>
 #include <cstddef>
 #include <cstdint>
+#include <condition_variable>
+#include <cstring>
+#include <limits>
 #include <memory>
 #include <mutex>
 #include <string>
 #include <thread>
 #include <unordered_map>
 #include <vector>
+
+#if defined(_WIN32)
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#include <Windows.h>
+#endif
 
 enum class BatchLiftStatus {
     returned,
@@ -43,6 +56,7 @@ struct BatchLiftState {
     std::uint32_t eip = 0;
     std::uint32_t fs_base = 0;
     BatchGuestImportDispatcher* imports = nullptr;
+    std::uint32_t last_error = 0;
 };
 
 inline bool batch_even_parity(std::uint8_t value) {
@@ -226,6 +240,11 @@ public:
         std::lock_guard<std::mutex> lock(memory_mutex_);
         const Region* region = find_region(address, size);
         return region != nullptr && region->writable;
+    }
+
+    bool is_readable(std::uint32_t address, std::size_t size) const {
+        std::lock_guard<std::mutex> lock(memory_mutex_);
+        return find_region(address, size) != nullptr;
     }
 
     bool load8(std::uint32_t address, std::uint32_t& value) const {
@@ -507,10 +526,32 @@ struct BatchGuestImportCall {
     std::string symbol;
     std::uint32_t iat_address;
     std::vector<std::uint32_t> arguments;
+    std::uint32_t result{};
+    std::uint32_t last_error{};
+    std::uint32_t return_address{};
+    std::uint32_t receiver{};
 };
 
 class BatchGuestRuntime final : public BatchGuestImportDispatcher {
 public:
+    ~BatchGuestRuntime() override {
+#if defined(_WIN32)
+        for (HANDLE handle : native_handles_) {
+            if (handle != nullptr) CloseHandle(handle);
+        }
+#else
+        std::lock_guard<std::mutex> lock(registry_mutex_);
+        for (const auto& entry : handle_objects_) {
+            if (entry.second->initial_owner
+                && entry.second->initial_owner_thread
+                    == std::this_thread::get_id()) {
+                entry.second->initial_owner = false;
+                entry.second->mutex.unlock();
+            }
+        }
+#endif
+    }
+
     BatchLiftStatus invoke_import(
         BatchLiftMemory& memory,
         BatchLiftState& state,
@@ -536,9 +577,27 @@ public:
             }
             call.arguments.push_back(argument);
         }
+        call.return_address = return_address;
+        call.receiver = state.regs[6];
         calls_.push_back(call);
         last_error_.clear();
 
+        if (call.symbol == "MSVCR90.dll!strncpy") {
+            return strncpy_guest(memory, state, call);
+        }
+        if (call.symbol == "KERNEL32.dll!CreateMutexA") {
+            return create_mutex(memory, state, call);
+        }
+        if (call.symbol == "KERNEL32.dll!CreateSemaphoreA") {
+            return create_semaphore(memory, state, call);
+        }
+        if (call.symbol == "KERNEL32.dll!GetLastError") {
+            state.regs[0] = state.last_error;
+            calls_.back().result = state.regs[0];
+            calls_.back().last_error = state.last_error;
+            complete_import_call(state, return_address, 0u);
+            return BatchLiftStatus::returned;
+        }
         if (call.symbol == "KERNEL32.dll!InitializeCriticalSection") {
             return initialize_critical_section(memory, state, call);
         }
@@ -551,11 +610,6 @@ public:
         if (call.symbol == "KERNEL32.dll!DeleteCriticalSection") {
             return delete_critical_section(memory, state, call);
         }
-        if (call.symbol == "KERNEL32.dll!CreateMutexA") {
-            last_error_ = "not implemented: " + call.symbol;
-            return BatchLiftStatus::unsupported_import;
-        }
-
         last_error_ = "unrecognized guest import: " + call.symbol;
         return BatchLiftStatus::unsupported_import;
     }
@@ -568,12 +622,63 @@ public:
         return calls_;
     }
 
+    std::uint32_t last_error_code() const {
+        return last_error_code_;
+    }
+
+    bool same_kernel_object(
+        std::uint32_t left_handle,
+        std::uint32_t right_handle) const {
+        std::lock_guard<std::mutex> lock(registry_mutex_);
+        const auto left = handle_objects_.find(left_handle);
+        const auto right = handle_objects_.find(right_handle);
+        return left != handle_objects_.end()
+            && right != handle_objects_.end()
+            && left->second == right->second;
+    }
+
+    bool semaphore_state(
+        std::uint32_t handle,
+        std::uint32_t& count,
+        std::uint32_t& maximum) const {
+        std::lock_guard<std::mutex> lock(registry_mutex_);
+        const auto found = handle_objects_.find(handle);
+        if (found == handle_objects_.end()
+            || found->second->type != KernelObjectType::semaphore) {
+            return false;
+        }
+        count = found->second->semaphore_count;
+        maximum = found->second->semaphore_maximum;
+        return true;
+    }
+
     bool has_critical_section(std::uint32_t guest_address) const {
         std::lock_guard<std::mutex> lock(registry_mutex_);
         return critical_sections_.find(guest_address) != critical_sections_.end();
     }
 
 private:
+    enum class KernelObjectType {
+        mutex,
+        semaphore,
+    };
+
+    struct KernelObject {
+        explicit KernelObject(KernelObjectType object_type)
+            : type(object_type) {}
+
+        KernelObjectType type;
+        std::string name;
+        bool inheritable{};
+        bool initial_owner{};
+        std::thread::id initial_owner_thread{};
+        std::uint32_t semaphore_count{};
+        std::uint32_t semaphore_maximum{};
+        std::recursive_mutex mutex;
+        std::mutex semaphore_mutex;
+        std::condition_variable semaphore_changed;
+    };
+
     struct NativeCriticalSection {
         std::recursive_mutex mutex;
         std::thread::id owner{};
@@ -589,7 +694,394 @@ private:
             return 1u;
         }
         if (symbol == "KERNEL32.dll!CreateMutexA") return 3u;
+        if (symbol == "MSVCR90.dll!strncpy") return 3u;
+        if (symbol == "KERNEL32.dll!CreateSemaphoreA") return 4u;
         return 0u;
+    }
+
+    void set_guest_error(
+        BatchLiftState& state,
+        std::uint32_t error,
+        std::string diagnostic = {}) {
+        state.last_error = error;
+        last_error_code_ = error;
+        last_error_ = std::move(diagnostic);
+#if defined(_WIN32)
+        SetLastError(error);
+#endif
+    }
+
+    static bool read_guest_string(
+        const BatchLiftMemory& memory,
+        std::uint32_t address,
+        std::string& value) {
+        value.clear();
+        if (address == 0u) return false;
+        for (std::uint32_t offset = 0; offset < 260u; ++offset) {
+            if (address > std::numeric_limits<std::uint32_t>::max() - offset) {
+                return false;
+            }
+            std::uint32_t byte{};
+            if (!memory.load8(address + offset, byte)) return false;
+            if (byte == 0u) return true;
+            value.push_back(static_cast<char>(byte));
+        }
+        return false;
+    }
+
+    static bool read_security_attributes(
+        const BatchLiftMemory& memory,
+        std::uint32_t address,
+        bool& present,
+        bool& inheritable) {
+        present = address != 0u;
+        inheritable = false;
+        if (!present) return true;
+        std::uint32_t length{};
+        std::uint32_t descriptor{};
+        std::uint32_t inherit{};
+        if (!memory.load32(address, length)
+            || !memory.load32(address + 4u, descriptor)
+            || !memory.load32(address + 8u, inherit)) {
+            return false;
+        }
+        if (length != 12u || descriptor != 0u || inherit > 1u) {
+            return false;
+        }
+        inheritable = inherit != 0u;
+        return true;
+    }
+
+    static void complete_api_call(
+        BatchLiftState& state,
+        BatchGuestImportCall& call,
+        std::uint32_t return_address,
+        std::uint32_t argument_bytes,
+        std::uint32_t result) {
+        state.regs[0] = result;
+        call.result = result;
+        call.last_error = state.last_error;
+        complete_import_call(state, return_address, argument_bytes);
+    }
+
+    BatchLiftStatus strncpy_guest(
+        BatchLiftMemory& memory,
+        BatchLiftState& state,
+        const BatchGuestImportCall& call) {
+        const std::uint32_t destination = call.arguments[0];
+        const std::uint32_t source = call.arguments[1];
+        const std::uint32_t count = call.arguments[2];
+        std::uint32_t return_address{};
+        if (!memory.load32(state.regs[4], return_address)) {
+            last_error_ = "strncpy return address is outside guest memory";
+            return BatchLiftStatus::invalid_memory;
+        }
+        if (count != 0u
+            && (static_cast<std::uint64_t>(destination) + count
+                    > (std::uint64_t{1} << 32u)
+                || !memory.is_writable(destination, count))) {
+            last_error_ = "strncpy destination is outside writable guest memory";
+            return BatchLiftStatus::invalid_memory;
+        }
+
+        bool terminated = false;
+        std::uint32_t source_bytes = count;
+        for (std::uint32_t offset = 0; offset < count; ++offset) {
+            if (source > std::numeric_limits<std::uint32_t>::max() - offset) {
+                last_error_ = "strncpy source address overflows guest address space";
+                return BatchLiftStatus::invalid_memory;
+            }
+            std::uint32_t byte{};
+            if (!memory.load8(source + offset, byte)) {
+                last_error_ = "strncpy source exceeds mapped guest memory";
+                return BatchLiftStatus::invalid_memory;
+            }
+            if (byte == 0u) {
+                source_bytes = offset + 1u;
+                terminated = true;
+                break;
+            }
+        }
+        for (std::uint32_t offset = 0; offset < source_bytes; ++offset) {
+            std::uint32_t byte{};
+            if (!memory.load8(source + offset, byte)
+                || !memory.store8(destination + offset, byte)) {
+                last_error_ = "strncpy guest memory changed after validation";
+                return BatchLiftStatus::invalid_memory;
+            }
+        }
+        if (terminated) {
+            for (std::uint32_t offset = source_bytes; offset < count; ++offset) {
+                if (!memory.store8(destination + offset, 0u)) {
+                    last_error_ = "strncpy destination changed after validation";
+                    return BatchLiftStatus::invalid_memory;
+                }
+            }
+        }
+        complete_api_call(
+            state, calls_.back(), return_address, 0u, destination);
+        return BatchLiftStatus::returned;
+    }
+
+    BatchLiftStatus create_mutex(
+        BatchLiftMemory& memory,
+        BatchLiftState& state,
+        const BatchGuestImportCall& call) {
+        std::uint32_t return_address{};
+        if (!memory.load32(state.regs[4], return_address)) {
+            last_error_ = "CreateMutexA return address is outside guest memory";
+            return BatchLiftStatus::invalid_memory;
+        }
+        bool attributes_present{};
+        bool inheritable{};
+        if (!read_security_attributes(
+                memory, call.arguments[0], attributes_present, inheritable)) {
+            set_guest_error(
+                state, 87u,
+                "CreateMutexA supports only a valid x86 SECURITY_ATTRIBUTES "
+                "with a null security descriptor");
+            complete_api_call(
+                state, calls_.back(), return_address, 12u, 0u);
+            return BatchLiftStatus::returned;
+        }
+
+        std::string name;
+        const std::uint32_t name_address = call.arguments[2];
+        if (name_address != 0u
+            && !read_guest_string(memory, name_address, name)) {
+            last_error_ = "CreateMutexA name is outside mapped guest memory "
+                "or exceeds MAX_PATH";
+            return BatchLiftStatus::invalid_memory;
+        }
+        if (name_address != 0u && name.empty()) {
+            set_guest_error(state, 123u, "CreateMutexA rejected an empty name");
+            complete_api_call(
+                state, calls_.back(), return_address, 12u, 0u);
+            return BatchLiftStatus::returned;
+        }
+
+        const auto existing = name.empty()
+            ? std::shared_ptr<KernelObject>{}
+            : find_named_object(name);
+        if (existing && existing->type != KernelObjectType::mutex) {
+            set_guest_error(
+                state, 6u,
+                "CreateMutexA name is already used by another object type");
+            complete_api_call(
+                state, calls_.back(), return_address, 12u, 0u);
+            return BatchLiftStatus::returned;
+        }
+
+        std::shared_ptr<KernelObject> object = existing;
+        bool already_exists = static_cast<bool>(existing);
+        std::uint32_t handle{};
+#if defined(_WIN32)
+        SetLastError(0u);
+        SECURITY_ATTRIBUTES native_attributes{};
+        native_attributes.nLength = sizeof(native_attributes);
+        native_attributes.bInheritHandle = inheritable ? TRUE : FALSE;
+        HANDLE native_handle = CreateMutexA(
+            attributes_present ? &native_attributes : nullptr,
+            call.arguments[1] != 0u ? TRUE : FALSE,
+            name.empty() ? nullptr : name.c_str());
+        const std::uint32_t native_error = GetLastError();
+        last_error_code_ = native_error;
+        state.last_error = native_error;
+        if (native_handle != nullptr) {
+            handle = static_cast<std::uint32_t>(
+                reinterpret_cast<std::uintptr_t>(native_handle));
+            native_handles_.push_back(native_handle);
+            already_exists = native_error == 183u;
+            if (!object) {
+                object = std::make_shared<KernelObject>(
+                    KernelObjectType::mutex);
+                object->name = name;
+                object->inheritable = inheritable;
+            }
+        }
+#else
+        if (already_exists) {
+            handle = allocate_guest_handle(object);
+        } else {
+            object = std::make_shared<KernelObject>(KernelObjectType::mutex);
+            object->name = name;
+            object->inheritable = inheritable;
+            if (call.arguments[1] != 0u) {
+                object->mutex.lock();
+                object->initial_owner = true;
+                object->initial_owner_thread = std::this_thread::get_id();
+            }
+            handle = allocate_guest_handle(object);
+        }
+        last_error_code_ = already_exists ? 183u : 0u;
+        state.last_error = last_error_code_;
+#endif
+        if (handle != 0u) {
+            remember_handle(handle, object);
+            if (!name.empty() && !existing) {
+                remember_named_object(name, object);
+            }
+        }
+        if (handle == 0u && state.last_error == 0u) {
+            set_guest_error(state, 8u, "CreateMutexA failed to allocate a handle");
+        } else {
+            last_error_ = already_exists
+                ? "CreateMutexA opened an existing named mutex"
+                : std::string{};
+        }
+        complete_api_call(
+            state, calls_.back(), return_address, 12u, handle);
+        return BatchLiftStatus::returned;
+    }
+
+    BatchLiftStatus create_semaphore(
+        BatchLiftMemory& memory,
+        BatchLiftState& state,
+        const BatchGuestImportCall& call) {
+        std::uint32_t return_address{};
+        if (!memory.load32(state.regs[4], return_address)) {
+            last_error_ = "CreateSemaphoreA return address is outside guest memory";
+            return BatchLiftStatus::invalid_memory;
+        }
+        bool attributes_present{};
+        bool inheritable{};
+        if (!read_security_attributes(
+                memory, call.arguments[0], attributes_present, inheritable)) {
+            set_guest_error(
+                state, 87u,
+                "CreateSemaphoreA supports only a valid x86 "
+                "SECURITY_ATTRIBUTES with a null security descriptor");
+            complete_api_call(
+                state, calls_.back(), return_address, 16u, 0u);
+            return BatchLiftStatus::returned;
+        }
+
+        const std::uint32_t initial_count = call.arguments[1];
+        const std::uint32_t maximum_count = call.arguments[2];
+        std::string name;
+        const std::uint32_t name_address = call.arguments[3];
+        if (name_address != 0u
+            && !read_guest_string(memory, name_address, name)) {
+            last_error_ = "CreateSemaphoreA name is outside mapped guest memory "
+                "or exceeds MAX_PATH";
+            return BatchLiftStatus::invalid_memory;
+        }
+        if (maximum_count == 0u
+            || maximum_count > static_cast<std::uint32_t>(
+                std::numeric_limits<std::int32_t>::max())
+            || initial_count > maximum_count
+            || (name_address != 0u && name.empty())) {
+            set_guest_error(
+                state, name_address != 0u && name.empty() ? 123u : 87u,
+                "CreateSemaphoreA received invalid counts or an empty name");
+            complete_api_call(
+                state, calls_.back(), return_address, 16u, 0u);
+            return BatchLiftStatus::returned;
+        }
+
+        const auto existing = name.empty()
+            ? std::shared_ptr<KernelObject>{}
+            : find_named_object(name);
+        if (existing && existing->type != KernelObjectType::semaphore) {
+            set_guest_error(
+                state, 6u,
+                "CreateSemaphoreA name is already used by another object type");
+            complete_api_call(
+                state, calls_.back(), return_address, 16u, 0u);
+            return BatchLiftStatus::returned;
+        }
+
+        std::shared_ptr<KernelObject> object = existing;
+        const bool already_exists = static_cast<bool>(existing);
+        std::uint32_t handle{};
+#if defined(_WIN32)
+        SetLastError(0u);
+        SECURITY_ATTRIBUTES native_attributes{};
+        native_attributes.nLength = sizeof(native_attributes);
+        native_attributes.bInheritHandle = inheritable ? TRUE : FALSE;
+        HANDLE native_handle = CreateSemaphoreA(
+            attributes_present ? &native_attributes : nullptr,
+            static_cast<LONG>(initial_count),
+            static_cast<LONG>(maximum_count),
+            name.empty() ? nullptr : name.c_str());
+        const std::uint32_t native_error = GetLastError();
+        last_error_code_ = native_error;
+        state.last_error = native_error;
+        if (native_handle != nullptr) {
+            handle = static_cast<std::uint32_t>(
+                reinterpret_cast<std::uintptr_t>(native_handle));
+            native_handles_.push_back(native_handle);
+            if (!object) {
+                object = std::make_shared<KernelObject>(
+                    KernelObjectType::semaphore);
+                object->name = name;
+                object->inheritable = inheritable;
+                object->semaphore_count = initial_count;
+                object->semaphore_maximum = maximum_count;
+            }
+        }
+#else
+        if (already_exists) {
+            handle = allocate_guest_handle(object);
+        } else {
+            object = std::make_shared<KernelObject>(
+                KernelObjectType::semaphore);
+            object->name = name;
+            object->inheritable = inheritable;
+            object->semaphore_count = initial_count;
+            object->semaphore_maximum = maximum_count;
+            handle = allocate_guest_handle(object);
+        }
+        last_error_code_ = already_exists ? 183u : 0u;
+        state.last_error = last_error_code_;
+#endif
+        if (handle != 0u) {
+            remember_handle(handle, object);
+            if (!name.empty() && !existing) {
+                remember_named_object(name, object);
+            }
+        }
+        if (handle == 0u && state.last_error == 0u) {
+            set_guest_error(
+                state, 8u, "CreateSemaphoreA failed to allocate a handle");
+        } else {
+            last_error_ = already_exists
+                ? "CreateSemaphoreA opened an existing named semaphore"
+                : std::string{};
+        }
+        complete_api_call(
+            state, calls_.back(), return_address, 16u, handle);
+        return BatchLiftStatus::returned;
+    }
+
+    std::shared_ptr<KernelObject> find_named_object(
+        const std::string& name) const {
+        std::lock_guard<std::mutex> lock(registry_mutex_);
+        const auto found = named_objects_.find(name);
+        return found == named_objects_.end() ? nullptr : found->second.lock();
+    }
+
+    void remember_named_object(
+        const std::string& name,
+        const std::shared_ptr<KernelObject>& object) {
+        std::lock_guard<std::mutex> lock(registry_mutex_);
+        named_objects_[name] = object;
+    }
+
+    void remember_handle(
+        std::uint32_t handle,
+        const std::shared_ptr<KernelObject>& object) {
+        std::lock_guard<std::mutex> lock(registry_mutex_);
+        handle_objects_[handle] = object;
+    }
+
+    std::uint32_t allocate_guest_handle(
+        const std::shared_ptr<KernelObject>& object) {
+        std::lock_guard<std::mutex> lock(registry_mutex_);
+        if (next_guest_handle_ == 0u) return 0u;
+        const std::uint32_t handle = next_guest_handle_++;
+        handle_objects_[handle] = object;
+        return handle;
     }
 
     static bool valid_critical_section_memory(
@@ -797,4 +1289,13 @@ private:
     std::uint32_t next_guest_thread_id_ = 1u;
     std::vector<BatchGuestImportCall> calls_;
     std::string last_error_;
+    std::uint32_t last_error_code_{};
+    mutable std::unordered_map<std::string, std::weak_ptr<KernelObject>>
+        named_objects_;
+    std::unordered_map<std::uint32_t, std::shared_ptr<KernelObject>>
+        handle_objects_;
+    std::uint32_t next_guest_handle_ = 0xe0000001u;
+#if defined(_WIN32)
+    std::vector<HANDLE> native_handles_;
+#endif
 };

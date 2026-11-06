@@ -145,7 +145,8 @@ try {
     }
 
     & $clang "--target=aarch64-linux-android29" "-std=c++17" "-O2" "-pthread" `
-        "-Wall" "-Wextra" "-Werror" "-I$backendDirectory" "-I$buildDirectory" `
+        "-Wall" "-Wextra" "-Werror" "-static-libstdc++" "-static-libgcc" `
+        "-fPIE" "-pie" "-I$backendDirectory" "-I$buildDirectory" `
         $harness $recursiveSource $calleeSource $callerSource `
         $resmanSources `
         "-o" $arm64Executable

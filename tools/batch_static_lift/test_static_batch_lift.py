@@ -8,6 +8,7 @@ from pathlib import Path
 
 import BatchStaticLift as lifter
 import diagnose_call_closure as diagnostic
+import generate_function_prefix as prefix_generator
 
 
 def instruction(address, encoded, mnemonic, operands=(), flow="FALL_THROUGH", flows_to=(), references=()):
@@ -36,6 +37,63 @@ def function(instructions):
 
 
 class StaticBatchLiftTests(unittest.TestCase):
+    def test_prefix_data_ranges_emit_verified_pe_bytes(self):
+        image = bytearray(0x400)
+        image[0x208:0x20c] = b"\x00\x00\x80\x3f"
+        pe = (
+            bytes(image),
+            0x00400000,
+            [(".rdata", 0x1000, 0x100, 0x200, 0x100)],
+        )
+        ranges = prefix_generator._verified_data_ranges(
+            pe, [(0x00401008, 4)]
+        )
+        header = prefix_generator._reference_header(
+            0x00401000,
+            0x00401005,
+            b"\x90",
+            0x00402000,
+            b"\xc3",
+            0x00401001,
+            0x00402000,
+            ranges,
+        )
+
+        self.assertEqual(ranges[0]["section"], ".rdata")
+        self.assertEqual(ranges[0]["file_offset"], 0x208)
+        self.assertEqual(ranges[0]["bytes"], b"\x00\x00\x80\x3f")
+        self.assertIn("kSporePrefixDataRange_00401008_address", header)
+        self.assertIn("0x00u, 0x00u, 0x80u, 0x3fu", header)
+        self.assertIn(
+            "kSporePrefixDataRanges = {{", header
+        )
+
+    def test_prefix_data_ranges_reject_overlap_and_non_file_backed_bytes(self):
+        image = bytearray(0x400)
+        pe = (
+            bytes(image),
+            0x00400000,
+            [(".rdata", 0x1000, 0x100, 0x200, 0x100)],
+        )
+        with self.assertRaisesRegex(ValueError, "must not overlap"):
+            prefix_generator._verified_data_ranges(
+                pe, [(0x00401008, 8), (0x0040100c, 4)]
+            )
+        with self.assertRaisesRegex(ValueError, "not backed by a PE section"):
+            prefix_generator._verified_data_ranges(
+                pe, [(0x00402000, 4)]
+            )
+
+    def test_prefix_data_range_parser_requires_address_and_length(self):
+        self.assertEqual(
+            prefix_generator._parse_data_range("0x00401000:0x1000"),
+            (0x00401000, 0x1000),
+        )
+        with self.assertRaisesRegex(ValueError, "expected ADDRESS:LENGTH"):
+            prefix_generator._parse_data_range("0x00401000")
+        with self.assertRaisesRegex(ValueError, "outside the x86 address space"):
+            prefix_generator._parse_data_range("0xffffffff:2")
+
     def test_prefix_executes_exported_call_and_stops_before_next_dependency(self):
         body = function([
             instruction(0x401000, "b801000000", "MOV", ("EAX", "0x1")),
@@ -285,6 +343,9 @@ class StaticBatchLiftTests(unittest.TestCase):
         self.assertIn("memory.load32(0x0166da00u", source)
         self.assertIn("batch_guest_movss_load", source)
         self.assertIn("batch_guest_movss_store", source)
+        self.assertIn(
+            "batch_guest_movss_store(memory, state, 0u, ", source
+        )
         self.assertIn("batch_guest_movss_register_move", source)
         self.assertEqual(
             [item["status"] for item in diagnostics],

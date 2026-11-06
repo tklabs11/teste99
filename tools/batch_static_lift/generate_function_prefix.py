@@ -45,15 +45,61 @@ def _bytes_array(name, encoded):
     )
 
 
+def _parse_data_range(value):
+    address_text, separator, length_text = value.partition(":")
+    if not separator or not address_text or not length_text:
+        raise ValueError(
+            f"invalid PE data range {value!r}; expected ADDRESS:LENGTH"
+        )
+    address = lifter.parse_address(address_text)
+    try:
+        length = int(length_text, 0)
+    except ValueError as error:
+        raise ValueError(
+            f"invalid PE data range length in {value!r}"
+        ) from error
+    if length <= 0 or address + length > 0x100000000:
+        raise ValueError(f"PE data range {value!r} is outside the x86 address space")
+    return address, length
+
+
+def _verified_data_ranges(pe, data_ranges):
+    records = []
+    previous_end = -1
+    for address, length in sorted(data_ranges):
+        if address < previous_end:
+            raise ValueError("PE data ranges must not overlap")
+        section, file_offset, encoded = lifter.read_pe_bytes(
+            pe, address, length
+        )
+        records.append({
+            "address": address,
+            "length": length,
+            "section": section,
+            "file_offset": file_offset,
+            "bytes": encoded,
+            "sha256": hashlib.sha256(encoded).hexdigest(),
+        })
+        previous_end = address + length
+    return records
+
+
 def _reference_header(
     entry, stop, root_bytes, child_entry, child_bytes,
     included_call_site, included_call_target,
+    data_ranges=(),
 ):
-    return "\n".join([
+    lines = [
         "#pragma once",
         "",
         "#include <array>",
         "#include <cstdint>",
+        "",
+        "struct SporeVerifiedDataRange {",
+        "    std::uint32_t address;",
+        "    std::uint32_t length;",
+        "    const std::uint8_t* bytes;",
+        "};",
         "",
         f"inline constexpr std::uint32_t kSporePrefixEntry = 0x{entry:08x}u;",
         f"inline constexpr std::uint32_t kSporePrefixStop = 0x{stop:08x}u;",
@@ -65,7 +111,30 @@ def _reference_header(
         _bytes_array("kSporePrefixBytes", root_bytes),
         _bytes_array("kSporeChildBytes", child_bytes),
         "",
-    ])
+    ]
+    for item in data_ranges:
+        suffix = f"{item['address']:08x}"
+        lines += [
+            f"inline constexpr std::uint32_t "
+            f"kSporePrefixDataRange_{suffix}_address = "
+            f"0x{item['address']:08x}u;",
+            _bytes_array(
+                f"kSporePrefixDataRange_{suffix}_bytes", item["bytes"]
+            ),
+            "",
+        ]
+    lines.append(
+        f"inline constexpr std::array<SporeVerifiedDataRange, "
+        f"{len(data_ranges)}> kSporePrefixDataRanges = {{{{"
+    )
+    for item in data_ranges:
+        suffix = f"{item['address']:08x}"
+        lines.append(
+            f"    {{0x{item['address']:08x}u, {item['length']}u, "
+            f"kSporePrefixDataRange_{suffix}_bytes.data()}},"
+        )
+    lines += ["}};", ""]
+    return "\n".join(lines)
 
 
 def generate_function_prefix(
@@ -77,6 +146,8 @@ def generate_function_prefix(
     output_dir,
     report_path,
     byte_header_path,
+    allowed_call_targets=(),
+    data_ranges=(),
 ):
     source_hash = lifter.sha256_file(executable)
     if source_hash != lifter.EXPECTED_SHA256:
@@ -86,27 +157,32 @@ def generate_function_prefix(
         )
     exported = closure.load_exported_functions(batch_paths, source_hash)
     pe = lifter.parse_pe(executable)
+    verified_data_ranges = _verified_data_ranges(pe, data_ranges)
     entry = lifter.parse_address(entry)
     stop_address = lifter.parse_address(stop_address)
     included_call_targets = {
         lifter.parse_address(value) for value in included_call_targets
     }
+    allowed_call_targets = {
+        lifter.parse_address(value) for value in allowed_call_targets
+    }
+    prefix_call_targets = included_call_targets | allowed_call_targets
     if entry not in exported:
         raise ValueError(f"root 0x{entry:08x} is absent from the supplied exports")
     root = exported[entry]
-    missing_included = included_call_targets.difference(exported)
+    missing_included = prefix_call_targets.difference(exported)
     if missing_included:
         raise ValueError(
-            "included call targets are absent from the supplied exports: "
+            "allowed prefix call targets are absent from the supplied exports: "
             + ", ".join(f"0x{address:08x}" for address in sorted(missing_included))
         )
     verified = {
         address: lifter.validate_function_bytes(exported[address], pe)
-        for address in {entry, *included_call_targets}
+        for address in {entry, *prefix_call_targets}
     }
 
     root_source, prefix_diagnostics = lifter.translate_function_prefix(
-        root, stop_address, included_call_targets
+        root, stop_address, prefix_call_targets
     )
     stop_instruction = next(
         instruction for instruction in root["instructions"]
@@ -211,6 +287,7 @@ def generate_function_prefix(
             child_bytes,
             included_call_site,
             included_call_target,
+            verified_data_ranges,
         ),
         encoding="utf-8",
         newline="\n",
@@ -237,6 +314,14 @@ def generate_function_prefix(
                 "instruction_count": len(exported[address]["instructions"]),
             }
             for address in sorted(included_call_targets)
+        ],
+        "allowed_call_targets": [
+            {
+                "address": f"0x{address:08x}",
+                "name": exported[address].get("name"),
+                "generated_in_prefix": address in included_call_targets,
+            }
+            for address in sorted(prefix_call_targets)
         ],
         "boundary": {
             "address": f"0x{stop_address:08x}",
@@ -272,6 +357,16 @@ def generate_function_prefix(
                 "purpose": "complete directly called child body",
             },
         ],
+        "data_ranges": [
+            {
+                "address": f"0x{item['address']:08x}",
+                "length": item["length"],
+                "section": item["section"],
+                "file_offset": item["file_offset"],
+                "sha256": item["sha256"],
+            }
+            for item in verified_data_ranges
+        ],
     }
     report_path.parent.mkdir(parents=True, exist_ok=True)
     report_path.write_text(
@@ -296,6 +391,13 @@ def main():
     parser.add_argument(
         "--include-call-target", action="append", default=[]
     )
+    parser.add_argument(
+        "--allow-call-target", action="append", default=[]
+    )
+    parser.add_argument(
+        "--data-range", action="append", default=[],
+        help="verified PE data range as ADDRESS:LENGTH (length accepts 0x...)",
+    )
     parser.add_argument("--output-dir", type=Path, required=True)
     parser.add_argument("--report", type=Path, required=True)
     parser.add_argument("--byte-header", type=Path, required=True)
@@ -310,6 +412,8 @@ def main():
             args.output_dir,
             args.report,
             args.byte_header,
+            args.allow_call_target,
+            [_parse_data_range(value) for value in args.data_range],
         )
     except (
         OSError, ValueError, KeyError, TypeError, json.JSONDecodeError,
