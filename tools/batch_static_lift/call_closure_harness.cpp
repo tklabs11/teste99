@@ -7,10 +7,12 @@
 
 #include <algorithm>
 #include <array>
+#include <atomic>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
 #include <iostream>
+#include <thread>
 
 #if defined(_M_IX86)
 #include <Windows.h>
@@ -1391,6 +1393,128 @@ bool run_guest_create_mutex_rejection(bool print_results) {
     return true;
 }
 
+bool run_xchg_regression(bool print_results) {
+    constexpr std::uint32_t kMemoryBase = 0x2600u;
+    constexpr std::uint32_t kAddress = kMemoryBase + 1u;
+    constexpr std::uint32_t kXchgInitialFlags = 0xa5a50ad7u;
+    const std::array<std::array<std::uint32_t, 2>, 5> cases{{
+        {{0x00000000u, 0xffffffffu}},
+        {{0xffffffffu, 0x00000000u}},
+        {{0x13579bdfu, 0x2468ace0u}},
+        {{0x80000000u, 0x7fffffffu}},
+        {{0xdeadbeefu, 0xdeadbeefu}},
+    }};
+    std::array<std::uint8_t, 0x10> bytes{};
+    BatchLiftMemory memory;
+    if (!memory.map_region(kMemoryBase, bytes.data(), bytes.size(), true)) {
+        return false;
+    }
+
+    bool values_match = true;
+    bool flags_preserved = true;
+    for (const auto& test_case : cases) {
+        const std::uint32_t initial_memory = test_case[0];
+        const std::uint32_t initial_register = test_case[1];
+        if (!memory.store32(kAddress, initial_memory)) return false;
+        BatchLiftState state{};
+        state.regs[0] = initial_register;
+        state.eflags = kXchgInitialFlags;
+        const bool exchanged =
+            batch_guest_xchg32(memory, state, 0u, kAddress);
+        std::uint32_t guest_memory{};
+        values_match = values_match && exchanged
+            && memory.load32(kAddress, guest_memory)
+            && state.regs[0] == initial_memory
+            && guest_memory == initial_register;
+        flags_preserved = flags_preserved
+            && state.eflags == kXchgInitialFlags;
+#if defined(_M_IX86)
+        std::uint32_t native_memory = initial_memory;
+        std::uint32_t native_register = initial_register;
+        __asm {
+            mov eax, native_register
+            xchg dword ptr [native_memory], eax
+            mov native_register, eax
+        }
+        values_match = values_match
+            && native_register == state.regs[0]
+            && native_memory == guest_memory;
+#endif
+    }
+
+    const std::uint32_t old_register = 0x11223344u;
+    BatchLiftState invalid_state{};
+    invalid_state.regs[0] = old_register;
+    invalid_state.eflags = kXchgInitialFlags;
+    const bool unmapped_rejected =
+        !batch_guest_xchg32(memory, invalid_state, 0u, kMemoryBase + 0x20u)
+        && invalid_state.regs[0] == old_register
+        && invalid_state.eflags == kXchgInitialFlags;
+
+    std::array<std::uint8_t, 4> read_only_bytes{};
+    BatchLiftMemory read_only_memory;
+    const bool read_only_mapped = read_only_memory.map_region(
+        kMemoryBase, read_only_bytes.data(), read_only_bytes.size(), false);
+    BatchLiftState read_only_state{};
+    read_only_state.regs[0] = old_register;
+    read_only_state.eflags = kXchgInitialFlags;
+    const bool read_only_rejected = read_only_mapped
+        && !batch_guest_xchg32(
+            read_only_memory, read_only_state, 0u, kMemoryBase)
+        && read_only_state.regs[0] == old_register
+        && read_only_state.eflags == kXchgInitialFlags;
+
+    constexpr std::uint32_t kInitialSharedValue = 0xaaaaaaaau;
+    std::array<std::uint8_t, 4> shared_bytes{};
+    BatchLiftMemory shared_memory;
+    if (!shared_memory.map_region(
+            kMemoryBase, shared_bytes.data(), shared_bytes.size(), true)
+        || !shared_memory.store32(kMemoryBase, kInitialSharedValue)) {
+        return false;
+    }
+    std::atomic<bool> torn_value_seen{false};
+    const auto worker = [&](std::uint32_t replacement) {
+        for (unsigned iteration = 0; iteration < 4000u; ++iteration) {
+            std::uint32_t previous{};
+            if (!shared_memory.exchange32(
+                    kMemoryBase, replacement, previous)
+                || (previous != kInitialSharedValue
+                    && previous != 0x11111111u
+                    && previous != 0x22222222u)) {
+                torn_value_seen.store(true, std::memory_order_relaxed);
+            }
+        }
+    };
+    std::thread first(worker, 0x11111111u);
+    std::thread second(worker, 0x22222222u);
+    first.join();
+    second.join();
+    const bool atomic_accesses_passed =
+        !torn_value_seen.load(std::memory_order_relaxed);
+
+    if (!values_match || !flags_preserved || !unmapped_rejected
+        || !read_only_rejected || !atomic_accesses_passed) {
+        std::cerr << "FAIL xchg32 values=" << values_match
+                  << " flags=" << flags_preserved
+                  << " unmapped=" << unmapped_rejected
+                  << " read_only=" << read_only_rejected
+                  << " atomic=" << atomic_accesses_passed << "\n";
+        return false;
+    }
+    if (print_results) {
+        std::cout << "PASS xchg32 memory_register cases=" << cases.size()
+                  << " flags=preserved bounds=checked readonly=checked "
+                  << "concurrent_exchange=passed"
+#if defined(_M_IX86)
+                  << " reference=x86_locked_xchg"
+#else
+                  << " reference=verified_exchange_semantics"
+#endif
+                  << "\n";
+    }
+    return true;
+}
+
 bool run_movss_transfer_regression(bool print_results) {
     constexpr std::uint32_t kMemoryBase = 0x2000u;
     constexpr std::uint32_t kSourceAddress = kMemoryBase + 4u;
@@ -1682,7 +1806,8 @@ bool run_x87_binary64_transfer_regression(bool print_results) {
 } // namespace
 
 int main() {
-    if (!run_xorps_regression(true)
+    if (!run_xchg_regression(true)
+        || !run_xorps_regression(true)
         || !run_x87_binary64_transfer_regression(true)
         || !run_movss_transfer_regression(true)
         || !run_recursive_cases(true)

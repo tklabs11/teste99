@@ -209,6 +209,7 @@ public:
         std::uint8_t* data,
         std::size_t size,
         bool writable) {
+        std::lock_guard<std::mutex> lock(memory_mutex_);
         if (data == nullptr || size == 0 || region_count_ >= regions_.size()) return false;
         const std::uint64_t end = static_cast<std::uint64_t>(base) + size;
         if (end > (std::uint64_t{1} << 32u)) return false;
@@ -222,11 +223,13 @@ public:
     }
 
     bool is_writable(std::uint32_t address, std::size_t size) const {
+        std::lock_guard<std::mutex> lock(memory_mutex_);
         const Region* region = find_region(address, size);
         return region != nullptr && region->writable;
     }
 
     bool load8(std::uint32_t address, std::uint32_t& value) const {
+        std::lock_guard<std::mutex> lock(memory_mutex_);
         const Region* region = find_region(address, 1);
         if (region == nullptr) return false;
         value = region->data[address - region->base];
@@ -234,6 +237,7 @@ public:
     }
 
     bool load16(std::uint32_t address, std::uint32_t& value) const {
+        std::lock_guard<std::mutex> lock(memory_mutex_);
         const Region* region = find_region(address, 2);
         if (region == nullptr) return false;
         const std::size_t offset = address - region->base;
@@ -243,6 +247,7 @@ public:
     }
 
     bool load32(std::uint32_t address, std::uint32_t& value) const {
+        std::lock_guard<std::mutex> lock(memory_mutex_);
         const Region* region = find_region(address, 4);
         if (region == nullptr) return false;
         const std::size_t offset = address - region->base;
@@ -254,6 +259,7 @@ public:
     }
 
     bool load64(std::uint32_t address, std::uint64_t& value) const {
+        std::lock_guard<std::mutex> lock(memory_mutex_);
         const Region* region = find_region(address, 8);
         if (region == nullptr) return false;
         const std::size_t offset = address - region->base;
@@ -266,6 +272,7 @@ public:
     }
 
     bool store8(std::uint32_t address, std::uint32_t value) {
+        std::lock_guard<std::mutex> lock(memory_mutex_);
         Region* region = find_region(address, 1);
         if (region == nullptr || !region->writable) return false;
         region->data[address - region->base] = static_cast<std::uint8_t>(value);
@@ -273,6 +280,7 @@ public:
     }
 
     bool store16(std::uint32_t address, std::uint32_t value) {
+        std::lock_guard<std::mutex> lock(memory_mutex_);
         Region* region = find_region(address, 2);
         if (region == nullptr || !region->writable) return false;
         const std::size_t offset = address - region->base;
@@ -282,6 +290,7 @@ public:
     }
 
     bool store32(std::uint32_t address, std::uint32_t value) {
+        std::lock_guard<std::mutex> lock(memory_mutex_);
         Region* region = find_region(address, 4);
         if (region == nullptr || !region->writable) return false;
         const std::size_t offset = address - region->base;
@@ -292,12 +301,32 @@ public:
     }
 
     bool store64(std::uint32_t address, std::uint64_t value) {
+        std::lock_guard<std::mutex> lock(memory_mutex_);
         Region* region = find_region(address, 8);
         if (region == nullptr || !region->writable) return false;
         const std::size_t offset = address - region->base;
         for (unsigned index = 0; index < 8; ++index) {
             region->data[offset + index] =
                 static_cast<std::uint8_t>(value >> (index * 8u));
+        }
+        return true;
+    }
+
+    bool exchange32(
+        std::uint32_t address,
+        std::uint32_t replacement,
+        std::uint32_t& previous) {
+        std::lock_guard<std::mutex> lock(memory_mutex_);
+        Region* region = find_region(address, 4);
+        if (region == nullptr || !region->writable) return false;
+        const std::size_t offset = address - region->base;
+        previous = static_cast<std::uint32_t>(region->data[offset]) |
+            (static_cast<std::uint32_t>(region->data[offset + 1]) << 8u) |
+            (static_cast<std::uint32_t>(region->data[offset + 2]) << 16u) |
+            (static_cast<std::uint32_t>(region->data[offset + 3]) << 24u);
+        for (unsigned index = 0; index < 4; ++index) {
+            region->data[offset + index] =
+                static_cast<std::uint8_t>(replacement >> (index * 8u));
         }
         return true;
     }
@@ -333,7 +362,23 @@ private:
     std::array<Region, 8> regions_{};
     std::array<std::uint8_t, kStackBytes> stack_{};
     std::size_t region_count_ = 0;
+    mutable std::mutex memory_mutex_;
 };
+
+inline bool batch_guest_xchg32(
+    BatchLiftMemory& memory,
+    BatchLiftState& state,
+    std::uint32_t register_index,
+    std::uint32_t address) {
+    if (register_index >= 8u) return false;
+    std::uint32_t previous{};
+    if (!memory.exchange32(
+            address, state.regs[register_index], previous)) {
+        return false;
+    }
+    state.regs[register_index] = previous;
+    return true;
+}
 
 inline bool batch_guest_movss_load(
     const BatchLiftMemory& memory,

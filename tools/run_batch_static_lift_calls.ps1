@@ -144,7 +144,7 @@ try {
         throw "Windows x86 reference-vs-generated-lift comparison failed"
     }
 
-    & $clang "--target=aarch64-linux-android29" "-std=c++17" "-O2" `
+    & $clang "--target=aarch64-linux-android29" "-std=c++17" "-O2" "-pthread" `
         "-Wall" "-Wextra" "-Werror" "-I$backendDirectory" "-I$buildDirectory" `
         $harness $recursiveSource $calleeSource $callerSource `
         $resmanSources `

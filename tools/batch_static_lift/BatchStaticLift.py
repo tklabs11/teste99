@@ -512,6 +512,38 @@ def translate_instruction(
             f"{int(source.group(1))}u)) "
             "return BatchLiftStatus::invalid_control_flow;"
         ]
+    if mnemonic == "XCHG":
+        if len(operands_text) != 2:
+            raise ValueError(
+            f"XCHG expects 2 operands; found {len(operands_text)}"
+            )
+        operands = [
+            parse_operand(operand, infer_memory_width=32)
+            for operand in operands_text
+        ]
+        memory_operands = [
+            operand for operand in operands
+            if operand[0] in {"absolute_memory", "memory"}
+        ]
+        register_operands = [
+            operand for operand in operands
+            if operand[0] == "register" and operand[2] == 32
+        ]
+        if (
+            len(memory_operands) != 1
+            or len(register_operands) != 1
+            or memory_operands[0][3] != 32
+        ):
+            raise ValueError(
+            "XCHG currently requires one 32-bit memory operand and "
+            "one 32-bit general-purpose register"
+            )
+        return [
+            "if (!batch_guest_xchg32("
+            f"memory, state, {register_operands[0][1]}u, "
+            f"{memory_address(memory_operands[0])})) "
+            "return BatchLiftStatus::invalid_memory;"
+        ]
     if mnemonic in {"FLD", "FSTP"}:
         if len(operands_text) != 1:
             raise ValueError(

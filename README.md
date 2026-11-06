@@ -3017,7 +3017,7 @@ Run the retained x86/build/device regressions with
 `.\tools\run_batch_static_lift_calls.ps1 -DeviceSerial <serial>`. This does not
 generate or execute the still-blocked `FUN_00a33600` closure.
 
-## Verified partial execution of `FUN_00a33600` — 2026-11-06
+## Verified partial execution of `FUN_00a33600` — 2026-11-06 (Marco 3 baseline)
 
 The backend now has a reusable prefix mode: it translates only contiguous
 fall-through instructions up to a selected direct-call boundary, and permits
@@ -3055,12 +3055,88 @@ capturing the comparison state.
 
 The object memory is a harness-provided mapping, not a game allocation. Its
 `+0x20` field starts with a sentinel and is cleared by the executed
-`FUN_00743b50`; no child result is substituted. Execution stops before the
-next call, at `0x00a3366a` to `FUN_00921f00`. The first unsupported instruction
-in that dependency is `XCHG dword ptr [ECX],EAX` at `0x00921f08`; its body also
-calls targets absent from the supplied exports (`0x00922820`, `0x009222a0`,
-and `0x00921e60`). This is evidence for a real prefix only, not a complete
-constructor, a game-startup run, or a full `FUN_00a33600` execution.
+`FUN_00743b50`; no child result is substituted. This baseline execution stops
+before the next call, at `0x00a3366a` to `FUN_00921f00`. At that time the
+three direct callees were absent from the prefix runner's selected exports.
+Marco 4 below records their recovery and the remaining runtime blockers. This
+baseline is not a complete constructor, a game-startup run, or a full
+`FUN_00a33600` execution.
+
+## Marco 4 — `FUN_00921f00`, `XCHG`, and the remaining import boundary — 2026-11-06
+
+The original PE and Ghidra batch export `spore_batch_all_0034.json` were used
+to recover the requested direct callees. Their original instruction bytes
+match the PE SHA-256
+`6aec99cb2dc7fd08851a1718e92a60f359fb3fccca3b244a890ae07e93cbe59b`.
+Ghidra reports complete contiguous function bodies; the lifter's byte
+validator accepted every exported instruction:
+
+| Function | Body bytes | SHA-256 of concatenated verified instruction bytes |
+|---|---:|---|
+| `FUN_00922820` | 85 | `1b6507130ed2ffede3efd17754428ef20556667c283900c1c8a9e92d0b8c991e` |
+| `FUN_009222a0` | 102 | `bc6d97dd20220daf2f881c32074bbd573d589bbeb301ed399fcdb5f90e7433e3` |
+| `FUN_00921e60` | 147 | `873f85aba614f87c0bd9bf546118f3de14d4a4ecb3153c5b04153d5fc2df072d` |
+
+`FUN_00921f00` itself is 121 verified bytes. Its complete direct-call closure
+is eight functions, including `FUN_00922620`, `FUN_00922150`, `FUN_009225d0`,
+and `FUN_00921e00`; no direct target is missing from this export set. The
+closure report is
+[call-closure-00921f00-after-xchg-2026-11-06.json](./test-logs/call-closure-00921f00-after-xchg-2026-11-06.json).
+The byte-verified generated sources, reference-byte header, and call/import
+manifest are in
+[generated-00921f00-closure-20261106-121229438](./test-logs/generated-00921f00-closure-20261106-121229438/).
+
+The backend now lowers the observed `87 01` at `0x00921f08`,
+`XCHG dword ptr [ECX],EAX`. The guest memory abstraction serializes all reads,
+writes, and 32-bit exchanges through a per-memory mutex; the exchange returns
+the previous memory value into EAX and preserves EFLAGS. The supported form is
+limited to one 32-bit memory operand and one 32-bit general-purpose register.
+It rejects other widths and two-memory forms.
+
+Differential tests compared the helper with native x86 locked `XCHG` for five
+value pairs, including unaligned memory, and checked memory/register results,
+unchanged flags, invalid and read-only memory rejection, and concurrent
+exchanges. The 43 Python backend tests passed. The retained five-function
+regression passed on x86 and the Android ARM64 target compiled successfully;
+the generated eight-function closure also passed Android ARM64 syntax
+compilation. The phone was not connected at this run (`adb devices -l` returned
+no devices), so **no Marco 4 code was executed on the phone**. The requested
+device run failed with `device 'PJMZAEJRX4YLFIDI' not found`; the successful
+build-only log is
+[five-function-buildonly-after-xchg-20261106-121250484.log](./test-logs/five-function-buildonly-after-xchg-20261106-121250484.log).
+
+The closure's five IAT calls are identified:
+
+| Call site | Import | Current runtime status |
+|---|---|---|
+| `0x00921e18`, `0x009225ef` | `MSVCR90.dll!strncpy` | No handler |
+| `0x0092216c` | `KERNEL32.dll!InitializeCriticalSection` | Implemented |
+| `0x00922189` | `KERNEL32.dll!CreateMutexA` | Explicitly rejected |
+| `0x0092266d` | `KERNEL32.dll!CreateSemaphoreA` | No handler |
+
+These are real import boundaries, not missing code bodies. The generated
+closure compiles, but its runtime cannot faithfully continue through every
+branch until the unsupported imports have real handlers. No import was
+replaced with a prepared result. Because the phone was unavailable, the first
+import actually reached by the original caller state was not observed. Thus
+the `FUN_00a33600` prefix remains stopped before `0x00a3366a`; it has **not**
+been widened or represented as a complete constructor.
+
+Reproduce the focused closure diagnosis with:
+
+```powershell
+python .\tools\batch_static_lift\diagnose_call_closure.py `
+  --exe C:\SporeAnalysis\SporeApp.exe `
+  --batch-dir C:\SporeAnalysis\spore_batch_all_parts `
+  --root 0x00921f00 `
+  --report .\test-logs\call-closure-00921f00-after-xchg-2026-11-06.json
+```
+
+With the device connected, rerun the preserved regressions using
+`.\tools\run_batch_static_lift_calls.ps1 -DeviceSerial <serial>`. This reruns
+the five-function suite and the XCHG differential; it does not execute
+`FUN_00921f00` until the import boundary and the original caller-state
+comparison harness are addressed.
 
 ### Allocator singleton and initializer evidence
 

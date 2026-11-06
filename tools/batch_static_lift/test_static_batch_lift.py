@@ -330,6 +330,45 @@ class StaticBatchLiftTests(unittest.TestCase):
 
         self.assertIn("two XMM register operands", raised.exception.reasons[0])
 
+    def test_xchg_dword_memory_register_is_translated_without_flags(self):
+        body = function([
+            instruction(
+                0x401000, "8701", "XCHG",
+                ("dword ptr [ECX]", "EAX"),
+            ),
+            instruction(0x401002, "c3", "RET", flow="TERMINAL"),
+        ])
+
+        source, diagnostics = lifter.translate_function(body)
+
+        self.assertIn(
+            "batch_guest_xchg32(memory, state, 0u, "
+            "static_cast<std::uint32_t>(state.regs[1] + 0x00000000u))",
+            source,
+        )
+        self.assertNotIn("batch_set_", source)
+        self.assertEqual(
+            [item["status"] for item in diagnostics],
+            ["translated", "translated"],
+        )
+
+    def test_xchg_rejects_non_dword_or_two_memory_operands(self):
+        for operands in (
+            ("word ptr [ECX]", "EAX"),
+            ("dword ptr [ECX]", "dword ptr [EDX]"),
+        ):
+            with self.subTest(operands=operands):
+                body = function([
+                    instruction(0x401000, "8701", "XCHG", operands),
+                    instruction(0x401002, "c3", "RET", flow="TERMINAL"),
+                ])
+                with self.assertRaises(lifter.LiftRejected) as raised:
+                    lifter.translate_function(body)
+                self.assertIn(
+                    "one 32-bit memory operand",
+                    raised.exception.reasons[0],
+                )
+
     def test_x87_binary64_load_and_pop_store_are_translated(self):
         body = function([
             instruction(
