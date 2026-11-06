@@ -201,6 +201,83 @@ class StaticBatchLiftTests(unittest.TestCase):
             "sse_arithmetic",
         )
 
+    def test_xorps_register_forms_are_translated(self):
+        body = function([
+            instruction(0x401000, "0f57c0", "XORPS", ("XMM0", "XMM0")),
+            instruction(0x401003, "0f57d1", "XORPS", ("XMM2", "XMM1")),
+            instruction(0x401006, "c3", "RET", flow="TERMINAL"),
+        ])
+
+        source, diagnostics = lifter.translate_function(body)
+
+        self.assertIn("batch_guest_xorps(state, 0u, 0u)", source)
+        self.assertIn("batch_guest_xorps(state, 2u, 1u)", source)
+        self.assertEqual(
+            [item["status"] for item in diagnostics],
+            ["translated"] * len(body["instructions"]),
+        )
+        self.assertEqual(lifter.classify_instruction("XORPS"), "sse_logical")
+
+    def test_xorps_memory_form_remains_rejected(self):
+        body = function([
+            instruction(
+                0x401000, "0f5700", "XORPS",
+                ("XMM0", "oword ptr [EAX]"),
+            ),
+            instruction(0x401003, "c3", "RET", flow="TERMINAL"),
+        ])
+
+        with self.assertRaises(lifter.LiftRejected) as raised:
+            lifter.translate_function(body)
+
+        self.assertIn("two XMM register operands", raised.exception.reasons[0])
+
+    def test_x87_binary64_load_and_pop_store_are_translated(self):
+        body = function([
+            instruction(
+                0x401000, "dd05382f4501", "FLD",
+                ("double ptr [0x01452f38]",),
+            ),
+            instruction(
+                0x401006, "dd9e68b71500", "FSTP",
+                ("double ptr [ESI + 0x15b768]",),
+            ),
+            instruction(0x40100C, "c3", "RET", flow="TERMINAL"),
+        ])
+
+        source, diagnostics = lifter.translate_function(body)
+
+        self.assertIn(
+            "batch_guest_fld64(memory, state, 0x01452f38u)", source
+        )
+        self.assertIn(
+            "batch_guest_fstp64(memory, state, "
+            "static_cast<std::uint32_t>(state.regs[6] + 0x0015b768u))",
+            source,
+        )
+        self.assertIn("state.x87_depth >= 8u", source)
+        self.assertIn("state.x87_depth == 0u", source)
+        self.assertEqual(
+            [item["status"] for item in diagnostics],
+            ["translated"] * len(body["instructions"]),
+        )
+        self.assertEqual(lifter.classify_instruction("FLD"), "x87")
+        self.assertEqual(lifter.classify_instruction("FSTP"), "x87")
+
+    def test_x87_arithmetic_remains_rejected(self):
+        body = function([
+            instruction(0x401000, "d8c1", "FADD", ("ST(0)", "ST(1)")),
+            instruction(0x401002, "c3", "RET", flow="TERMINAL"),
+        ])
+
+        with self.assertRaises(lifter.LiftRejected) as raised:
+            lifter.translate_function(body)
+
+        self.assertEqual(
+            raised.exception.instruction_diagnostics[0]["mnemonic"], "FADD"
+        )
+        self.assertEqual(lifter.classify_instruction("FADD"), "x87")
+
     def test_sse_arithmetic_remains_rejected(self):
         body = function([
             instruction(
@@ -797,7 +874,10 @@ class StaticBatchLiftTests(unittest.TestCase):
             self.assertEqual(summary["accepted_bytes_percent_of_pilot_export"], 98.67)
             self.assertEqual(summary["reachable_pilot_function_count"], 15)
             self.assertEqual(summary["unreachable_pilot_function_count"], 15)
-            self.assertEqual(summary["rejection_counts_by_kind"], {"unsupported_opcode": 1})
+            self.assertEqual(
+                summary["rejection_counts_by_kind"],
+                {"unsupported_operand_form": 1},
+            )
             self.assertEqual(len(list(output_dir.glob("*.cpp"))), 29)
             self.assertTrue(report_path.is_file())
             rejected = next(

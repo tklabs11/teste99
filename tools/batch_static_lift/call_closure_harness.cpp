@@ -5,6 +5,7 @@
 #endif
 #include "startup_resman_reference_bytes.hpp"
 
+#include <algorithm>
 #include <array>
 #include <cstddef>
 #include <cstdint>
@@ -1512,10 +1513,178 @@ bool run_movss_transfer_regression(bool print_results) {
     return true;
 }
 
+bool run_xorps_regression(bool print_results) {
+    constexpr std::uint32_t kInitialFlags = 0xa5a50002u;
+    BatchLiftState state{};
+    state.eflags = kInitialFlags;
+    const std::array<std::uint32_t, 4> destination{
+        0x00000000u, 0xaaaaaaaaU, 0x55555555u, 0xffffffffu};
+    const std::array<std::uint32_t, 4> source{
+        0xffffffffu, 0x12345678u, 0x55555555u, 0x00000000u};
+    std::copy(destination.begin(), destination.end(), state.xmm[0]);
+    std::copy(source.begin(), source.end(), state.xmm[1]);
+
+    std::array<std::uint32_t, 4> expected{};
+#if defined(_M_IX86)
+    const __m128 native_destination = _mm_castsi128_ps(
+        _mm_loadu_si128(
+            reinterpret_cast<const __m128i*>(destination.data())));
+    const __m128 native_source = _mm_castsi128_ps(
+        _mm_loadu_si128(reinterpret_cast<const __m128i*>(source.data())));
+    _mm_storeu_si128(
+        reinterpret_cast<__m128i*>(expected.data()),
+        _mm_castps_si128(_mm_xor_ps(native_destination, native_source)));
+#else
+    for (std::size_t lane = 0; lane < expected.size(); ++lane) {
+        expected[lane] = destination[lane] ^ source[lane];
+    }
+#endif
+
+    const bool operation_passed = batch_guest_xorps(state, 0u, 1u);
+    const bool self_zero_passed = batch_guest_xorps(state, 2u, 2u)
+        && std::all_of(
+            std::begin(state.xmm[2]), std::end(state.xmm[2]),
+            [](std::uint32_t value) { return value == 0u; });
+    const bool lanes_passed = std::equal(
+        expected.begin(), expected.end(), std::begin(state.xmm[0]));
+    const bool flags_passed = state.eflags == kInitialFlags;
+    const bool bounds_passed =
+        !batch_guest_xorps(state, 8u, 1u)
+        && !batch_guest_xorps(state, 0u, 8u);
+    if (!operation_passed || !self_zero_passed || !lanes_passed
+        || !flags_passed || !bounds_passed) {
+        std::cerr << "FAIL xorps operation=" << operation_passed
+                  << " self_zero=" << self_zero_passed
+                  << " lanes=" << lanes_passed
+                  << " flags=" << flags_passed
+                  << " bounds=" << bounds_passed << "\n";
+        return false;
+    }
+    if (print_results) {
+        std::cout << "PASS xorps register_register=self_zero_and_distinct "
+                  << "lanes=verified flags=preserved bounds=checked"
+#if defined(_M_IX86)
+                  << " reference=x86_SSE"
+#else
+                  << " reference=verified_bitwise_semantics"
+#endif
+                  << "\n";
+    }
+    return true;
+}
+
+bool run_x87_binary64_transfer_regression(bool print_results) {
+    constexpr std::uint32_t kMemoryBase = 0x2400u;
+    constexpr std::uint32_t kSourceAddress = kMemoryBase;
+    constexpr std::uint32_t kDestinationAddress = kMemoryBase + 8u;
+    constexpr std::uint32_t kInitialFlags = 0xa5a50002u;
+    const std::array<std::uint64_t, 6> values{
+        0x0000000000000000ull,
+        0x8000000000000000ull,
+        0x4034000000000000ull,
+        0xc00a000000000000ull,
+        0x0000000000000001ull,
+        0x7fefffffffffffffull,
+    };
+    std::array<std::uint8_t, 0x20> bytes{};
+    BatchLiftMemory memory;
+    if (!memory.map_region(
+            kMemoryBase, bytes.data(), bytes.size(), true)) {
+        return false;
+    }
+
+    bool native_matches = true;
+    bool memory_matches = true;
+    bool flags_preserved = true;
+    bool stack_balanced = true;
+    for (const std::uint64_t value : values) {
+        BatchLiftState state{};
+        state.eflags = kInitialFlags;
+        if (!memory.store64(kSourceAddress, value)
+            || !memory.store64(kDestinationAddress, 0xaaaaaaaaaaaaaaaaull)) {
+            return false;
+        }
+
+        const bool loaded = batch_guest_fld64(
+            memory, state, kSourceAddress);
+        const bool pushed = loaded && state.x87_depth == 1u
+            && state.x87_stack[0] == value;
+        const bool stored = pushed && batch_guest_fstp64(
+            memory, state, kDestinationAddress);
+        std::uint64_t guest_value{};
+        memory_matches = memory_matches
+            && memory.load64(kDestinationAddress, guest_value)
+            && guest_value == value;
+        flags_preserved = flags_preserved && state.eflags == kInitialFlags;
+        stack_balanced = stack_balanced && state.x87_depth == 0u;
+        if (!stored) return false;
+
+#if defined(_M_IX86)
+        volatile std::uint64_t native_source = value;
+        volatile std::uint64_t native_destination = 0u;
+        volatile std::uint16_t native_status = 0u;
+        __asm {
+            fninit
+            fld qword ptr [native_source]
+            fstp qword ptr [native_destination]
+            fnstsw ax
+            mov native_status, ax
+        }
+        native_matches = native_matches
+            && native_destination == guest_value
+            && (native_status & 0x3800u) == 0u;
+#else
+        native_matches = native_matches && guest_value == value;
+#endif
+    }
+
+    BatchLiftState invalid_state{};
+    invalid_state.x87_depth = 8u;
+    const bool overflow_rejected = !batch_guest_fld64(
+        memory, invalid_state, kSourceAddress)
+        && invalid_state.x87_depth == 8u;
+    invalid_state.x87_depth = 0u;
+    const bool underflow_rejected = !batch_guest_fstp64(
+        memory, invalid_state, kDestinationAddress)
+        && invalid_state.x87_depth == 0u;
+    invalid_state.x87_depth = 1u;
+    invalid_state.x87_stack[0] = values[2];
+    const bool unmapped_store_rejected = !batch_guest_fstp64(
+        memory, invalid_state, kMemoryBase + 0x100u)
+        && invalid_state.x87_depth == 1u;
+
+    if (!native_matches || !memory_matches || !flags_preserved
+        || !stack_balanced || !overflow_rejected || !underflow_rejected
+        || !unmapped_store_rejected) {
+        std::cerr << "FAIL x87_binary64_transfer native=" << native_matches
+                  << " memory=" << memory_matches
+                  << " flags=" << flags_preserved
+                  << " stack=" << stack_balanced
+                  << " overflow=" << overflow_rejected
+                  << " underflow=" << underflow_rejected
+                  << " unmapped_store=" << unmapped_store_rejected << "\n";
+        return false;
+    }
+    if (print_results) {
+        std::cout << "PASS x87_binary64_transfer values=" << values.size()
+                  << " stack_balanced=yes flags=preserved "
+                  << "overflow_underflow=checked bounds=checked"
+#if defined(_M_IX86)
+                  << " reference=x86_x87"
+#else
+                  << " reference=verified_binary64_transfer"
+#endif
+                  << "\n";
+    }
+    return true;
+}
+
 } // namespace
 
 int main() {
-    if (!run_movss_transfer_regression(true)
+    if (!run_xorps_regression(true)
+        || !run_x87_binary64_transfer_regression(true)
+        || !run_movss_transfer_regression(true)
         || !run_recursive_cases(true)
         || !run_distinct_function_calls(true)
         || !run_startup_initialization_chain(true)

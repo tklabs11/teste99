@@ -38,18 +38,18 @@ REGISTER_ALIASES = {
     "SP": (4, 16, 0), "BP": (5, 16, 0), "SI": (6, 16, 0), "DI": (7, 16, 0),
 }
 MEMORY_OPERAND = re.compile(
-    r"^(?:(byte|word|dword) ptr )?\[\s*"
+    r"^(?:(byte|word|dword|qword|double) ptr )?\[\s*"
     r"(EAX|ECX|EDX|EBX|ESP|EBP|ESI|EDI)"
     r"(?:\s*([+-])\s*(-?(?:0x[0-9a-f]+|[0-9]+)))?\s*\]$",
     re.IGNORECASE,
 )
 FS_MEMORY_OPERAND = re.compile(
-    r"^(?:(byte|word|dword) ptr )?FS:\[\s*"
+    r"^(?:(byte|word|dword|qword|double) ptr )?FS:\[\s*"
     r"([+-]?(?:0x[0-9a-f]+|[0-9]+))\s*\]$",
     re.IGNORECASE,
 )
 ABSOLUTE_MEMORY_OPERAND = re.compile(
-    r"^(?:(byte|word|dword) ptr )?\[\s*(0x[0-9a-f]+|[0-9]+)\s*\]$",
+    r"^(?:(byte|word|dword|qword|double) ptr )?\[\s*(0x[0-9a-f]+|[0-9]+)\s*\]$",
     re.IGNORECASE,
 )
 XMM_REGISTER = re.compile(r"^XMM([0-7])$", re.IGNORECASE)
@@ -149,6 +149,8 @@ def parse_operand(text, infer_memory_width=None):
             "byte": 8,
             "word": 16,
             "dword": 32,
+            "qword": 64,
+            "double": 64,
         }.get((match.group(1) or "").lower(), infer_memory_width)
         if memory_width is None:
             raise ValueError(f"memory operand width is ambiguous: {text!r}")
@@ -165,6 +167,8 @@ def parse_operand(text, infer_memory_width=None):
             "byte": 8,
             "word": 16,
             "dword": 32,
+            "qword": 64,
+            "double": 64,
         }.get((match.group(1) or "").lower(), infer_memory_width)
         if memory_width is None:
             raise ValueError(f"memory operand width is ambiguous: {text!r}")
@@ -190,6 +194,8 @@ def parse_operand(text, infer_memory_width=None):
             "byte": 8,
             "word": 16,
             "dword": 32,
+            "qword": 64,
+            "double": 64,
         }.get((match.group(1) or "").lower(), infer_memory_width)
         if memory_width is None:
             raise ValueError(f"memory operand width is ambiguous: {text!r}")
@@ -238,7 +244,7 @@ def emit_load(operand, temp):
         return register_read(operand, temp)
     if kind == "immediate":
         return [f"{temp} = {cpp_u32(value)};"]
-    method = {8: "load8", 16: "load16", 32: "load32"}[operand[3]]
+    method = {8: "load8", 16: "load16", 32: "load32", 64: "load64"}[operand[3]]
     return [f"if (!memory.{method}({memory_address(operand)}, {temp})) "
             "return BatchLiftStatus::invalid_memory;"]
 
@@ -255,7 +261,12 @@ def emit_store(operand, value):
             f"(({value} << {shift}u) & {cpp_u32(mask)});"
         ]
     if kind in {"absolute_memory", "memory", "fs_memory"}:
-        method = {8: "store8", 16: "store16", 32: "store32"}[operand[3]]
+        method = {
+            8: "store8",
+            16: "store16",
+            32: "store32",
+            64: "store64",
+        }[operand[3]]
         return [f"if (!memory.{method}({memory_address(operand)}, {value})) "
                 "return BatchLiftStatus::invalid_memory;"]
     raise ValueError("an immediate cannot be an instruction destination")
@@ -486,6 +497,44 @@ def translate_instruction(
         raise ValueError(
             "MOVSS destination must be an XMM register or 32-bit memory operand"
         )
+    if mnemonic == "XORPS":
+        if len(operands_text) != 2:
+            raise ValueError(
+                f"XORPS expects 2 operands; found {len(operands_text)}"
+            )
+        destination = XMM_REGISTER.fullmatch(operands_text[0].strip())
+        source = XMM_REGISTER.fullmatch(operands_text[1].strip())
+        if destination is None or source is None:
+            raise ValueError("XORPS currently requires two XMM register operands")
+        return [
+            "if (!batch_guest_xorps("
+            f"state, {int(destination.group(1))}u, "
+            f"{int(source.group(1))}u)) "
+            "return BatchLiftStatus::invalid_control_flow;"
+        ]
+    if mnemonic in {"FLD", "FSTP"}:
+        if len(operands_text) != 1:
+            raise ValueError(
+                f"{mnemonic} expects 1 operand; found {len(operands_text)}"
+            )
+        operand = resolve_operands(operands_text)[0]
+        if operand[0] not in {"absolute_memory", "memory"} or operand[3] != 64:
+            raise ValueError(
+                f"{mnemonic} currently supports only 64-bit memory operands"
+            )
+        helper = (
+            "batch_guest_fld64" if mnemonic == "FLD" else "batch_guest_fstp64"
+        )
+        stack_guard = (
+            "if (state.x87_depth >= 8u) return BatchLiftStatus::invalid_x87_state;"
+            if mnemonic == "FLD"
+            else "if (state.x87_depth == 0u) return BatchLiftStatus::invalid_x87_state;"
+        )
+        return [
+            stack_guard,
+            f"if (!{helper}(memory, state, {memory_address(operand)})) "
+            "return BatchLiftStatus::invalid_memory;"
+        ]
 
     set_condition = None
     if mnemonic.startswith("SET") and len(mnemonic) > 3:
@@ -516,6 +565,11 @@ def translate_instruction(
         lines += emit_store(operands[0], f"({SUPPORTED_CONDITIONS[set_condition]} ? 1u : 0u)")
     elif mnemonic == "MOV":
         require(2)
+        if any(
+            operand_width(operand) not in {None, 8, 16, 32}
+            for operand in operands
+        ):
+            raise ValueError("MOV supports only 8-, 16-, or 32-bit operands")
         if operands[0][0] in {"immediate"} or (
             operands[0][0] in {
                 "absolute_memory", "memory", "fs_memory",

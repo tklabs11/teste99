@@ -16,6 +16,7 @@ enum class BatchLiftStatus {
     invalid_control_flow,
     unsupported_import,
     synchronization_error,
+    invalid_x87_state,
 };
 
 class BatchLiftMemory;
@@ -35,6 +36,8 @@ public:
 struct BatchLiftState {
     std::uint32_t regs[8]{};
     std::uint32_t xmm[8][4]{};
+    std::uint64_t x87_stack[8]{};
+    std::uint8_t x87_depth = 0;
     std::uint32_t eflags = 0;
     std::uint32_t eip = 0;
     std::uint32_t fs_base = 0;
@@ -249,6 +252,18 @@ public:
         return true;
     }
 
+    bool load64(std::uint32_t address, std::uint64_t& value) const {
+        const Region* region = find_region(address, 8);
+        if (region == nullptr) return false;
+        const std::size_t offset = address - region->base;
+        value = 0;
+        for (unsigned index = 0; index < 8; ++index) {
+            value |= static_cast<std::uint64_t>(region->data[offset + index])
+                << (index * 8u);
+        }
+        return true;
+    }
+
     bool store8(std::uint32_t address, std::uint32_t value) {
         Region* region = find_region(address, 1);
         if (region == nullptr || !region->writable) return false;
@@ -271,6 +286,17 @@ public:
         const std::size_t offset = address - region->base;
         for (unsigned index = 0; index < 4; ++index) {
             region->data[offset + index] = static_cast<std::uint8_t>(value >> (index * 8u));
+        }
+        return true;
+    }
+
+    bool store64(std::uint32_t address, std::uint64_t value) {
+        Region* region = find_region(address, 8);
+        if (region == nullptr || !region->writable) return false;
+        const std::size_t offset = address - region->base;
+        for (unsigned index = 0; index < 8; ++index) {
+            region->data[offset + index] =
+                static_cast<std::uint8_t>(value >> (index * 8u));
         }
         return true;
     }
@@ -336,6 +362,39 @@ inline bool batch_guest_movss_register_move(
     std::uint32_t source) {
     if (destination >= 8u || source >= 8u) return false;
     state.xmm[destination][0] = state.xmm[source][0];
+    return true;
+}
+
+inline bool batch_guest_xorps(
+    BatchLiftState& state,
+    std::uint32_t destination,
+    std::uint32_t source) {
+    if (destination >= 8u || source >= 8u) return false;
+    for (unsigned lane = 0; lane < 4u; ++lane) {
+        state.xmm[destination][lane] ^= state.xmm[source][lane];
+    }
+    return true;
+}
+
+inline bool batch_guest_fld64(
+    const BatchLiftMemory& memory,
+    BatchLiftState& state,
+    std::uint32_t address) {
+    if (state.x87_depth >= 8u) return false;
+    std::uint64_t value{};
+    if (!memory.load64(address, value)) return false;
+    state.x87_stack[state.x87_depth++] = value;
+    return true;
+}
+
+inline bool batch_guest_fstp64(
+    BatchLiftMemory& memory,
+    BatchLiftState& state,
+    std::uint32_t address) {
+    if (state.x87_depth == 0u) return false;
+    const std::uint64_t value = state.x87_stack[state.x87_depth - 1u];
+    if (!memory.store64(address, value)) return false;
+    state.x87_stack[--state.x87_depth] = 0u;
     return true;
 }
 
