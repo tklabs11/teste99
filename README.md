@@ -1845,14 +1845,12 @@ that field was not part of this block.
 | Setup `+0x14`, backbuffer format, depth format | Translated as `0x16`, `21`, and `75`; `+0x14` has no identified D3D9 consumer. |
 | Adapter `0`, device type `1`, behavior flags `0x40`, window token | Still supplied by the harness; the window token is resolved through the guest-window mapping. |
 | Backbuffer count `1`, multisample/quality `0`, swap effect `1`, flags `0`, refresh `0`, interval `1` | Still prepared by the harness. |
-| Device-global `Windowed` | Now set by the translated boolean lookup for key `0x00d77e9b`; the current Android input is an explicit test fixture, not the original configuration loader. The separate manual/window-global regressions retain their manual `TRUE` seed. |
+| Device-global `Windowed` | Explicit harness input `TRUE`; no configuration key is currently connected to this field. The prior `0x00d77e9b` connection was incorrect and is removed. |
 | `EnableAutoDepthStencil = FALSE` | Still explicit harness state; the separate original initialization is outside this block. |
 
 Thus, this increment removes manual setup for the translated dimensions and
-the three observed setup dwords. The following boolean-lookup increment also
-removes the manual `Windowed = TRUE` assignment from the device-global path,
-but supplies the lookup with a test fixture; it does not claim that the
-original configuration store or all `CreateDevice` parameters are translated.
+the three observed setup dwords. `Windowed` and `behavior_flags` remain
+harness inputs pending translation of their complete original consumers.
 
 ### Device-token recreation regression
 
@@ -1880,76 +1878,82 @@ the recreated-device Present succeeded. The physical display returned to
 `FUN_0075f030` also obtains the DWORD at guest key address `0x00d77e99`
 through `FUN_006a2660`; that getter returns zero when no record is found.
 `FUN_006a25a0` is the boolean getter used by the graphics path, and a missing
-or unsupported typed record produces false. This Android increment supplies
-one explicit record to the translated query; the original game's store remains
-unloaded and its value for this key is still unobserved.
+or unsupported typed record produces false. Earlier probe fixtures were
+removed from the Android `CreateDevice` path; the original game's store remains
+unloaded and its values are still unobserved.
 
-## Boolean configuration query for `Windowed` — 2026-11-06
+## Correcting the graphics-property mapping — 2026-11-06
 
-In `FUN_0075f030`, instruction `0x75f1cb` is `PUSH 0x00d77e9b`; it is followed
-by `MOV ECX, ESI` and the getter call at `0x75f1d7` to `FUN_006a25a0`.
-Therefore `0x00d77e9b` is passed as an immediate key value, not loaded from or
-dereferenced as a pointer. The getter result feeds the translated temporary
-presentation setup; `FUN_011f7d00` maps that temporary field back to D3D9's
-`Windowed` parameter. The numeric value overlaps `.text`, but that alone does
-not establish a setting name or the source of its stored value.
+The prior Android consumer treated the boolean at key `0x00d77e9b` as
+`D3DPRESENT_PARAMETERS.Windowed`. That association was incorrect. The
+SporeModder FX property registry names `0x00d77e9b` as `HardwareVP` and
+`0x038d0a09` as `fullscreen`; registry names are supporting evidence, not proof
+that either key is queried at a particular callsite.
 
-The x86 getter's relevant behavior is:
+The x86 data flow in `FUN_0075f030` distinguishes the fields:
 
-- If the key argument is below the cached count at object `+0x38`, it reads
-  the cached dword from `+0x3c` and returns whether it is nonzero. Whether the
-  graphics key takes this path or the record-search path depends on the
-  runtime cached count and was not observed.
-- The sorted record vector uses begin/end pointers at `+0x18` and `+0x1c`;
-  each record is `0x18` bytes, with its key at `+0`, value flags at `+0x10`,
-  and type at `+0x12`. `FUN_006a30c0` updates the indexed-value path when the
-  key is below the object's cached count and otherwise delegates to
-  `FUN_006a2e20`. That routine searches the sorted records and constructs a
-  record when absent; for an already-present key, the observed body disposes
-  the incoming temporary value rather than replacing the record.
-- Typed records `1` and `0x10` are accepted. Flag bits `0x30` select the
-  indirect byte at the record's value pointer; otherwise the first inline
-  byte is used. Any nonzero byte is true. Unsupported types read the observed
-  zero default at `DAT_015d115d`; an absent key returns false.
-- `DAT_015fd918` is assigned by `FUN_0067e050`, whose direct call is at
-  `0x7e8bd2`. The insertion routine has observed callers including
-  `FUN_006a30c0`, `FUN_00bed460`, and `FUN_00bed920`; the latter two insert
-  key `0x049b48ee`. These facts establish the generic storage path, not who
-  supplies `0x00d77e9b` during original game startup.
+- `0x75f1cb: PUSH 0x00d77e9b` and `0x75f1d7: CALL 0x006a25a0` query
+  `HardwareVP` as an immediate key.
+- The getter result is packed into `uVar15`; `uStack_70` is set to
+  `((char)(uVar15 >> 8) == 0)`. This is structure offset `+0x2c`, copied to
+  global `DAT_01712470`.
+- `FUN_011f8680` reads `DAT_01712470` at `0x11f8704` and `0x11f8760` while
+  selecting `BehaviorFlags`. The branch also depends on `DAT_01712474` and
+  device-capability bits at `[ESP+0x38]` (`0x10000` and `0x100000`); the
+  property is therefore not itself a complete `BehaviorFlags` value.
+- The wrapper pushes the returned-device pointer and presentation pointer at
+  `0x11f8735` and `0x11f873a`, then pushes the selected `EAX` as
+  `BehaviorFlags` at `0x11f873f`, followed by the focus window, device type
+  and adapter. It dispatches `IDirect3D9::CreateDevice` through vtable offset
+  `+0x40` at `0x11f874e`.
+- The temporary structure's distinct `+0x24` field is assigned as
+  `(uint)pvStack_c & 0xff`, where `pvStack_c` is the saved x86 exception-list
+  pointer. `FUN_011f7d00` reads `[param+0x24]` at `0x11f7d50` and `0x11f7d6c`;
+  it writes the zero-test result to `DAT_016f8bbc`, which is
+  `D3DPRESENT_PARAMETERS.Windowed` at offset `+0x20`. The wrapper does not
+  read the `+0x2c` field.
+- A bounded scan of the 116 available JSON export files found no instruction
+  operand `0x038d0a09`. This does not prove that no unexported or indirect
+  path queries `fullscreen`; its connection to this `CreateDevice` chain is
+  unverified.
 
-The x86 differential executes the original 181-byte getter body from
-`0x6a25a0` through `0x6a2654`. The harness replaces its binary-search and
-typed-value-construction callees with fixture stubs, then compares the getter
-result with the translated lookup for inline false/true/noncanonical true,
-indirect true/false, cached false/true, unsupported type, missing key, and
-uninitialized-store cases. Uninitialized is kept distinct from the original's
-legitimate false defaults; it does not update the translated `Windowed` field.
+The consumer was corrected: the Android device-global probe no longer feeds
+the `HardwareVP` fixture to `Windowed`. It sets `Windowed=TRUE` explicitly as
+harness state, and `behavior_flags=0x40` also remains a harness input until
+the capability-dependent translated selection is implemented. No claim is
+made that the community `fullscreen` ID substitutes for an original query.
 
-The device-global Android probe now translates the query-to-`Windowed` chain.
-Its record (`key=0x00d77e9b`, `type=1`, inline value `1`) is marked
-`origin=test-fixture` in the log. It is not evidence that the game loader
-populates this key. `1280x720` remains input supplied by the test and passes
-through the translated dimension block. The translated depth format remains
-`75`, while `EnableAutoDepthStencil` remains false.
+The x86 regression keeps the previous getter cases: inline false/true and
+noncanonical true, indirect true/false, cached false/true, unsupported type,
+missing key, and uninitialized-store behavior. It now also executes the
+original `FUN_011f7d00` wrapper with `+0x24` and `+0x2c` varied independently.
+`Windowed` follows only `+0x24` across all four combinations. These are
+isolated function tests, not game-startup execution.
 
-On phone `2303ERA42L`, the fixture produced `Windowed=1` in the successful
-`CreateDevice` call (`1280x720`, format `21`, depth format `75`, depth stencil
-disabled). One `Reset` succeeded at `2400x1080`, followed by the first
-successful `Present`. The device-token zero/unknown rejection and
-create-invalidate-recreate/stale-token checks also passed. The original
-configuration loader and its value for this key remain the next blocker;
-other configuration-dependent presentation fields remain manual.
+`1280x720` remains test input through the already-validated dimensions block.
+The translated depth format remains `75`, while
+`EnableAutoDepthStencil=FALSE` remains explicit harness state. The prior phone
+log with `HardwareVP` connected to `Windowed` is historical and is not
+evidence for the corrected mapping.
 
-The rebuilt debug APK SHA-256 is
-`fd4be7903f5c864c0339a9595e3815e0c1929fefd146a5656985dd837fd77dcc`.
+Run the x86 regression against the analyzed PE with:
+
+```powershell
+.\tools\test_graphics_parameter_x86_reference.ps1 -PePath C:\SporeAnalysis\SporeApp.exe
+```
+
+The analyzed PE SHA-256 is
+`6aec99cb2dc7fd08851a1718e92a60f359fb3fccca3b244a890ae07e93cbe59b`. The
+same test also passed against the previously used PE
+`fb66afc320730dec6f80b79301c7c525689859e3d0a99616b657559e8f11a1ae`.
 
 Logs:
 
-- [translated-config-windowed-x86-2026-11-06.log](./test-logs/translated-config-windowed-x86-2026-11-06.log)
-- [translated-config-windowed-device-2026-11-06.log](./test-logs/translated-config-windowed-device-2026-11-06.log)
-- [config-windowed-regression-d3d9-bridge-2026-11-06.log](./test-logs/config-windowed-regression-d3d9-bridge-2026-11-06.log)
-- [config-windowed-regression-translated-graphics-manual-regression-2026-11-06.log](./test-logs/config-windowed-regression-translated-graphics-manual-regression-2026-11-06.log)
-- [config-windowed-regression-translated-window-global-increment-2026-11-06.log](./test-logs/config-windowed-regression-translated-window-global-increment-2026-11-06.log)
+- [graphics-property-mapping-x86-2026-11-06.log](./test-logs/graphics-property-mapping-x86-2026-11-06.log)
+- [graphics-property-mapping-x86-legacy-2026-11-06.log](./test-logs/graphics-property-mapping-x86-legacy-2026-11-06.log)
+
+The Android debug build succeeded after the correction. No phone run was made
+for this change; `adb` is unavailable in the current shell.
 
 ### Configuration-origin follow-up — 2026-11-05
 
@@ -1986,11 +1990,13 @@ is generic and does not establish a file, default, argument, or other startup
 source for this key.
 
 No initialization block was selected or integrated: substituting a guessed
-default would not replace the fixture with original initialization. The
-Android `origin=test-fixture` remains explicit. Next required evidence is a
-valid PC run captured at the getter, followed by tracing the actual record
-producer (including indirect calls) or confirming that the record is absent
-and the original false default is consumed. See
+default would not replace original initialization. The former Android
+`origin=test-fixture` log described the now-removed `HardwareVP`-to-`Windowed`
+connection; it is not current Android state. The x86 getter fixture remains a
+test only. Next required evidence is a valid PC run captured at the getter,
+followed by tracing the actual record producer (including indirect calls) or
+confirming that the record is absent and the original false default is
+consumed. See
 [config-windowed-origin-static-2026-11-05.log](./test-logs/config-windowed-origin-static-2026-11-05.log)
 for the instruction evidence, bounded producer results, Evidence IDs, and
 capture limitation.
@@ -2019,7 +2025,7 @@ Static REA Evidence for the selected `fb66afc3...` executable:
 x86 instruction blocks; it is not execution of the Spore boot path.
 
 The x86 differential and all three phone regressions were rerun against the
-final debug APK. Its SHA-256 is
+then-current debug APK. Its SHA-256 is
 `e01675ee3ab095cb9cbd9e039e9179617d0096ef37c6541992684c9d7679b56a`.
 The earlier incomplete recreation attempt is retained as a diagnostic log,
 superseded by the successful recreation run below.

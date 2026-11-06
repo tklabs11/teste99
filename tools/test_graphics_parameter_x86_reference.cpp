@@ -31,6 +31,10 @@ constexpr std::uint32_t kPresentationModeBlockVa = 0x75f29f;
 constexpr std::uint32_t kPresentationModeBlockEndVa = 0x75f2b7;
 constexpr std::uint32_t kBooleanGetterBlockVa = 0x6a25a0;
 constexpr std::uint32_t kBooleanGetterBlockEndVa = 0x6a2655;
+constexpr std::uint32_t kPresentationWrapperVa = 0x11f7d00;
+constexpr std::uint32_t kPresentationWrapperEndVa = 0x11f7dd8;
+constexpr std::uint32_t kPresentationGlobalsVa = 0x016f6000;
+constexpr std::size_t kPresentationGlobalsSize = 0x5000;
 
 std::uint32_t g_saved_stack_pointer = 0;
 std::uint32_t g_reference_ecx = 0;
@@ -355,7 +359,7 @@ bool runPresentationModeComparison(
 }
 
 bool runConfigBooleanComparison(void* executable_block) {
-    constexpr std::uint32_t kWindowedKey = 0x00d77e9b;
+    constexpr std::uint32_t kHardwareVPKey = 0x00d77e9b;
     constexpr std::size_t kStackTopIndex = 16;
     constexpr std::size_t kMapSize = 0x40;
     constexpr std::size_t kRecordSize = 0x18;
@@ -424,7 +428,7 @@ bool runConfigBooleanComparison(void* executable_block) {
         std::array<std::uint8_t, kRecordSize> record{};
         std::array<std::uint8_t, kMapSize> map{};
         std::uint8_t indirect_value = test_case.indirect_value;
-        std::uint32_t record_key = kWindowedKey;
+        std::uint32_t record_key = kHardwareVPKey;
         std::memcpy(record.data(), &record_key, sizeof(record_key));
 
         const std::uint32_t raw_value = test_case.value_type == 0x10
@@ -460,13 +464,13 @@ bool runConfigBooleanComparison(void* executable_block) {
         std::array<std::uint32_t, 0x80 / sizeof(std::uint32_t)> frame{};
         frame[kStackTopIndex] = static_cast<std::uint32_t>(
             reinterpret_cast<std::uintptr_t>(&RestoreCallerStack));
-        frame[kStackTopIndex + 1] = kWindowedKey;
+        frame[kStackTopIndex + 1] = kHardwareVPKey;
         g_reference_return_value = 0;
         ExecuteReferenceBlock(frame.data() + kStackTopIndex);
         const bool reference_value = g_reference_return_value != 0;
 
         SporeGuestConfigBooleanFixtureRecord translated_record{
-            kWindowedKey,
+            kHardwareVPKey,
             test_case.value_type,
             test_case.value_flags,
             test_case.inline_value,
@@ -482,16 +486,17 @@ bool runConfigBooleanComparison(void* executable_block) {
         bool translated_value = false;
         const SporeGuestConfigBooleanLookupStatus translated_status =
             SporeTranslatedLookupConfigBoolean(
-                config_view, kWindowedKey, &translated_value);
+                config_view, kHardwareVPKey, &translated_value);
 
         const bool case_passed =
             translated_status == test_case.expected_status
             && reference_value == translated_value;
         std::printf(
-            "config-query case=%s key=0x%08x type=0x%x flags=0x%02x "
+            "config-query property=HardwareVP case=%s key=0x%08x "
+            "type=0x%x flags=0x%02x "
             "x86=%s/0x%02x translated=%s status=%s result=%s\n",
             test_case.name,
-            kWindowedKey,
+            kHardwareVPKey,
             test_case.value_type,
             test_case.value_flags,
             reference_value ? "true" : "false",
@@ -508,13 +513,14 @@ bool runConfigBooleanComparison(void* executable_block) {
     bool unchanged_value = true;
     const SporeGuestConfigBooleanLookupStatus uninitialized_status =
         SporeTranslatedLookupConfigBoolean(
-            uninitialized_view, kWindowedKey, &unchanged_value);
+            uninitialized_view, kHardwareVPKey, &unchanged_value);
     const bool uninitialized_passed =
         uninitialized_status
             == SporeGuestConfigBooleanLookupStatus::not_initialized
         && unchanged_value;
     std::printf(
-        "config-query case=uninitialized status=%s output-unchanged=%s result=%s\n",
+        "config-query property=HardwareVP case=uninitialized "
+        "status=%s output-unchanged=%s result=%s\n",
         configLookupStatusName(uninitialized_status),
         unchanged_value ? "PASS" : "FAIL",
         uninitialized_passed ? "PASS" : "FAIL");
@@ -559,7 +565,8 @@ bool runConfigBooleanComparison(void* executable_block) {
             status == SporeGuestConfigBooleanLookupStatus::found
             && reference_value == translated_value;
         std::printf(
-            "config-query case=cached-index-%u x86=%s translated=%s "
+            "config-query property=HardwareVP case=cached-index-%u "
+            "x86=%s translated=%s "
             "status=%s result=%s\n",
             key,
             reference_value ? "true" : "false",
@@ -570,6 +577,147 @@ bool runConfigBooleanComparison(void* executable_block) {
     }
 
     return all_cases_passed && uninitialized_passed && cached_cases_passed;
+}
+
+bool runPresentationWrapperWindowedComparison(void* executable_block) {
+    if (executable_block == nullptr) {
+        return false;
+    }
+
+    void* globals = VirtualAlloc(
+        nullptr,
+        kPresentationGlobalsSize,
+        MEM_COMMIT | MEM_RESERVE,
+        PAGE_READWRITE);
+    if (globals == nullptr) {
+        const DWORD error = GetLastError();
+        std::fprintf(
+            stderr,
+            "Could not allocate x86 reference globals: %lu\n",
+            error);
+        return false;
+    }
+    if (reinterpret_cast<std::uintptr_t>(globals)
+            + kPresentationGlobalsSize
+        > std::numeric_limits<std::uint32_t>::max()) {
+        VirtualFree(globals, 0, MEM_RELEASE);
+        std::fprintf(stderr, "x86 reference globals exceed 32-bit address space\n");
+        return false;
+    }
+
+    struct GlobalReference {
+        std::uint32_t address;
+        std::size_t minimum_count;
+        std::size_t actual_count;
+    };
+    GlobalReference global_references[] = {
+        {0x016f8b9c, 1, 0},
+        {0x016f8ba0, 1, 0},
+        {0x016f8ba4, 1, 0},
+        {0x016f8ba8, 1, 0},
+        {0x016f8bac, 1, 0},
+        {0x016f8bb0, 1, 0},
+        {0x016f658c, 1, 0},
+        {0x016f8bb8, 1, 0},
+        {0x016f8bb4, 1, 0},
+        {0x016f8bc0, 1, 0},
+        {0x016f8bbc, 1, 0},
+        {0x016f8bc4, 1, 0},
+        {0x016f8bc8, 2, 0},
+        {0x016f8bcc, 2, 0},
+        {0x016f8bd0, 1, 0}
+    };
+    auto* relocated_code = static_cast<std::uint8_t*>(executable_block);
+    constexpr std::size_t kWrapperSize =
+        kPresentationWrapperEndVa - kPresentationWrapperVa;
+    for (std::size_t offset = 0; offset + sizeof(std::uint32_t) <= kWrapperSize;
+            ++offset) {
+        std::uint32_t referenced_address = 0;
+        std::memcpy(
+            &referenced_address,
+            relocated_code + offset,
+            sizeof(referenced_address));
+        for (GlobalReference& reference : global_references) {
+            if (referenced_address == reference.address) {
+                const std::uint32_t relocated_address =
+                    static_cast<std::uint32_t>(
+                        reinterpret_cast<std::uintptr_t>(globals)
+                        + (reference.address - kPresentationGlobalsVa));
+                std::memcpy(
+                    relocated_code + offset,
+                    &relocated_address,
+                    sizeof(relocated_address));
+                ++reference.actual_count;
+                offset += sizeof(std::uint32_t) - 1;
+                break;
+            }
+        }
+    }
+    for (const GlobalReference& reference : global_references) {
+        if (reference.actual_count < reference.minimum_count) {
+            VirtualFree(globals, 0, MEM_RELEASE);
+            std::fprintf(
+                stderr,
+                "Unexpected FUN_011f7d00 global reference count for "
+                "0x%08x: %zu\n",
+                reference.address,
+                reference.actual_count);
+            return false;
+        }
+    }
+
+    constexpr std::size_t kStackTopIndex = 16;
+    constexpr std::size_t kWindowedInputOffset = 0x24 / sizeof(std::uint32_t);
+    constexpr std::size_t kHardwareVPInputOffset = 0x2c / sizeof(std::uint32_t);
+    constexpr std::size_t kD3DWindowedOutputOffset =
+        0x016f8bbc - kPresentationGlobalsVa;
+    std::array<std::uint32_t, 0x40 / sizeof(std::uint32_t)> parameters{};
+    bool all_cases_passed = true;
+
+    for (std::uint32_t windowed_input = 0; windowed_input <= 1; ++windowed_input) {
+        for (std::uint32_t hardware_vp_input = 0;
+                hardware_vp_input <= 1;
+                ++hardware_vp_input) {
+            std::memset(globals, 0, kPresentationGlobalsSize);
+            parameters.fill(0);
+            parameters[kWindowedInputOffset] = windowed_input;
+            parameters[kHardwareVPInputOffset] = hardware_vp_input;
+
+            std::array<std::uint32_t, 0x80 / sizeof(std::uint32_t)> frame{};
+            frame[kStackTopIndex] = static_cast<std::uint32_t>(
+                reinterpret_cast<std::uintptr_t>(&RestoreCallerStack));
+            frame[kStackTopIndex + 1] = static_cast<std::uint32_t>(
+                reinterpret_cast<std::uintptr_t>(parameters.data()));
+            g_reference_block = executable_block;
+            g_reference_ecx = 0;
+            ExecuteReferenceBlock(frame.data() + kStackTopIndex);
+
+            std::uint32_t reference_windowed = 0;
+            std::memcpy(
+                &reference_windowed,
+                static_cast<const std::uint8_t*>(globals)
+                    + kD3DWindowedOutputOffset,
+                sizeof(reference_windowed));
+            const std::uint32_t expected_windowed =
+                windowed_input == 0 ? 1u : 0u;
+            const bool case_passed =
+                reference_windowed == expected_windowed
+                && parameters[kWindowedInputOffset] == windowed_input
+                && parameters[kHardwareVPInputOffset] == hardware_vp_input;
+            std::printf(
+                "presentation-wrapper windowed-input=%u hardware-vp-input=%u "
+                "x86-d3d.Windowed=%u expected=%u result=%s\n",
+                windowed_input,
+                hardware_vp_input,
+                reference_windowed,
+                expected_windowed,
+                case_passed ? "PASS" : "FAIL");
+            all_cases_passed = all_cases_passed && case_passed;
+        }
+    }
+
+    VirtualFree(globals, 0, MEM_RELEASE);
+    return all_cases_passed;
 }
 
 }
@@ -585,6 +733,7 @@ int wmain(int argc, wchar_t** argv) {
     std::vector<std::uint8_t> dimensions_reference_bytes;
     std::vector<std::uint8_t> mode_reference_bytes;
     std::vector<std::uint8_t> config_reference_bytes;
+    std::vector<std::uint8_t> presentation_wrapper_reference_bytes;
     if (!readImage(argv[1], &image)
             || !extractReferenceBlock(
                 image,
@@ -600,7 +749,12 @@ int wmain(int argc, wchar_t** argv) {
                 image,
                 kBooleanGetterBlockVa,
                 kBooleanGetterBlockEndVa,
-                &config_reference_bytes)) {
+                &config_reference_bytes)
+            || !extractReferenceBlock(
+                image,
+                kPresentationWrapperVa,
+                kPresentationWrapperEndVa,
+                &presentation_wrapper_reference_bytes)) {
         return 1;
     }
 
@@ -677,6 +831,34 @@ int wmain(int argc, wchar_t** argv) {
         config_reference_bytes.size());
     const bool config_boolean =
         runConfigBooleanComparison(config_executable_block);
+    auto* presentation_wrapper_executable_block =
+        static_cast<std::uint8_t*>(VirtualAlloc(
+            nullptr,
+            presentation_wrapper_reference_bytes.size() + 1,
+            MEM_COMMIT | MEM_RESERVE,
+            PAGE_EXECUTE_READWRITE));
+    if (presentation_wrapper_executable_block == nullptr) {
+        VirtualFree(dimensions_executable_block, 0, MEM_RELEASE);
+        VirtualFree(mode_executable_block, 0, MEM_RELEASE);
+        VirtualFree(config_executable_block, 0, MEM_RELEASE);
+        std::fprintf(stderr, "VirtualAlloc failed: %lu\n", GetLastError());
+        return 1;
+    }
+    std::memcpy(
+        presentation_wrapper_executable_block,
+        presentation_wrapper_reference_bytes.data(),
+        presentation_wrapper_reference_bytes.size());
+    presentation_wrapper_executable_block[
+        presentation_wrapper_reference_bytes.size()] = 0xc3;
+    std::printf(
+        "reference-function=FUN_011f7d00 presentation-wrapper-va="
+        "0x%08x-0x%08x executed-original-bytes=%zu\n",
+        kPresentationWrapperVa,
+        kPresentationWrapperEndVa,
+        presentation_wrapper_reference_bytes.size());
+    const bool presentation_wrapper_windowed =
+        runPresentationWrapperWindowedComparison(
+            presentation_wrapper_executable_block);
     std::uint32_t unused_width = 0;
     const bool null_rejected =
         !SporeTranslatedCopyBackBufferDimensions(
@@ -689,16 +871,17 @@ int wmain(int argc, wchar_t** argv) {
     VirtualFree(dimensions_executable_block, 0, MEM_RELEASE);
     VirtualFree(mode_executable_block, 0, MEM_RELEASE);
     VirtualFree(config_executable_block, 0, MEM_RELEASE);
+    VirtualFree(presentation_wrapper_executable_block, 0, MEM_RELEASE);
     g_reference_block = nullptr;
 
     if (!first || !second || !presentation_mode || !config_boolean
-            || !null_rejected) {
+            || !presentation_wrapper_windowed || !null_rejected) {
         std::fprintf(stderr, "x86 reference comparison: FAIL\n");
         return 1;
     }
     std::printf(
         "x86-original-vs-translated=PASS "
         "null-output-rejection=PASS presentation-mode=PASS "
-        "config-boolean=PASS\n");
+        "config-boolean=PASS presentation-wrapper-windowed=PASS\n");
     return 0;
 }

@@ -264,28 +264,6 @@ bool SporeTranslatedSetPresentationModeFields(
     return true;
 }
 
-SporeGuestConfigBooleanLookupStatus SporeTranslatedSetWindowedFromConfig(
-    SporeGuestD3D9State32* state,
-    const SporeGuestConfigBooleanFixtureView& config,
-    std::uint32_t key,
-    bool* query_value_out) {
-    if (state == nullptr || query_value_out == nullptr) {
-        return SporeGuestConfigBooleanLookupStatus::invalid_fixture;
-    }
-
-    bool query_value = false;
-    const SporeGuestConfigBooleanLookupStatus status =
-        SporeTranslatedLookupConfigBoolean(config, key, &query_value);
-    if (status == SporeGuestConfigBooleanLookupStatus::not_initialized
-            || status == SporeGuestConfigBooleanLookupStatus::invalid_fixture) {
-        return status;
-    }
-
-    *query_value_out = query_value;
-    state->presentation.windowed = query_value ? TRUE : FALSE;
-    return status;
-}
-
 HRESULT SporeTranslatedCreateDevice(
     SporeGuestD3D9State32* state,
     SDL_Window* window,

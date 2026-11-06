@@ -103,11 +103,6 @@ bool SporeTranslatedSetCreateDeviceBackBufferDimensions(
     std::uint32_t guest_height);
 bool SporeTranslatedSetPresentationModeFields(
     SporeGuestD3D9State32* state);
-SporeGuestConfigBooleanLookupStatus SporeTranslatedSetWindowedFromConfig(
-    SporeGuestD3D9State32* state,
-    const SporeGuestConfigBooleanFixtureView& config,
-    std::uint32_t key,
-    bool* query_value_out);
 
 HRESULT SporeTranslatedCreateDevice(
     SporeGuestD3D9State32* state,

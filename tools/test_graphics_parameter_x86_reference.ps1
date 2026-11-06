@@ -4,12 +4,15 @@ param(
 
 $ErrorActionPreference = "Stop"
 
-$expectedSha256 = "fb66afc320730dec6f80b79301c7c525689859e3d0a99616b657559e8f11a1ae"
+$expectedSha256 = @(
+    "fb66afc320730dec6f80b79301c7c525689859e3d0a99616b657559e8f11a1ae",
+    "6aec99cb2dc7fd08851a1718e92a60f359fb3fccca3b244a890ae07e93cbe59b"
+)
 if (-not (Test-Path -LiteralPath $PePath)) {
     throw "Reference PE not found: $PePath"
 }
 $actualSha256 = (Get-FileHash -LiteralPath $PePath -Algorithm SHA256).Hash.ToLowerInvariant()
-if ($actualSha256 -ne $expectedSha256) {
+if ($actualSha256 -notin $expectedSha256) {
     throw "Unexpected reference PE SHA-256: $actualSha256"
 }
 
