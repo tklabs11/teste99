@@ -1886,22 +1886,27 @@ unloaded and its value for this key is still unobserved.
 
 ## Boolean configuration query for `Windowed` — 2026-11-06
 
-The graphics callsite at `0x75f1cb` calls `FUN_006a25a0` with key
-`0x00d77e9b`. In `FUN_0075f030`, that result is inverted in the temporary
-presentation setup; `FUN_011f7d00` maps the temporary field back to the D3D9
-`Windowed` parameter. This key is an address in `.text`, not a confirmed
-user-facing setting name.
+In `FUN_0075f030`, instruction `0x75f1cb` is `PUSH 0x00d77e9b`; it is followed
+by `MOV ECX, ESI` and the getter call at `0x75f1d7` to `FUN_006a25a0`.
+Therefore `0x00d77e9b` is passed as an immediate key value, not loaded from or
+dereferenced as a pointer. The getter result feeds the translated temporary
+presentation setup; `FUN_011f7d00` maps that temporary field back to D3D9's
+`Windowed` parameter. The numeric value overlaps `.text`, but that alone does
+not establish a setting name or the source of its stored value.
 
 The x86 getter's relevant behavior is:
 
 - If the key argument is below the cached count at object `+0x38`, it reads
-  the cached dword from `+0x3c` and returns whether it is nonzero. The graphics
-  key is outside that small index range, so the original call follows the
-  record-search path.
+  the cached dword from `+0x3c` and returns whether it is nonzero. Whether the
+  graphics key takes this path or the record-search path depends on the
+  runtime cached count and was not observed.
 - The sorted record vector uses begin/end pointers at `+0x18` and `+0x1c`;
   each record is `0x18` bytes, with its key at `+0`, value flags at `+0x10`,
-  and type at `+0x12`. `FUN_006a2e20` inserts or updates records, and
-  `FUN_006a30c0` selects the indexed-value or record path.
+  and type at `+0x12`. `FUN_006a30c0` updates the indexed-value path when the
+  key is below the object's cached count and otherwise delegates to
+  `FUN_006a2e20`. That routine searches the sorted records and constructs a
+  record when absent; for an already-present key, the observed body disposes
+  the incoming temporary value rather than replacing the record.
 - Typed records `1` and `0x10` are accepted. Flag bits `0x30` select the
   indirect byte at the record's value pointer; otherwise the first inline
   byte is used. Any nonzero byte is true. Unsupported types read the observed
@@ -1945,6 +1950,50 @@ Logs:
 - [config-windowed-regression-d3d9-bridge-2026-11-06.log](./test-logs/config-windowed-regression-d3d9-bridge-2026-11-06.log)
 - [config-windowed-regression-translated-graphics-manual-regression-2026-11-06.log](./test-logs/config-windowed-regression-translated-graphics-manual-regression-2026-11-06.log)
 - [config-windowed-regression-translated-window-global-increment-2026-11-06.log](./test-logs/config-windowed-regression-translated-window-global-increment-2026-11-06.log)
+
+### Configuration-origin follow-up — 2026-11-05
+
+The original executable was identified as `SporeApp.exe`
+(SHA-256 `fb66afc320730dec6f80b79301c7c525689859e3d0a99616b657559e8f11a1ae`).
+Static inspection confirms the query argument at the graphics consumer:
+`0x75f1cb: PUSH 0xd77e9b`, `0x75f1d0: MOV ECX, ESI`, and
+`0x75f1d7: CALL 0x006a25a0`. The key is an immediate value. This does not show
+whether a matching record exists in a valid run, or where its value originates.
+Earlier in the function, `ESI` is loaded from `DAT_015fd918`; that identifies
+the static source of `ECX`, but not the runtime pointer value.
+
+The bounded producer trace found:
+
+- `FUN_006a2e20` has resolved direct callers `FUN_006a30c0`,
+  `FUN_00bed460`, and `FUN_00bed920`; Ghidra marks this caller inventory
+  partial and reports two omitted call references.
+- `FUN_006a30c0` updates indexed values when the key is below the cached count
+  and otherwise delegates to `FUN_006a2e20`. No direct code caller was
+  resolved for this function; an xref points to data at `0x01408884`, which
+  does not by itself establish the indirect caller.
+- The two other resolved insertion callers pass key `0x049b48ee`, not
+  `0x00d77e9b`. `FUN_0067e050` stores the configuration object in
+  `DAT_015fd918`; that singleton assignment does not identify a producer for
+  this record.
+
+The requested runtime capture was not possible in this environment. The game
+was not running; REA's local Frida device discovery failed because its native
+binding is missing, Windows process capture is not supported by the available
+REA host workflow, and no local x86 debugger command was found. Consequently
+there is no runtime argument/`ECX`/return/record-presence observation. Neither
+presence nor absence of the key is established. The insert/update call chain
+is generic and does not establish a file, default, argument, or other startup
+source for this key.
+
+No initialization block was selected or integrated: substituting a guessed
+default would not replace the fixture with original initialization. The
+Android `origin=test-fixture` remains explicit. Next required evidence is a
+valid PC run captured at the getter, followed by tracing the actual record
+producer (including indirect calls) or confirming that the record is absent
+and the original false default is consumed. See
+[config-windowed-origin-static-2026-11-05.log](./test-logs/config-windowed-origin-static-2026-11-05.log)
+for the instruction evidence, bounded producer results, Evidence IDs, and
+capture limitation.
 
 Static REA Evidence for the selected `fb66afc3...` executable:
 `ev_7d1506aa29a5fffd7c02c0897950a6d96270373ed1929ce9c41874b09907c446`

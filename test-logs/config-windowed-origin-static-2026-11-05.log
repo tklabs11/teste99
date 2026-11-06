@@ -1,0 +1,68 @@
+Spore graphics configuration origin follow-up
+date=2026-11-05
+analysis=static-only
+target=C:\Users\wesll\Downloads\SPORE-SteamRIP.com\SPORE\SporeBin\SporeApp.exe
+target_sha256=fb66afc320730dec6f80b79301c7c525689859e3d0a99616b657559e8f11a1ae
+
+Callsite argument
+0x0075f04e: MOV ESI, dword ptr [0x015fd918]
+0x0075f1cb: PUSH 0x00d77e9b
+0x0075f1d0: MOV ECX, ESI
+0x0075f1d7: CALL 0x006a25a0
+Interpretation: 0x00d77e9b is an immediate stack argument to FUN_006a25a0,
+not a pointer loaded from memory and not a dereference at this callsite.
+ESI/ECX statically comes from DAT_015fd918, but the runtime pointer value is
+unknown. The key's overlap with .text does not establish its semantic name.
+Getter return, runtime ECX, runtime record presence, and runtime value were
+not observed.
+
+Producer trace (bounded)
+FUN_006a30c0 compares the key against the cached count at object +0x38.
+The indexed case updates a typed value; the other case calls FUN_006a2e20.
+FUN_006a2e20 searches the sorted record vector, builds a record when the key
+is absent, and disposes the incoming temporary value when the key is already
+present.
+
+Resolved direct callers of FUN_006a2e20:
+- FUN_006a30c0
+- FUN_00bed460: passes key 0x049b48ee
+- FUN_00bed920: passes key 0x049b48ee
+Ghidra marks this caller inventory partial and reports two omitted call
+references; this list is not exhaustive.
+
+FUN_006a30c0 has no resolved direct code callers. An xref points to data at
+0x01408884; it is not sufficient to identify the indirect callsite. The
+configuration singleton pointer DAT_015fd918 is assigned by FUN_0067e050
+(direct call at 0x007e8bd2), but this does not show who creates the
+0x00d77e9b record.
+
+Runtime capture blocker
+SporeApp was not running. REA list_frida_devices failed with
+capability_unavailable because the local frida_binding.node is missing.
+REA Windows process capture is not admitted on this host workflow. Local checks
+found no windbg, cdb, ntsd, x64dbg, x32dbg, frida, gdb, rizin, or rz command.
+No attempt was made to launch the game without an available capture mechanism.
+Therefore neither record-present nor record-absent was observed in a valid run.
+
+Decision
+No initialization segment was selected or integrated. Keep the Android
+test-fixture explicit until the valid-run capture identifies the record's
+origin or confirms its absence/default behavior.
+No APK was built or installed for this investigation.
+
+REA evidence (all bound to the target SHA-256 above)
+- ev_8711ae284f5fcebb939d880202002e0e6c8e8d0a4c311891f1a0056ed015efc0:
+  instruction 0x75f1cb is PUSH immediate 0xd77e9b.
+- ev_fb603209ea57eb93aa66e16799631c0db9130acd4f6e880dabb128da2ad967db:
+  instruction 0x75f1d7 directly calls FUN_006a25a0.
+- ev_779b9424caf0cd10ee3d331d87b5ce83d11ec332d986875bc3a280460b9353eb:
+  xrefs to immediate value 0x00d77e9b resolve to 0x75f1cb.
+- ev_541a6ccb234a726a4ed02ee935b9987cca9039a08571840cf7318f9b1ae1bf86:
+  resolved callers of FUN_006a2e20; partial coverage, two omitted references.
+- ev_6ad883afa2ae9bea8e3502179e896d06adc12676d57f89337f6523acd932fddc:
+  no resolved direct callers of FUN_006a30c0; caller coverage complete for
+  resolved direct calls only.
+- ev_80bfd954f3eeb585aa2be2f44eb98fd026b09424536a39c878d623b0a517a03c:
+  xref to FUN_006a30c0 at data address 0x01408884.
+- ev_e2e661be7c8d0f22fabe8c903b3179cd1fda9d9ad340b2d50ae51176924aa46c:
+  sole resolved direct call to FUN_0067e050 at 0x007e8bd2.
