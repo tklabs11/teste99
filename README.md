@@ -1947,13 +1947,22 @@ The analyzed PE SHA-256 is
 same test also passed against the previously used PE
 `fb66afc320730dec6f80b79301c7c525689859e3d0a99616b657559e8f11a1ae`.
 
+The corrected debug APK ran on phone `2303ERA42L`. `CreateDevice` succeeded
+with explicit harness values `Windowed=TRUE` and `BehaviorFlags=0x40`, and
+translated dimensions `1280x720`, format `21`, and depth format `75`
+(`EnableAutoDepthStencil=FALSE`). One `Reset` to `2400x1080` succeeded before
+the first successful `Present`. On exit, the create → invalidate/release →
+create regression also passed: the old token `0x00010004` was rejected and
+the new token `0x00010005` presented successfully. The APK SHA-256 was
+`3c21ea35be8809c564a16270407bd1fa956a208f99bb3ba6f26570a517e73e89`.
+
 Logs:
 
 - [graphics-property-mapping-x86-2026-11-06.log](./test-logs/graphics-property-mapping-x86-2026-11-06.log)
 - [graphics-property-mapping-x86-legacy-2026-11-06.log](./test-logs/graphics-property-mapping-x86-legacy-2026-11-06.log)
+- [graphics-property-mapping-device-2026-11-06.log](./test-logs/graphics-property-mapping-device-2026-11-06.log)
 
-The Android debug build succeeded after the correction. No phone run was made
-for this change; `adb` is unavailable in the current shell.
+The Android debug build succeeded after the correction.
 
 ### Configuration-origin follow-up — 2026-11-05
 
@@ -2723,7 +2732,10 @@ the translated target with the same memory/register/flags state, and verifies
 that `RET` returned to that address. `RET` and `RET imm16` update guest ESP and
 EIP through the historical runtime. Indirect/far calls, targets absent from the
 export, rejected callees, and tail-call `JMP` transfers remain explicit
-rejections; no result is substituted for a call.
+rejections. An indirect `CALL` is accepted only when its absolute operand is a
+slot identified by the PE import table; the runtime dispatches that import by
+its resolved symbol. Other indirect calls remain rejected, and no result is
+substituted for a call.
 
 The historical and recursive-pilot runtimes remain separate:
 
@@ -2747,12 +2759,12 @@ caller's comparison and `SETZ`.
 The generated-backend harness compares the reference x86 bytes with the
 generated functions on Windows x86, including return values, relevant flags,
 stack balance, and guest return addresses. It also compiles the same generated
-functions for ARM64. The 2026-11-07 run passed all x86 cases and the ARM64
-compile; no authorized Android device was connected, so that run records a
-skipped device execution. Logs:
+functions for ARM64. An earlier `-BuildOnly` run on 2026-11-07 passed the
+recursive and distinct-function cases; no authorized Android device was
+connected during that run. Logs:
 
 - [batch-static-lift-calls-final-2026-11-07.log](./test-logs/batch-static-lift-calls-final-2026-11-07.log)
-- [batch-static-lift-unit-2026-11-07.log](./test-logs/batch-static-lift-unit-2026-11-07.log)
+- [batch-static-lift-unit-import-boundary-2026-11-07.log](./test-logs/batch-static-lift-unit-import-boundary-2026-11-07.log)
 - [recursive-pilot-build-regression-2026-11-07.log](./test-logs/recursive-pilot-build-regression-2026-11-07.log)
 
 In the subsequent device run, the same harness passed on the connected
@@ -2881,18 +2893,44 @@ direct calls:
 The import names and slots come from the PE import table. At the second call,
 the guest code derives the optional mutex name from the supplied string and
 returns success only if `CreateMutexA` returns a non-null handle. The first
-call initializes native synchronization state. Android has neither Win32 API;
-replacing either call with a constant or an unverified fixture would not
-preserve the constructor's behavior. Therefore the enlarged closure is **not**
-generated or run on x86/ARM64/device yet. Its next blocker is a deliberate,
-documented import-call boundary with defined guest-side synchronization and
-handle semantics, not an unresolved PE symbol.
+call initializes synchronization state. The runtime now routes imports through
+a common guest dispatcher. `InitializeCriticalSection` validates the guest
+address, preserves the x86 24-byte structure layout, and associates that
+address with a separate native recursive mutex; no host mutex is embedded in
+guest memory. The guest lifecycle test initializes, enters twice, leaves twice,
+and deletes the section. The Windows x86 comparison also executes the original
+PE bytes and checks the constructor's object, stack return sites, stack balance,
+and restored `FS:[0]`. It normalizes the Win32 debug pointer and separately
+reports the host's opaque `SpinCount` (`0x020007d0` on this run versus zero in
+the guest mirror); the remaining object bytes are compared.
 
-The ordinary-path SEH behavior is bounded to preserving the previous
-`FS:[0]`, installing the stack record, and restoring the previous head on
-return. Exception dispatch/unwinding remains unsupported. The actual generated
-test still starts at an internal function; it is not execution from the game
-entry point.
+The selected arguments `(0, 1)` exercise the `InitializeCriticalSection`
+branch. `CreateMutexA` is still an explicit unsupported import: its separate
+branch stops with a diagnostic if called, rather than returning a fabricated
+handle. This rejection is tested on both x86 and ARM64. The original PE string
+`"resman:"` at `0x01449334` is extracted by the generator and supplies the
+constructor input; the native x86 harness maps the IAT and string at available
+addresses and relocates only their pointer operands to avoid process address
+collisions.
+
+The five-function closure is generated and byte-verified, and runs on Windows
+x86 and the connected ARM64 phone. On-device it passed the startup constructor,
+the existing recursive and distinct-function call regressions, recursive
+critical-section lifecycle, and explicit `CreateMutexA` rejection. This still
+starts directly at internal `FUN_00a247f0`, not from the game entry point.
+Exception handling is limited to installing and restoring the guest `FS:[0]`
+chain on the ordinary return path; exception dispatch and unwinding remain
+unsupported.
+
+Persistent generated sources and the PE byte report are in
+[`tools/batch_static_lift/generated/startup_resman/`](./tools/batch_static_lift/generated/startup_resman/).
+The command `.\tools\run_batch_static_lift_calls.ps1` regenerates temporary
+closures, runs the Windows x86 differential and ARM64 build, and executes the
+ARM64 harness over ADB when one authorized device is connected. The complete
+device run is
+[batch-static-lift-import-boundary-2026-11-07.log](./test-logs/batch-static-lift-import-boundary-2026-11-07.log);
+the 30 Python backend regressions pass with
+`python -m unittest -v test_static_batch_lift`.
 
 ## Preserved one-function recursive-call pilot
 
@@ -2953,10 +2991,10 @@ With one authorized ARM64 device connected, run the same chain through ADB:
 .\tools\run_recursive_call_lift.ps1 -DeviceSerial <serial>
 ```
 
-The run records are
+The earlier direct-call-only run records are
 [call-chain-006237a0-2026-11-06.log](./test-logs/call-chain-006237a0-2026-11-06.log)
 and
 [call-chain-006237a0-device-2026-11-06.log](./test-logs/call-chain-006237a0-device-2026-11-06.log).
-The separate pilot does not cover initialization; the recovered backend is
-now the reusable direct-call path, while an initialization-linked chain has
-not yet been translated.
+The separate recursive pilot remains unchanged. The recovered backend now has
+a first tested initialization-linked closure, while startup from the game's
+entry point and the `CreateMutexA` branch remain unimplemented.

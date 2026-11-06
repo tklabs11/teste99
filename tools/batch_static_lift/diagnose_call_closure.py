@@ -22,51 +22,7 @@ def _rva_to_offset(pe, rva, size):
 
 def parse_import_thunks(pe, include_iat_slots=False):
     image, image_base, sections = pe
-    pe_offset = struct.unpack_from("<I", image, 0x3c)[0]
-    optional = pe_offset + 24
-    directory_count = struct.unpack_from("<I", image, optional + 92)[0]
-    if directory_count <= 1:
-        return ({}, {}) if include_iat_slots else {}
-    import_rva, import_size = struct.unpack_from(
-        "<II", image, optional + 96 + 8
-    )
-    if import_rva == 0 or import_size == 0:
-        return ({}, {}) if include_iat_slots else {}
-
-    slots = {}
-    descriptor_offset = _rva_to_offset(pe, import_rva, 20)
-    descriptor_end = descriptor_offset + import_size
-    while descriptor_offset + 20 <= min(descriptor_end, len(image)):
-        original_thunk, _, _, name_rva, first_thunk = struct.unpack_from(
-            "<IIIII", image, descriptor_offset
-        )
-        if not any((original_thunk, name_rva, first_thunk)):
-            break
-        dll_offset = _rva_to_offset(pe, name_rva, 1)
-        dll_end = image.find(b"\0", dll_offset)
-        if dll_end < 0:
-            raise ValueError("unterminated DLL name in PE import descriptor")
-        dll_name = image[dll_offset:dll_end].decode("ascii", "replace")
-        lookup_rva = original_thunk or first_thunk
-        index = 0
-        while True:
-            thunk_offset = _rva_to_offset(pe, lookup_rva + index * 4, 4)
-            thunk_value = struct.unpack_from("<I", image, thunk_offset)[0]
-            if thunk_value == 0:
-                break
-            if thunk_value & 0x80000000:
-                symbol = f"ordinal_{thunk_value & 0xffff}"
-            else:
-                import_name_offset = _rva_to_offset(pe, thunk_value, 3)
-                name_offset = import_name_offset + 2
-                name_end = image.find(b"\0", name_offset)
-                if name_end < 0:
-                    raise ValueError("unterminated function name in PE import table")
-                symbol = image[name_offset:name_end].decode("ascii", "replace")
-            iat_va = image_base + first_thunk + index * 4
-            slots[iat_va] = f"{dll_name}!{symbol}"
-            index += 1
-        descriptor_offset += 20
+    slots = lifter.parse_pe_iat_imports(pe)
 
     stubs = {}
     for name, section_rva, _, raw_offset, raw_size in sections:

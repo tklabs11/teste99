@@ -85,6 +85,7 @@ class StaticBatchLiftTests(unittest.TestCase):
         import_stubs_with_slots, iat_slots = diagnostic.parse_import_thunks(
             pe, include_iat_slots=True
         )
+        self.assertEqual(lifter.parse_pe_iat_imports(pe), iat_slots)
         self.assertEqual(import_stubs_with_slots, import_stubs)
         self.assertEqual(iat_slots, {0x402050: "sample.dll!ImportedThing"})
         self.assertEqual(
@@ -124,6 +125,42 @@ class StaticBatchLiftTests(unittest.TestCase):
             )["classification"],
             "exported_function",
         )
+
+    def test_identified_iat_call_uses_guest_import_dispatcher(self):
+        body = function([
+            instruction(
+                0x401000, "ff1550204000", "CALL",
+                ("dword ptr [0x00402050]",), flow="COMPUTED_CALL",
+            ),
+            instruction(0x401006, "c3", "RET", flow="TERMINAL"),
+        ])
+        imports = {0x402050: "KERNEL32.dll!InitializeCriticalSection"}
+
+        source, diagnostics = lifter.translate_function(
+            body, {0x401000}, imports
+        )
+
+        self.assertIn("batch_guest_import_call32", source)
+        self.assertIn('"KERNEL32.dll!InitializeCriticalSection"', source)
+        self.assertIn("0x00402050u, 0x00401006u", source)
+        self.assertEqual([item["status"] for item in diagnostics], [
+            "translated", "translated",
+        ])
+        self.assertEqual(lifter.function_call_targets(body, imports), [])
+
+    def test_indirect_call_without_identified_iat_slot_remains_rejected(self):
+        body = function([
+            instruction(
+                0x401000, "ff1550204000", "CALL",
+                ("dword ptr [0x00402050]",), flow="COMPUTED_CALL",
+            ),
+            instruction(0x401006, "c3", "RET", flow="TERMINAL"),
+        ])
+
+        with self.assertRaises(lifter.LiftRejected) as raised:
+            lifter.translate_function(body, {0x401000}, {})
+
+        self.assertIn("indirect or unresolved call", raised.exception.reasons[0])
 
     def test_pilot_manifest_accepts_baseline_and_nested_100_plan(self):
         baseline = [

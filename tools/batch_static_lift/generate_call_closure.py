@@ -43,7 +43,7 @@ def load_exported_functions(batch_paths, source_hash):
     return functions
 
 
-def collect_call_closure(root_entries, exported_functions, pe):
+def collect_call_closure(root_entries, exported_functions, pe, iat_imports):
     selected = set()
     pending = list(root_entries)
     verified = {}
@@ -61,7 +61,12 @@ def collect_call_closure(root_entries, exported_functions, pe):
             flow = str(instruction.get("flow", "")).upper()
             if mnemonic not in {"CALL", "CALLF"} and "CALL" not in flow:
                 continue
-            target = lifter.direct_call_target(instruction)
+            try:
+                target = lifter.direct_call_target(instruction)
+            except ValueError:
+                if lifter.indirect_iat_import(instruction, iat_imports) is not None:
+                    continue
+                raise
             if target not in exported_functions:
                 raise ValueError(
                     f"direct call target 0x{target:08x} from "
@@ -71,7 +76,7 @@ def collect_call_closure(root_entries, exported_functions, pe):
     return selected, verified
 
 
-def emit_reference_bytes_header(selected, verified):
+def emit_reference_bytes_header(selected, verified, pe=None, data_string_vas=()):
     lines = [
         "#pragma once",
         "",
@@ -111,12 +116,32 @@ def emit_reference_bytes_header(selected, verified):
                 f"{instruction['length']}u, {{{{{byte_values}}}}}}},"
             )
         lines += ["}};", ""]
+    for address in data_string_vas:
+        raw = bytearray()
+        for offset in range(4096):
+            _, _, byte = lifter.read_pe_bytes(pe, address + offset, 1)
+            raw.extend(byte)
+            if byte == b"\0":
+                break
+        else:
+            raise ValueError(
+                f"PE string at 0x{address:08x} exceeds the 4096-byte limit"
+            )
+        symbol = f"kSporeDataString_{address:08x}"
+        values = ", ".join(f"0x{byte:02x}u" for byte in raw)
+        lines += [
+            f"inline constexpr std::uint32_t {symbol}_address = "
+            f"0x{address:08x}u;",
+            f"inline constexpr std::array<std::uint8_t, {len(raw)}> "
+            f"{symbol}_bytes = {{{values}}};",
+            "",
+        ]
     return "\n".join(lines)
 
 
 def generate_call_closure(
     executable, batch_paths, root_entries, output_dir, report_path,
-    byte_header_path=None,
+    byte_header_path=None, data_string_vas=(),
 ):
     source_hash = lifter.sha256_file(executable)
     if source_hash != lifter.EXPECTED_SHA256:
@@ -125,11 +150,12 @@ def generate_call_closure(
         )
     exported_functions = load_exported_functions(batch_paths, source_hash)
     pe = lifter.parse_pe(executable)
+    iat_imports = lifter.parse_pe_iat_imports(pe)
     selected, verified = collect_call_closure(
-        root_entries, exported_functions, pe
+        root_entries, exported_functions, pe, iat_imports
     )
     functions = [exported_functions[entry] for entry in sorted(selected)]
-    translations = lifter.translate_function_set(functions)
+    translations = lifter.translate_function_set(functions, iat_imports)
     rejected = {
         entry: result["reasons"]
         for entry, result in translations.items()
@@ -151,12 +177,28 @@ def generate_call_closure(
             f"reference-byte header already exists; preserve it before rerunning: "
             f"{byte_header_path}"
         )
+    if data_string_vas and byte_header_path is None:
+        raise ValueError("PE data-string fixtures require --byte-header")
 
     generated_files = {}
     report_functions = []
+    report_import_calls = []
     for entry in sorted(selected):
         function = exported_functions[entry]
-        call_targets = lifter.function_call_targets(function)
+        call_targets = lifter.function_call_targets(function, iat_imports)
+        import_targets = []
+        for instruction in function["instructions"]:
+            mnemonic = str(instruction.get("mnemonic", "")).upper()
+            flow = str(instruction.get("flow", "")).upper()
+            if mnemonic not in {"CALL", "CALLF"} and "CALL" not in flow:
+                continue
+            imported = lifter.indirect_iat_import(instruction, iat_imports)
+            if imported is not None:
+                import_targets.append({
+                    "site": instruction["address"],
+                    "iat_address": f"0x{imported['iat_address']:08x}",
+                    "symbol": imported["symbol"],
+                })
         filename = f"spore_{entry:08x}_arm64.cpp"
         generated_files[filename] = translations[entry]["source"] + "\n"
         report_functions.append({
@@ -168,6 +210,34 @@ def generate_call_closure(
                 item["length"] for item in verified[entry]
             ),
             "direct_call_targets": [f"0x{target:08x}" for target in call_targets],
+            "import_calls": import_targets,
+        })
+        report_import_calls.extend(
+            {"function": f"0x{entry:08x}", **item}
+            for item in import_targets
+        )
+
+    data_fixtures = []
+    for address in data_string_vas:
+        raw = bytearray()
+        section = None
+        for offset in range(4096):
+            current_section, _, byte = lifter.read_pe_bytes(
+                pe, address + offset, 1
+            )
+            section = current_section if section is None else section
+            raw.extend(byte)
+            if byte == b"\0":
+                break
+        else:
+            raise ValueError(
+                f"PE string at 0x{address:08x} exceeds the 4096-byte limit"
+            )
+        data_fixtures.append({
+            "address": f"0x{address:08x}",
+            "section": section,
+            "bytes_hex": raw.hex(),
+            "text": raw[:-1].decode("ascii", "strict"),
         })
 
     report = {
@@ -176,6 +246,16 @@ def generate_call_closure(
         "batch_exports": [str(path) for path in batch_paths],
         "root_entries": [f"0x{entry:08x}" for entry in root_entries],
         "function_count": len(selected),
+        "iat_imports": [
+            {"address": f"0x{address:08x}", "symbol": symbol}
+            for address, symbol in sorted(iat_imports.items())
+            if any(
+                item["iat_address"] == f"0x{address:08x}"
+                for item in report_import_calls
+            )
+        ],
+        "import_calls": report_import_calls,
+        "data_fixtures": data_fixtures,
         "reference_bytes_header": (
             str(byte_header_path) if byte_header_path is not None else None
         ),
@@ -188,7 +268,9 @@ def generate_call_closure(
     if byte_header_path is not None:
         byte_header_path.parent.mkdir(parents=True, exist_ok=True)
         byte_header_path.write_text(
-            emit_reference_bytes_header(selected, verified),
+            emit_reference_bytes_header(
+                selected, verified, pe, data_string_vas
+            ),
             encoding="utf-8",
             newline="\n",
         )
@@ -206,12 +288,16 @@ def main():
     parser.add_argument("--output-dir", type=Path, required=True)
     parser.add_argument("--report", type=Path, required=True)
     parser.add_argument("--byte-header", type=Path)
+    parser.add_argument(
+        "--data-string-va", type=str, action="append", default=[]
+    )
     args = parser.parse_args()
     try:
         entries = [lifter.parse_address(value) for value in args.entry]
         report = generate_call_closure(
             args.exe, args.batch, entries, args.output_dir, args.report,
             args.byte_header,
+            [lifter.parse_address(value) for value in args.data_string_va],
         )
     except (
         OSError, ValueError, KeyError, TypeError, json.JSONDecodeError, struct.error

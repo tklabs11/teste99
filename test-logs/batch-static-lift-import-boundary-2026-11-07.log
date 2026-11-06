@@ -1,0 +1,57 @@
+Generated 1 byte-verified function(s) from 1 root(s).
+0x006237a0 FUN_006237a0: 16 instructions, calls=0x006237a0
+Report: C:\Users\wesll\AppData\Local\Temp\spore-batch-call-lift-c32d01fc975943be87d1b00fcbadc5cf\recursive\report.json
+Generated 2 byte-verified function(s) from 1 root(s).
+0x00b8dab0 FUN_00b8dab0: 2 instructions, calls=none
+0x00bb9b70 FUN_00bb9b70: 4 instructions, calls=0x00b8dab0
+Report: C:\Users\wesll\AppData\Local\Temp\spore-batch-call-lift-c32d01fc975943be87d1b00fcbadc5cf\cross_call\report.json
+Generated 5 byte-verified function(s) from 1 root(s).
+0x00922150 FUN_00922150: 34 instructions, calls=none
+0x009222a0 FUN_009222a0: 38 instructions, calls=0x00922150,0x00922150
+0x00a247f0 FUN_00a247f0: 28 instructions, calls=0x011e5d80,0x009222a0
+0x011e5d80 FUN_011e5d80: 12 instructions, calls=0x011e8b20
+0x011e8b20 FUN_011e8b20: 16 instructions, calls=none
+Report: C:\Users\wesll\AppData\Local\Temp\spore-batch-call-lift-c32d01fc975943be87d1b00fcbadc5cf\startup_resman\report.json
+call_closure_harness.cpp
+spore_006237a0_arm64.cpp
+spore_00b8dab0_arm64.cpp
+spore_00bb9b70_arm64.cpp
+spore_00a247f0_arm64.cpp
+spore_009222a0_arm64.cpp
+spore_00922150_arm64.cpp
+spore_011e5d80_arm64.cpp
+spore_011e8b20_arm64.cpp
+Gerando Código...
+PASS x86 differential recursive depth=0 return=0x0 child_ecx=0x0 eflags=0x44 esp_balanced=yes guest_return_addresses=verified x86_return_addresses=verified
+PASS x86 differential recursive depth=1 return=0x0 child_ecx=0x1 eflags=0x55 esp_balanced=yes guest_return_addresses=verified x86_return_addresses=verified
+PASS x86 differential recursive depth=2 return=0x0 child_ecx=0x80000001 eflags=0x55 esp_balanced=yes guest_return_addresses=verified x86_return_addresses=verified
+PASS x86 differential recursive depth=3 return=0xebdd1061 child_ecx=0xd2f5172 eflags=0x90 esp_balanced=yes guest_return_addresses=verified x86_return_addresses=verified
+PASS x86 differential distinct_call input=0x4 return=0x0 eflags=0x95 esp_balanced=yes target=0x00b8dab0 return_address=0x00bb9b75
+PASS x86 differential distinct_call input=0x5 return=0x1 eflags=0x44 esp_balanced=yes target=0x00b8dab0 return_address=0x00bb9b75
+PASS x86 differential distinct_call input=0x6 return=0x0 eflags=0x0 esp_balanced=yes target=0x00b8dab0 return_address=0x00bb9b75
+PASS x86 differential distinct_call input=0xffffffff return=0xffffff00 eflags=0x84 esp_balanced=yes target=0x00b8dab0 return_address=0x00bb9b75
+PASS x86 differential startup_init_string_copy input_bytes=0 return=object nested_target=0x011e8b20 nested_return=0x011e5d97 esp_balanced=yes
+PASS x86 differential startup_init_string_copy input_bytes=1 return=object nested_target=0x011e8b20 nested_return=0x011e5d97 esp_balanced=yes
+PASS x86 differential startup_init_string_copy input_bytes=17 return=object nested_target=0x011e8b20 nested_return=0x011e5d97 esp_balanced=yes
+PASS x86 differential resman_constructor object_bytes=128 critical_section_debug_pointer=normalized opaque_spin_count=excluded native=0x20007d0 guest=0x0 stack_return_sites=4 esp_balanced=yes fs_restored=yes recursive_lock=2/2/delete=passed
+PASS guest critical_section layout=x86-24-byte recursion=2 enter=2 leave=2 delete=passed
+PASS explicit import rejection import=KERNEL32.dll!CreateMutexA diagnostic="not implemented: KERNEL32.dll!CreateMutexA" execution_stopped=yes
+PASS generated_backend_call_closures recursive=1 distinct_functions=2 startup_linked_functions=2 import_startup_functions=5 shared_state=yes verified_pe_bytes=yes
+PASS arm64_compile target=aarch64-linux-android29
+C:\Users\wesll\AppData\Local\Temp\spore-batch-call-lift-c32d01fc975943be87d1b00fcbadc5cf\batch_call_lift_arm64: 1 file pushed, 0 skipped. 64.3 MB/s (105744 bytes in 0.002s)
+PASS arm64 guest recursive depth=0 return=0x0 child_ecx=0x0 eflags=0x44 esp_balanced=yes
+PASS arm64 guest recursive depth=1 return=0x0 child_ecx=0x1 eflags=0x55 esp_balanced=yes
+PASS arm64 guest recursive depth=2 return=0x0 child_ecx=0x80000001 eflags=0x55 esp_balanced=yes
+PASS arm64 guest recursive depth=3 return=0xebdd1061 child_ecx=0xd2f5172 eflags=0x90 esp_balanced=yes
+PASS arm64 guest distinct_call input=0x4 return=0x0 eflags=0x95 esp_balanced=yes target=0x00b8dab0 return_address=0x00bb9b75
+PASS arm64 guest distinct_call input=0x5 return=0x1 eflags=0x44 esp_balanced=yes target=0x00b8dab0 return_address=0x00bb9b75
+PASS arm64 guest distinct_call input=0x6 return=0x0 eflags=0x0 esp_balanced=yes target=0x00b8dab0 return_address=0x00bb9b75
+PASS arm64 guest distinct_call input=0xffffffff return=0xffffff00 eflags=0x84 esp_balanced=yes target=0x00b8dab0 return_address=0x00bb9b75
+PASS arm64 guest startup_init_string_copy input_bytes=0 return=object nested_target=0x011e8b20 nested_return=0x011e5d97 esp_balanced=yes
+PASS arm64 guest startup_init_string_copy input_bytes=1 return=object nested_target=0x011e8b20 nested_return=0x011e5d97 esp_balanced=yes
+PASS arm64 guest startup_init_string_copy input_bytes=17 return=object nested_target=0x011e8b20 nested_return=0x011e5d97 esp_balanced=yes
+PASS arm64 guest resman_constructor string=PE:0x01449334 bytes=8 object=verified esp_balanced=yes fs_restored=yes import=KERNEL32.dll!InitializeCriticalSection
+PASS guest critical_section layout=x86-24-byte recursion=2 enter=2 leave=2 delete=passed
+PASS explicit import rejection import=KERNEL32.dll!CreateMutexA diagnostic="not implemented: KERNEL32.dll!CreateMutexA" execution_stopped=yes
+PASS generated_backend_call_closures recursive=1 distinct_functions=2 startup_linked_functions=2 import_startup_functions=5 shared_state=yes verified_pe_bytes=yes
+PASS arm64_device_run serial=PJMZAEJRX4YLFIDI

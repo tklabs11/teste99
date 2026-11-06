@@ -3,11 +3,33 @@
 #include <array>
 #include <cstddef>
 #include <cstdint>
+#include <memory>
+#include <mutex>
+#include <string>
+#include <thread>
+#include <unordered_map>
+#include <vector>
 
 enum class BatchLiftStatus {
     returned,
     invalid_memory,
     invalid_control_flow,
+    unsupported_import,
+    synchronization_error,
+};
+
+class BatchLiftMemory;
+struct BatchLiftState;
+
+class BatchGuestImportDispatcher {
+public:
+    virtual ~BatchGuestImportDispatcher() = default;
+    virtual BatchLiftStatus invoke_import(
+        BatchLiftMemory& memory,
+        BatchLiftState& state,
+        const char* symbol,
+        std::uint32_t iat_address) = 0;
+    virtual const std::string& last_error() const = 0;
 };
 
 struct BatchLiftState {
@@ -15,6 +37,7 @@ struct BatchLiftState {
     std::uint32_t eflags = 0;
     std::uint32_t eip = 0;
     std::uint32_t fs_base = 0;
+    BatchGuestImportDispatcher* imports = nullptr;
 };
 
 inline bool batch_even_parity(std::uint8_t value) {
@@ -193,6 +216,11 @@ public:
         return true;
     }
 
+    bool is_writable(std::uint32_t address, std::size_t size) const {
+        const Region* region = find_region(address, size);
+        return region != nullptr && region->writable;
+    }
+
     bool load8(std::uint32_t address, std::uint32_t& value) const {
         const Region* region = find_region(address, 1);
         if (region == nullptr) return false;
@@ -303,3 +331,333 @@ inline bool batch_guest_return32(
     state.eip = return_address;
     return true;
 }
+
+inline BatchLiftStatus batch_guest_import_call32(
+    BatchLiftMemory& memory,
+    BatchLiftState& state,
+    const char* symbol,
+    std::uint32_t iat_address,
+    std::uint32_t return_address) {
+    if (state.imports == nullptr) return BatchLiftStatus::unsupported_import;
+    if (!batch_guest_call32(memory, state, iat_address, return_address)) {
+        return BatchLiftStatus::invalid_memory;
+    }
+    const BatchLiftStatus status = state.imports->invoke_import(
+        memory, state, symbol, iat_address);
+    if (status != BatchLiftStatus::returned) return status;
+    if (state.eip != return_address) return BatchLiftStatus::invalid_control_flow;
+    return BatchLiftStatus::returned;
+}
+
+struct GuestCriticalSection32 {
+    std::uint32_t debug_info;
+    std::int32_t lock_count;
+    std::int32_t recursion_count;
+    std::uint32_t owning_thread;
+    std::uint32_t lock_semaphore;
+    std::uint32_t spin_count;
+};
+
+static_assert(sizeof(GuestCriticalSection32) == 24u);
+static_assert(offsetof(GuestCriticalSection32, debug_info) == 0x00u);
+static_assert(offsetof(GuestCriticalSection32, lock_count) == 0x04u);
+static_assert(offsetof(GuestCriticalSection32, recursion_count) == 0x08u);
+static_assert(offsetof(GuestCriticalSection32, owning_thread) == 0x0cu);
+static_assert(offsetof(GuestCriticalSection32, lock_semaphore) == 0x10u);
+static_assert(offsetof(GuestCriticalSection32, spin_count) == 0x14u);
+
+struct BatchGuestImportCall {
+    std::string symbol;
+    std::uint32_t iat_address;
+    std::vector<std::uint32_t> arguments;
+};
+
+class BatchGuestRuntime final : public BatchGuestImportDispatcher {
+public:
+    BatchLiftStatus invoke_import(
+        BatchLiftMemory& memory,
+        BatchLiftState& state,
+        const char* symbol,
+        std::uint32_t iat_address) override {
+        BatchGuestImportCall call{symbol, iat_address, {}};
+        std::uint32_t return_address{};
+        if (!memory.load32(state.regs[4], return_address)) {
+            last_error_ = "import call return address is outside guest memory";
+            return BatchLiftStatus::invalid_memory;
+        }
+
+        const std::uint32_t argument_count =
+            import_argument_count(call.symbol);
+        for (std::uint32_t index = 0; index < argument_count; ++index) {
+            std::uint32_t argument{};
+            if (!memory.load32(
+                    state.regs[4] + 4u + index * 4u, argument)) {
+                last_error_ = call.symbol
+                    + " arguments are outside guest memory";
+                calls_.push_back(std::move(call));
+                return BatchLiftStatus::invalid_memory;
+            }
+            call.arguments.push_back(argument);
+        }
+        calls_.push_back(call);
+        last_error_.clear();
+
+        if (call.symbol == "KERNEL32.dll!InitializeCriticalSection") {
+            return initialize_critical_section(memory, state, call);
+        }
+        if (call.symbol == "KERNEL32.dll!EnterCriticalSection") {
+            return enter_critical_section(memory, state, call);
+        }
+        if (call.symbol == "KERNEL32.dll!LeaveCriticalSection") {
+            return leave_critical_section(memory, state, call);
+        }
+        if (call.symbol == "KERNEL32.dll!DeleteCriticalSection") {
+            return delete_critical_section(memory, state, call);
+        }
+        if (call.symbol == "KERNEL32.dll!CreateMutexA") {
+            last_error_ = "not implemented: " + call.symbol;
+            return BatchLiftStatus::unsupported_import;
+        }
+
+        last_error_ = "unrecognized guest import: " + call.symbol;
+        return BatchLiftStatus::unsupported_import;
+    }
+
+    const std::string& last_error() const override {
+        return last_error_;
+    }
+
+    const std::vector<BatchGuestImportCall>& calls() const {
+        return calls_;
+    }
+
+    bool has_critical_section(std::uint32_t guest_address) const {
+        std::lock_guard<std::mutex> lock(registry_mutex_);
+        return critical_sections_.find(guest_address) != critical_sections_.end();
+    }
+
+private:
+    struct NativeCriticalSection {
+        std::recursive_mutex mutex;
+        std::thread::id owner{};
+        std::uint32_t recursion_count{};
+        std::uint32_t waiting_entrants{};
+    };
+
+    static std::uint32_t import_argument_count(const std::string& symbol) {
+        if (symbol == "KERNEL32.dll!InitializeCriticalSection"
+            || symbol == "KERNEL32.dll!EnterCriticalSection"
+            || symbol == "KERNEL32.dll!LeaveCriticalSection"
+            || symbol == "KERNEL32.dll!DeleteCriticalSection") {
+            return 1u;
+        }
+        if (symbol == "KERNEL32.dll!CreateMutexA") return 3u;
+        return 0u;
+    }
+
+    static bool valid_critical_section_memory(
+        const BatchLiftMemory& memory,
+        std::uint32_t address) {
+        return address != 0u
+            && memory.is_writable(address, sizeof(GuestCriticalSection32));
+    }
+
+    static bool write_critical_section(
+        BatchLiftMemory& memory,
+        std::uint32_t address,
+        std::uint32_t debug_info,
+        std::int32_t lock_count,
+        std::uint32_t recursion_count,
+        std::uint32_t owning_thread) {
+        return memory.store32(address, debug_info)
+            && memory.store32(address + 4u, static_cast<std::uint32_t>(lock_count))
+            && memory.store32(address + 8u, recursion_count)
+            && memory.store32(address + 12u, owning_thread)
+            && memory.store32(address + 16u, 0u)
+            && memory.store32(address + 20u, 0u);
+    }
+
+    static void complete_import_call(
+        BatchLiftState& state,
+        std::uint32_t return_address,
+        std::uint32_t argument_bytes) {
+        state.regs[4] += 4u + argument_bytes;
+        state.eip = return_address;
+    }
+
+    BatchLiftStatus initialize_critical_section(
+        BatchLiftMemory& memory,
+        BatchLiftState& state,
+        const BatchGuestImportCall& call) {
+        const std::uint32_t address = call.arguments[0];
+        std::uint32_t return_address{};
+        if (!valid_critical_section_memory(memory, address)
+            || !memory.load32(state.regs[4], return_address)) {
+            last_error_ = "InitializeCriticalSection received an invalid guest address";
+            return BatchLiftStatus::invalid_memory;
+        }
+        auto section = std::make_shared<NativeCriticalSection>();
+        {
+            std::lock_guard<std::mutex> lock(registry_mutex_);
+            if (critical_sections_.find(address) != critical_sections_.end()) {
+                last_error_ = "InitializeCriticalSection called twice without DeleteCriticalSection";
+                return BatchLiftStatus::synchronization_error;
+            }
+            if (!write_critical_section(memory, address, 0u, -1, 0u, 0u)) {
+                last_error_ = "could not initialize the x86 guest critical-section layout";
+                return BatchLiftStatus::invalid_memory;
+            }
+            critical_sections_.emplace(address, std::move(section));
+        }
+        complete_import_call(state, return_address, 4u);
+        return BatchLiftStatus::returned;
+    }
+
+    std::shared_ptr<NativeCriticalSection> find_critical_section(
+        std::uint32_t address) const {
+        std::lock_guard<std::mutex> lock(registry_mutex_);
+        const auto found = critical_sections_.find(address);
+        return found == critical_sections_.end() ? nullptr : found->second;
+    }
+
+    std::uint32_t guest_thread_id(std::thread::id thread) {
+        const auto found = guest_thread_ids_.find(thread);
+        if (found != guest_thread_ids_.end()) return found->second;
+        const std::uint32_t id = next_guest_thread_id_++;
+        guest_thread_ids_.emplace(thread, id);
+        return id;
+    }
+
+    BatchLiftStatus enter_critical_section(
+        BatchLiftMemory& memory,
+        BatchLiftState& state,
+        const BatchGuestImportCall& call) {
+        const std::uint32_t address = call.arguments[0];
+        std::uint32_t return_address{};
+        if (!valid_critical_section_memory(memory, address)
+            || !memory.load32(state.regs[4], return_address)) {
+            last_error_ = "EnterCriticalSection received an invalid guest address";
+            return BatchLiftStatus::invalid_memory;
+        }
+        std::shared_ptr<NativeCriticalSection> section;
+        {
+            std::lock_guard<std::mutex> lock(registry_mutex_);
+            const auto found = critical_sections_.find(address);
+            if (found == critical_sections_.end()) {
+                last_error_ = "EnterCriticalSection called before initialization";
+                return BatchLiftStatus::synchronization_error;
+            }
+            section = found->second;
+            ++section->waiting_entrants;
+        }
+        section->mutex.lock();
+        {
+            std::lock_guard<std::mutex> lock(registry_mutex_);
+            --section->waiting_entrants;
+            section->owner = std::this_thread::get_id();
+            ++section->recursion_count;
+            if (!write_critical_section(
+                    memory, address, 0u,
+                    static_cast<std::int32_t>(section->recursion_count - 1u),
+                    section->recursion_count,
+                    guest_thread_id(section->owner))) {
+                --section->recursion_count;
+                if (section->recursion_count == 0u) section->owner = {};
+                section->mutex.unlock();
+                last_error_ = "could not update the x86 guest critical-section layout";
+                return BatchLiftStatus::invalid_memory;
+            }
+        }
+        complete_import_call(state, return_address, 4u);
+        return BatchLiftStatus::returned;
+    }
+
+    BatchLiftStatus leave_critical_section(
+        BatchLiftMemory& memory,
+        BatchLiftState& state,
+        const BatchGuestImportCall& call) {
+        const std::uint32_t address = call.arguments[0];
+        std::uint32_t return_address{};
+        if (!valid_critical_section_memory(memory, address)
+            || !memory.load32(state.regs[4], return_address)) {
+            last_error_ = "LeaveCriticalSection received an invalid guest address";
+            return BatchLiftStatus::invalid_memory;
+        }
+        std::shared_ptr<NativeCriticalSection> section;
+        {
+            std::lock_guard<std::mutex> lock(registry_mutex_);
+            const auto found = critical_sections_.find(address);
+            if (found == critical_sections_.end()) {
+                last_error_ = "LeaveCriticalSection called before initialization";
+                return BatchLiftStatus::synchronization_error;
+            }
+            section = found->second;
+            if (section->owner != std::this_thread::get_id()
+                || section->recursion_count == 0u) {
+                last_error_ = "LeaveCriticalSection called by a non-owner";
+                return BatchLiftStatus::synchronization_error;
+            }
+            --section->recursion_count;
+            if (section->recursion_count == 0u) section->owner = {};
+            if (!write_critical_section(
+                    memory, address, 0u,
+                    section->recursion_count == 0u
+                        ? -1
+                        : static_cast<std::int32_t>(
+                            section->recursion_count - 1u),
+                    section->recursion_count,
+                    section->recursion_count == 0u
+                        ? 0u
+                        : guest_thread_id(section->owner))) {
+                ++section->recursion_count;
+                section->owner = std::this_thread::get_id();
+                last_error_ = "could not update the x86 guest critical-section layout";
+                return BatchLiftStatus::invalid_memory;
+            }
+        }
+        section->mutex.unlock();
+        complete_import_call(state, return_address, 4u);
+        return BatchLiftStatus::returned;
+    }
+
+    BatchLiftStatus delete_critical_section(
+        BatchLiftMemory& memory,
+        BatchLiftState& state,
+        const BatchGuestImportCall& call) {
+        const std::uint32_t address = call.arguments[0];
+        std::uint32_t return_address{};
+        if (!valid_critical_section_memory(memory, address)
+            || !memory.load32(state.regs[4], return_address)) {
+            last_error_ = "DeleteCriticalSection received an invalid guest address";
+            return BatchLiftStatus::invalid_memory;
+        }
+        {
+            std::lock_guard<std::mutex> lock(registry_mutex_);
+            const auto found = critical_sections_.find(address);
+            if (found == critical_sections_.end()) {
+                last_error_ = "DeleteCriticalSection called before initialization";
+                return BatchLiftStatus::synchronization_error;
+            }
+            if (found->second->recursion_count != 0u
+                || found->second->waiting_entrants != 0u) {
+                last_error_ = "DeleteCriticalSection called while in use";
+                return BatchLiftStatus::synchronization_error;
+            }
+            critical_sections_.erase(found);
+            if (!write_critical_section(memory, address, 0u, 0, 0u, 0u)) {
+                last_error_ = "could not clear the deleted x86 guest critical section";
+                return BatchLiftStatus::invalid_memory;
+            }
+        }
+        complete_import_call(state, return_address, 4u);
+        return BatchLiftStatus::returned;
+    }
+
+    mutable std::mutex registry_mutex_;
+    std::unordered_map<std::uint32_t, std::shared_ptr<NativeCriticalSection>>
+        critical_sections_;
+    std::unordered_map<std::thread::id, std::uint32_t> guest_thread_ids_;
+    std::uint32_t next_guest_thread_id_ = 1u;
+    std::vector<BatchGuestImportCall> calls_;
+    std::string last_error_;
+};

@@ -310,31 +310,69 @@ def direct_call_target(instruction):
     return target
 
 
-def function_call_targets(function):
+def indirect_iat_import(instruction, iat_imports):
+    if not iat_imports:
+        return None
+    for operand in instruction.get("operands", []):
+        match = re.fullmatch(
+            r"(?:(?:byte|word|dword) ptr )?\[\s*(0x[0-9a-f]+|[0-9]+)\s*\]",
+            str(operand).strip(),
+            re.IGNORECASE,
+        )
+        if match is None:
+            continue
+        token = match.group(1)
+        address = int(token, 16 if token.lower().startswith("0x") else 10)
+        symbol = iat_imports.get(address)
+        if symbol is not None:
+            return {"iat_address": address, "symbol": symbol}
+    return None
+
+
+def function_call_targets(function, iat_imports=None):
     targets = []
     for instruction in function.get("instructions", []):
         mnemonic = str(instruction.get("mnemonic", "")).upper()
         flow = str(instruction.get("flow", "")).upper()
         if mnemonic in {"CALL", "CALLF"} or "CALL" in flow:
-            targets.append(direct_call_target(instruction))
+            try:
+                targets.append(direct_call_target(instruction))
+            except ValueError:
+                if indirect_iat_import(instruction, iat_imports) is None:
+                    raise
     return targets
 
 
 def translate_instruction(
-    instruction, index, addresses, next_address, exported_function_entries=None
+    instruction, index, addresses, next_address, exported_function_entries=None,
+    iat_imports=None,
 ):
     mnemonic = instruction["mnemonic"].upper()
     operands_text = instruction.get("operands", [])
     flow = str(instruction.get("flow", "")).upper()
 
     if "CALL" in flow or mnemonic in {"CALL", "CALLF"}:
-        target = direct_call_target(instruction)
+        if next_address is None or next_address not in addresses:
+            raise ValueError("CALL return address is not an exported instruction")
+        try:
+            target = direct_call_target(instruction)
+        except ValueError as direct_error:
+            imported = indirect_iat_import(instruction, iat_imports)
+            if imported is None:
+                raise direct_error
+            return [
+                f"t{index}_call_status = batch_guest_import_call32("
+                f"memory, state, \"{imported['symbol']}\", "
+                f"0x{imported['iat_address']:08x}u, 0x{next_address:08x}u);",
+                f"if (t{index}_call_status != BatchLiftStatus::returned) "
+                f"return t{index}_call_status;",
+                f"if (state.eip != 0x{next_address:08x}u) "
+                "return BatchLiftStatus::invalid_control_flow;",
+            ]
         if exported_function_entries is None or target not in exported_function_entries:
             raise ValueError(
                 f"direct call target 0x{target:08x} is not in the exported function set"
             )
-        if next_address is None or next_address not in addresses:
-            raise ValueError("direct CALL return address is not an exported instruction")
         return [
             f"if (!batch_guest_call32(memory, state, 0x{target:08x}u, "
             f"0x{next_address:08x}u)) return BatchLiftStatus::invalid_memory;",
@@ -611,7 +649,9 @@ def static_source(function, translated, call_targets):
     ])
 
 
-def translate_function(function, exported_function_entries=None):
+def translate_function(
+    function, exported_function_entries=None, iat_imports=None
+):
     reasons = []
     diagnostics = []
     instructions = function.get("instructions")
@@ -675,6 +715,7 @@ def translate_function(function, exported_function_entries=None):
                 address_set,
                 next_address,
                 exported_function_entries,
+                iat_imports,
             )
             translated.append((instruction, body))
             diagnostics.append({
@@ -708,11 +749,11 @@ def translate_function(function, exported_function_entries=None):
             ["function has no recognized terminal return or unconditional transfer"],
             diagnostics,
         )
-    call_targets = function_call_targets(function)
+    call_targets = function_call_targets(function, iat_imports)
     return static_source(function, translated, call_targets), diagnostics
 
 
-def translate_function_set(functions):
+def translate_function_set(functions, iat_imports=None):
     function_by_entry = {}
     for function in functions:
         entry = parse_address(function["entry"])
@@ -724,7 +765,9 @@ def translate_function_set(functions):
     results = {}
     for entry, function in function_by_entry.items():
         try:
-            source, diagnostics = translate_function(function, exported_entries)
+            source, diagnostics = translate_function(
+                function, exported_entries, iat_imports
+            )
         except LiftRejected as error:
             results[entry] = {
                 "source": None,
@@ -746,7 +789,7 @@ def translate_function_set(functions):
         for entry in sorted(accepted_entries):
             function = function_by_entry[entry]
             unresolved = sorted(set(
-                target for target in function_call_targets(function)
+                target for target in function_call_targets(function, iat_imports)
                 if target not in accepted_entries
             ))
             if unresolved:
@@ -807,6 +850,80 @@ def parse_pe(path):
         )
         sections.append((name, virtual_address, virtual_size, raw_offset, raw_size))
     return image, image_base, sections
+
+
+def _pe_rva_to_offset(pe, rva, size):
+    image, _, sections = pe
+    for _, section_rva, _, raw_offset, raw_size in sections:
+        if section_rva <= rva and rva + size <= section_rva + raw_size:
+            return raw_offset + rva - section_rva
+    if rva < len(image) and rva + size <= len(image):
+        return rva
+    raise ValueError(f"PE RVA 0x{rva:08x} is not backed by file data")
+
+
+def parse_pe_iat_imports(pe):
+    image, image_base, _ = pe
+    if len(image) < 0x40:
+        raise ValueError("PE image is too small to contain a DOS header")
+    pe_offset = struct.unpack_from("<I", image, 0x3c)[0]
+    optional = pe_offset + 24
+    if optional + 96 + 16 > len(image):
+        raise ValueError("PE image is too small to contain PE32 import directories")
+    directory_count = struct.unpack_from("<I", image, optional + 92)[0]
+    if directory_count <= 1:
+        return {}
+    import_rva, import_size = struct.unpack_from(
+        "<II", image, optional + 96 + 8
+    )
+    if import_rva == 0 or import_size == 0:
+        return {}
+
+    slots = {}
+    descriptor_offset = _pe_rva_to_offset(pe, import_rva, 20)
+    descriptor_end = descriptor_offset + import_size
+    terminated = False
+    while descriptor_offset + 20 <= min(descriptor_end, len(image)):
+        original_thunk, _, _, name_rva, first_thunk = struct.unpack_from(
+            "<IIIII", image, descriptor_offset
+        )
+        if not any((original_thunk, name_rva, first_thunk)):
+            terminated = True
+            break
+        dll_offset = _pe_rva_to_offset(pe, name_rva, 1)
+        dll_end = image.find(b"\0", dll_offset)
+        if dll_end < 0:
+            raise ValueError("unterminated DLL name in PE import descriptor")
+        dll_name = image[dll_offset:dll_end].decode("ascii", "replace")
+        lookup_rva = original_thunk or first_thunk
+        index = 0
+        thunk_terminated = False
+        while True:
+            thunk_offset = _pe_rva_to_offset(pe, lookup_rva + index * 4, 4)
+            thunk_value = struct.unpack_from("<I", image, thunk_offset)[0]
+            if thunk_value == 0:
+                thunk_terminated = True
+                break
+            if thunk_value & 0x80000000:
+                symbol = f"ordinal_{thunk_value & 0xffff}"
+            else:
+                import_name_offset = _pe_rva_to_offset(pe, thunk_value, 3)
+                name_offset = import_name_offset + 2
+                name_end = image.find(b"\0", name_offset)
+                if name_end < 0:
+                    raise ValueError("unterminated function name in PE import table")
+                symbol = image[name_offset:name_end].decode("ascii", "replace")
+            iat_va = image_base + first_thunk + index * 4
+            if iat_va in slots:
+                raise ValueError(f"duplicate PE IAT slot at 0x{iat_va:08x}")
+            slots[iat_va] = f"{dll_name}!{symbol}"
+            index += 1
+        if not thunk_terminated:
+            raise ValueError(f"unterminated PE import lookup table for {dll_name}")
+        descriptor_offset += 20
+    if not terminated:
+        raise ValueError("unterminated PE import descriptor table")
+    return slots
 
 
 def read_pe_bytes(pe, va, length):

@@ -14,6 +14,7 @@ $callerBatch = "C:\SporeAnalysis\spore_batch_all_parts\spore_batch_all_0051.json
 $calleeBatch = "C:\SporeAnalysis\spore_batch_all_parts\spore_batch_all_0050.json"
 $startupOuterBatch = "C:\SporeAnalysis\spore_batch_all_parts\spore_batch_all_0041.json"
 $startupInnerBatch = "C:\SporeAnalysis\spore_batch_all_parts\spore_batch_all_0086.json"
+$startupHelperBatch = "C:\SporeAnalysis\spore_batch_all_parts\spore_batch_all_0034.json"
 $python = (Get-Command python.exe -ErrorAction Stop).Source
 $sdkRoot = if ($env:ANDROID_SDK_ROOT) {
     $env:ANDROID_SDK_ROOT
@@ -30,9 +31,35 @@ $ndkRoot = if ($env:ANDROID_NDK_HOME) {
 }
 $clang = Join-Path $ndkRoot "toolchains\llvm\prebuilt\windows-x86_64\bin\clang++.exe"
 
+function Invoke-AdbChecked {
+    param(
+        [string[]]$Arguments,
+        [string]$FailureMessage
+    )
+
+    $previousPreference = $ErrorActionPreference
+    try {
+        $ErrorActionPreference = "Continue"
+        $output = & $adb @Arguments 2>&1
+        $exitCode = $LASTEXITCODE
+    } finally {
+        $ErrorActionPreference = $previousPreference
+    }
+    foreach ($line in $output) {
+        if ($line -is [System.Management.Automation.ErrorRecord]) {
+            Write-Output $line.Exception.Message
+        } else {
+            Write-Output $line
+        }
+    }
+    if ($exitCode -ne 0) {
+        throw "$FailureMessage (adb exit code $exitCode)"
+    }
+}
+
 foreach ($requiredPath in @(
     $PePath, $recursiveBatch, $callerBatch, $calleeBatch,
-    $startupOuterBatch, $startupInnerBatch, $adb, $clang
+    $startupOuterBatch, $startupInnerBatch, $startupHelperBatch, $adb, $clang
 )) {
     if (-not (Test-Path -LiteralPath $requiredPath)) {
         throw "Required input or tool was not found: $requiredPath"
@@ -56,15 +83,20 @@ $buildDirectory = Join-Path $env:TEMP ("spore-batch-call-lift-" + [Guid]::NewGui
 New-Item -ItemType Directory -Path $buildDirectory | Out-Null
 $recursiveOutput = Join-Path $buildDirectory "recursive"
 $crossCallOutput = Join-Path $buildDirectory "cross_call"
-$startupOutput = Join-Path $buildDirectory "startup_init_string_copy"
+$startupResmanOutput = Join-Path $buildDirectory "startup_resman"
 $recursiveSource = Join-Path $recursiveOutput "spore_006237a0_arm64.cpp"
 $calleeSource = Join-Path $crossCallOutput "spore_00b8dab0_arm64.cpp"
 $callerSource = Join-Path $crossCallOutput "spore_00bb9b70_arm64.cpp"
-$startupSource = Join-Path $startupOutput "spore_011e5d80_arm64.cpp"
-$startupCalleeSource = Join-Path $startupOutput "spore_011e8b20_arm64.cpp"
+$resmanSources = @(
+    (Join-Path $startupResmanOutput "spore_00a247f0_arm64.cpp"),
+    (Join-Path $startupResmanOutput "spore_009222a0_arm64.cpp"),
+    (Join-Path $startupResmanOutput "spore_00922150_arm64.cpp"),
+    (Join-Path $startupResmanOutput "spore_011e5d80_arm64.cpp"),
+    (Join-Path $startupResmanOutput "spore_011e8b20_arm64.cpp")
+)
 $recursiveBytes = Join-Path $buildDirectory "recursive_reference_bytes.hpp"
 $crossCallBytes = Join-Path $buildDirectory "cross_call_reference_bytes.hpp"
-$startupBytes = Join-Path $buildDirectory "startup_reference_bytes.hpp"
+$resmanBytes = Join-Path $buildDirectory "startup_resman_reference_bytes.hpp"
 $x86Executable = Join-Path $buildDirectory "batch_call_lift_x86.exe"
 $arm64Executable = Join-Path $buildDirectory "batch_call_lift_arm64"
 $remoteExecutable = "/data/local/tmp/spore_batch_call_lift"
@@ -88,11 +120,12 @@ try {
     }
     & $python $generator --exe $PePath `
         --batch $startupOuterBatch --batch $startupInnerBatch `
-        --entry 0x011e5d80 --output-dir $startupOutput `
-        --report (Join-Path $startupOutput "report.json") `
-        --byte-header $startupBytes
+        --batch $startupHelperBatch --entry 0x00a247f0 `
+        --output-dir $startupResmanOutput `
+        --report (Join-Path $startupResmanOutput "report.json") `
+        --byte-header $resmanBytes --data-string-va 0x01449334
     if ($LASTEXITCODE -ne 0) {
-        throw "Startup-linked call-closure generation failed"
+        throw "Import-boundary startup call-closure generation failed"
     }
 
     $buildCommand = 'call "' + $vsDevCmd +
@@ -101,7 +134,7 @@ try {
         $backendDirectory + '" /I"' + $buildDirectory + '" /Fe:"' +
         $x86Executable + '" "' + $harness + '" "' + $recursiveSource +
         '" "' + $calleeSource + '" "' + $callerSource + '" "' +
-        $startupSource + '" "' + $startupCalleeSource + '"'
+        ($resmanSources -join '" "') + '"'
     & $env:ComSpec /d /s /c $buildCommand
     if ($LASTEXITCODE -ne 0) {
         throw "Windows x86 reference-vs-generated-lift build failed"
@@ -114,7 +147,7 @@ try {
     & $clang "--target=aarch64-linux-android29" "-std=c++17" "-O2" `
         "-Wall" "-Wextra" "-Werror" "-I$backendDirectory" "-I$buildDirectory" `
         $harness $recursiveSource $calleeSource $callerSource `
-        $startupSource $startupCalleeSource `
+        $resmanSources `
         "-o" $arm64Executable
     if ($LASTEXITCODE -ne 0) {
         throw "Android ARM64 generated-lift harness build failed"
@@ -149,22 +182,36 @@ try {
         return
     }
     $deviceSelected = $true
-    & $adb -s $DeviceSerial push $arm64Executable $remoteExecutable
-    if ($LASTEXITCODE -ne 0) {
-        throw "Could not push ARM64 call-closure harness to $DeviceSerial"
-    }
-    & $adb -s $DeviceSerial shell chmod 700 $remoteExecutable
-    if ($LASTEXITCODE -ne 0) {
-        throw "Could not set executable permission on the ARM64 harness"
-    }
-    & $adb -s $DeviceSerial shell $remoteExecutable
-    if ($LASTEXITCODE -ne 0) {
-        throw "ARM64 call-closure harness failed on device $DeviceSerial"
-    }
+    Invoke-AdbChecked `
+        -Arguments @("-s", $DeviceSerial, "push", $arm64Executable, $remoteExecutable) `
+        -FailureMessage "Could not push ARM64 call-closure harness to $DeviceSerial"
+    Invoke-AdbChecked `
+        -Arguments @("-s", $DeviceSerial, "shell", "chmod", "700", $remoteExecutable) `
+        -FailureMessage "Could not set executable permission on the ARM64 harness"
+    Invoke-AdbChecked `
+        -Arguments @("-s", $DeviceSerial, "shell", $remoteExecutable) `
+        -FailureMessage "ARM64 call-closure harness failed on device $DeviceSerial"
     Write-Output "PASS arm64_device_run serial=$DeviceSerial"
 } finally {
     if ($deviceSelected) {
-        & $adb -s $DeviceSerial shell rm -f $remoteExecutable | Out-Null
+        $previousPreference = $ErrorActionPreference
+        try {
+            $ErrorActionPreference = "Continue"
+            $cleanupOutput = & $adb -s $DeviceSerial shell rm -f $remoteExecutable 2>&1
+            $cleanupExitCode = $LASTEXITCODE
+        } finally {
+            $ErrorActionPreference = $previousPreference
+        }
+        foreach ($line in $cleanupOutput) {
+            if ($line -is [System.Management.Automation.ErrorRecord]) {
+                Write-Output $line.Exception.Message
+            } else {
+                Write-Output $line
+            }
+        }
+        if ($cleanupExitCode -ne 0) {
+            Write-Warning "Could not remove the temporary device harness (adb exit code $cleanupExitCode)"
+        }
     }
     if (Test-Path -LiteralPath $buildDirectory) {
         Remove-Item -LiteralPath $buildDirectory -Recurse -Force
