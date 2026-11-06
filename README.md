@@ -2852,6 +2852,42 @@ Reproduce generation, x86 differential checks, and ARM64 compilation with
 `-DeviceSerial <serial>` to run the harness when an authorized device is
 connected. These remain isolated compatibility tests, not game startup.
 
+## Constructor closure and x86 SEH boundary — 2026-11-07
+
+The bounded diagnosis of `FUN_00a247f0` and its direct-call descendants reaches
+five exported functions, including `FUN_009222a0` and `FUN_00922150`. The
+updated report is
+[constructor-call-diagnostic-2026-11-07.json](./test-logs/constructor-call-diagnostic-2026-11-07.json).
+It finds no missing direct-call bodies and no remaining unsupported
+instructions after adding limited guest `FS:[disp]` memory access and `SBB`
+lowering. These changes do not implement x86 exception dispatch: `FS:[0]` is
+read and written through an explicit `BatchLiftState::fs_base` guest address,
+which the harness must map in `BatchLiftMemory`; no host thread state is used.
+
+The two indirect calls in `FUN_00922150` are resolved as PE IAT slots, not as
+direct calls:
+
+| Site | IAT slot | Resolved import | Local call contract |
+|---|---:|---|---|
+| `0x0092216c` | `0x013cc2d0` | `KERNEL32.dll!InitializeCriticalSection` | Receives `ESI` (`this`) and initializes the object's inline critical-section state. |
+| `0x00922189` | `0x013cc180` | `KERNEL32.dll!CreateMutexA` | Receives `(NULL, FALSE, name-or-NULL)`; its handle is tested and stored at `[ESI]`. |
+
+The import names and slots come from the PE import table. At the second call,
+the guest code derives the optional mutex name from the supplied string and
+returns success only if `CreateMutexA` returns a non-null handle. The first
+call initializes native synchronization state. Android has neither Win32 API;
+replacing either call with a constant or an unverified fixture would not
+preserve the constructor's behavior. Therefore the enlarged closure is **not**
+generated or run on x86/ARM64/device yet. Its next blocker is a deliberate,
+documented import-call boundary with defined guest-side synchronization and
+handle semantics, not an unresolved PE symbol.
+
+The ordinary-path SEH behavior is bounded to preserving the previous
+`FS:[0]`, installing the stack record, and restoring the previous head on
+return. Exception dispatch/unwinding remains unsupported. The actual generated
+test still starts at an internal function; it is not execution from the game
+entry point.
+
 ## Preserved one-function recursive-call pilot
 
 The earlier recursive pilot and its runtime are retained unchanged as a

@@ -43,6 +43,11 @@ MEMORY_OPERAND = re.compile(
     r"(?:\s*([+-])\s*(-?(?:0x[0-9a-f]+|[0-9]+)))?\s*\]$",
     re.IGNORECASE,
 )
+FS_MEMORY_OPERAND = re.compile(
+    r"^(?:(byte|word|dword) ptr )?FS:\[\s*"
+    r"([+-]?(?:0x[0-9a-f]+|[0-9]+))\s*\]$",
+    re.IGNORECASE,
+)
 ADDRESS = re.compile(r"^0x[0-9a-fA-F]+$")
 CF = "((state.eflags & 0x001u) != 0u)"
 PF = "((state.eflags & 0x004u) != 0u)"
@@ -111,6 +116,22 @@ def parse_operand(text, infer_memory_width=None):
         number = number[1:] if number[:1] in "+-" else number
         value_int = int(number, 16 if number.lower().startswith("0x") else 10) * sign
         return ("immediate", value_int & 0xFFFFFFFF, None, 0)
+    match = FS_MEMORY_OPERAND.fullmatch(value)
+    if match:
+        token = match.group(2)
+        sign = -1 if token.startswith("-") else 1
+        token = token[1:] if token[:1] in "+-" else token
+        displacement = sign * int(
+            token, 16 if token.lower().startswith("0x") else 10
+        )
+        memory_width = {
+            "byte": 8,
+            "word": 16,
+            "dword": 32,
+        }.get((match.group(1) or "").lower(), infer_memory_width)
+        if memory_width is None:
+            raise ValueError(f"memory operand width is ambiguous: {text!r}")
+        return ("fs_memory", displacement, 0, memory_width)
     match = MEMORY_OPERAND.fullmatch(value)
     if match:
         token = match.group(4)
@@ -149,6 +170,11 @@ def cpp_u32(value):
 
 
 def memory_address(operand):
+    if operand[0] == "fs_memory":
+        return (
+            "static_cast<std::uint32_t>(state.fs_base + "
+            f"{cpp_u32(operand[1])})"
+        )
     _, register, displacement, _ = operand
     return f"static_cast<std::uint32_t>(state.regs[{register}] + {cpp_u32(displacement)})"
 
@@ -189,7 +215,7 @@ def emit_store(operand, value):
             f"state.regs[{index}] = (state.regs[{index}] & {cpp_u32(~mask)}) | "
             f"(({value} << {shift}u) & {cpp_u32(mask)});"
         ]
-    if kind == "memory":
+    if kind in {"memory", "fs_memory"}:
         method = {8: "store8", 16: "store16", 32: "store32"}[operand[3]]
         return [f"if (!memory.{method}({memory_address(operand)}, {value})) "
                 "return BatchLiftStatus::invalid_memory;"]
@@ -230,7 +256,7 @@ def resolve_operands(text_operands, infer_untyped_memory=True):
 def operand_width(operand, default=None):
     if operand[0] == "register":
         return operand[2]
-    if operand[0] == "memory":
+    if operand[0] in {"memory", "fs_memory"}:
         return operand[3]
     return default
 
@@ -387,14 +413,16 @@ def translate_instruction(
                 f"({temp}a ^ {cpp_u32(sign)}) - {cpp_u32(sign)});"
             )
         lines += emit_store(operands[0], f"{temp}a")
-    elif mnemonic in {"ADD", "SUB", "CMP", "TEST", "AND", "OR", "XOR", "INC", "DEC", "NEG"}:
+    elif mnemonic in {"ADD", "SUB", "SBB", "CMP", "TEST", "AND", "OR", "XOR", "INC", "DEC", "NEG"}:
         if mnemonic in {"INC", "DEC", "NEG"}:
             require(1)
         else:
             require(2)
         if operands[0][0] == "immediate":
             raise ValueError(f"{mnemonic} destination cannot be immediate")
-        if len(operands) == 2 and operands[0][0] == "memory" and operands[1][0] == "memory":
+        if len(operands) == 2 and operands[0][0] in {
+            "memory", "fs_memory"
+        } and operands[1][0] in {"memory", "fs_memory"}:
             raise ValueError(f"{mnemonic} cannot use two memory operands")
         op_width = operand_width(operands[0])
         if op_width not in {8, 16, 32}:
@@ -430,15 +458,33 @@ def translate_instruction(
             }[mnemonic]
             lines.append(f"{flag_function}(state, {temp}a, {temp}r, {op_width}u);")
             lines += emit_store(operands[0], f"{temp}r")
-        elif mnemonic in {"ADD", "SUB", "CMP"}:
-            operation = "+" if mnemonic == "ADD" else "-"
-            lines += [
-                f"{temp}r = static_cast<std::uint32_t>({temp}a {operation} {temp}b) & {mask};",
-                f"batch_set_{'add' if mnemonic == 'ADD' else 'sub'}_flags("
-                f"state, {temp}a, {temp}b, {temp}r, {op_width}u);",
-            ]
-            if mnemonic != "CMP":
+        elif mnemonic in {"ADD", "SUB", "SBB", "CMP"}:
+            if mnemonic == "SBB":
+                lines.append(
+                    f"{temp}c = (state.eflags & 0x001u) != 0u ? 1u : 0u;"
+                )
+                lines.append(
+                    f"{temp}r = static_cast<std::uint32_t>("
+                    f"{temp}a - {temp}b - {temp}c) & {mask};"
+                )
+                lines.append(
+                    f"batch_set_sbb_flags(state, {temp}a, {temp}b, "
+                    f"{temp}c, {temp}r, {op_width}u);"
+                )
                 lines += emit_store(operands[0], f"{temp}r")
+                operation = None
+            else:
+                operation = "+" if mnemonic == "ADD" else "-"
+            if operation is None:
+                pass
+            else:
+                lines += [
+                    f"{temp}r = static_cast<std::uint32_t>({temp}a {operation} {temp}b) & {mask};",
+                    f"batch_set_{'add' if mnemonic == 'ADD' else 'sub'}_flags("
+                    f"state, {temp}a, {temp}b, {temp}r, {op_width}u);",
+                ]
+                if mnemonic != "CMP":
+                    lines += emit_store(operands[0], f"{temp}r")
         else:
             operator = {
                 "TEST": "&",
@@ -528,7 +574,7 @@ def static_source(function, translated, call_targets):
     }
     for index, (instruction, instruction_body) in enumerate(translated):
         used_temps = sorted(set(re.findall(
-            r"\bt\d+(?:a|b|r)?\b",
+            r"\bt\d+(?:a|b|c|r)?\b",
             "\n".join(instruction_body),
         )))
         if used_temps:

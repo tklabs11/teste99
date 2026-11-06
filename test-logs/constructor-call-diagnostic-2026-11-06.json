@@ -1,0 +1,364 @@
+{
+  "schema": "spore-static-lift-call-diagnostic-v1",
+  "source_sha256": "6aec99cb2dc7fd08851a1718e92a60f359fb3fccca3b244a890ae07e93cbe59b",
+  "batch_exports": [
+    "C:\\SporeAnalysis\\spore_batch_all_parts\\spore_batch_all_0001.json",
+    "C:\\SporeAnalysis\\spore_batch_all_parts\\spore_batch_all_0002.json",
+    "C:\\SporeAnalysis\\spore_batch_all_parts\\spore_batch_all_0003.json",
+    "C:\\SporeAnalysis\\spore_batch_all_parts\\spore_batch_all_0004.json",
+    "C:\\SporeAnalysis\\spore_batch_all_parts\\spore_batch_all_0005.json",
+    "C:\\SporeAnalysis\\spore_batch_all_parts\\spore_batch_all_0006.json",
+    "C:\\SporeAnalysis\\spore_batch_all_parts\\spore_batch_all_0007.json",
+    "C:\\SporeAnalysis\\spore_batch_all_parts\\spore_batch_all_0008.json",
+    "C:\\SporeAnalysis\\spore_batch_all_parts\\spore_batch_all_0009.json",
+    "C:\\SporeAnalysis\\spore_batch_all_parts\\spore_batch_all_0010.json",
+    "C:\\SporeAnalysis\\spore_batch_all_parts\\spore_batch_all_0011.json",
+    "C:\\SporeAnalysis\\spore_batch_all_parts\\spore_batch_all_0012.json",
+    "C:\\SporeAnalysis\\spore_batch_all_parts\\spore_batch_all_0013.json",
+    "C:\\SporeAnalysis\\spore_batch_all_parts\\spore_batch_all_0014.json",
+    "C:\\SporeAnalysis\\spore_batch_all_parts\\spore_batch_all_0015.json",
+    "C:\\SporeAnalysis\\spore_batch_all_parts\\spore_batch_all_0016.json",
+    "C:\\SporeAnalysis\\spore_batch_all_parts\\spore_batch_all_0017.json",
+    "C:\\SporeAnalysis\\spore_batch_all_parts\\spore_batch_all_0018.json",
+    "C:\\SporeAnalysis\\spore_batch_all_parts\\spore_batch_all_0019.json",
+    "C:\\SporeAnalysis\\spore_batch_all_parts\\spore_batch_all_0020.json",
+    "C:\\SporeAnalysis\\spore_batch_all_parts\\spore_batch_all_0021.json",
+    "C:\\SporeAnalysis\\spore_batch_all_parts\\spore_batch_all_0022.json",
+    "C:\\SporeAnalysis\\spore_batch_all_parts\\spore_batch_all_0023.json",
+    "C:\\SporeAnalysis\\spore_batch_all_parts\\spore_batch_all_0024.json",
+    "C:\\SporeAnalysis\\spore_batch_all_parts\\spore_batch_all_0025.json",
+    "C:\\SporeAnalysis\\spore_batch_all_parts\\spore_batch_all_0026.json",
+    "C:\\SporeAnalysis\\spore_batch_all_parts\\spore_batch_all_0027.json",
+    "C:\\SporeAnalysis\\spore_batch_all_parts\\spore_batch_all_0028.json",
+    "C:\\SporeAnalysis\\spore_batch_all_parts\\spore_batch_all_0029.json",
+    "C:\\SporeAnalysis\\spore_batch_all_parts\\spore_batch_all_0030.json",
+    "C:\\SporeAnalysis\\spore_batch_all_parts\\spore_batch_all_0031.json",
+    "C:\\SporeAnalysis\\spore_batch_all_parts\\spore_batch_all_0032.json",
+    "C:\\SporeAnalysis\\spore_batch_all_parts\\spore_batch_all_0033.json",
+    "C:\\SporeAnalysis\\spore_batch_all_parts\\spore_batch_all_0034.json",
+    "C:\\SporeAnalysis\\spore_batch_all_parts\\spore_batch_all_0035.json",
+    "C:\\SporeAnalysis\\spore_batch_all_parts\\spore_batch_all_0036.json",
+    "C:\\SporeAnalysis\\spore_batch_all_parts\\spore_batch_all_0037.json",
+    "C:\\SporeAnalysis\\spore_batch_all_parts\\spore_batch_all_0038.json",
+    "C:\\SporeAnalysis\\spore_batch_all_parts\\spore_batch_all_0039.json",
+    "C:\\SporeAnalysis\\spore_batch_all_parts\\spore_batch_all_0040.json",
+    "C:\\SporeAnalysis\\spore_batch_all_parts\\spore_batch_all_0041.json",
+    "C:\\SporeAnalysis\\spore_batch_all_parts\\spore_batch_all_0042.json",
+    "C:\\SporeAnalysis\\spore_batch_all_parts\\spore_batch_all_0043.json",
+    "C:\\SporeAnalysis\\spore_batch_all_parts\\spore_batch_all_0044.json",
+    "C:\\SporeAnalysis\\spore_batch_all_parts\\spore_batch_all_0045.json",
+    "C:\\SporeAnalysis\\spore_batch_all_parts\\spore_batch_all_0046.json",
+    "C:\\SporeAnalysis\\spore_batch_all_parts\\spore_batch_all_0047.json",
+    "C:\\SporeAnalysis\\spore_batch_all_parts\\spore_batch_all_0048.json",
+    "C:\\SporeAnalysis\\spore_batch_all_parts\\spore_batch_all_0049.json",
+    "C:\\SporeAnalysis\\spore_batch_all_parts\\spore_batch_all_0050.json",
+    "C:\\SporeAnalysis\\spore_batch_all_parts\\spore_batch_all_0051.json",
+    "C:\\SporeAnalysis\\spore_batch_all_parts\\spore_batch_all_0052.json",
+    "C:\\SporeAnalysis\\spore_batch_all_parts\\spore_batch_all_0053.json",
+    "C:\\SporeAnalysis\\spore_batch_all_parts\\spore_batch_all_0054.json",
+    "C:\\SporeAnalysis\\spore_batch_all_parts\\spore_batch_all_0055.json",
+    "C:\\SporeAnalysis\\spore_batch_all_parts\\spore_batch_all_0056.json",
+    "C:\\SporeAnalysis\\spore_batch_all_parts\\spore_batch_all_0057.json",
+    "C:\\SporeAnalysis\\spore_batch_all_parts\\spore_batch_all_0058.json",
+    "C:\\SporeAnalysis\\spore_batch_all_parts\\spore_batch_all_0059.json",
+    "C:\\SporeAnalysis\\spore_batch_all_parts\\spore_batch_all_0060.json",
+    "C:\\SporeAnalysis\\spore_batch_all_parts\\spore_batch_all_0061.json",
+    "C:\\SporeAnalysis\\spore_batch_all_parts\\spore_batch_all_0062.json",
+    "C:\\SporeAnalysis\\spore_batch_all_parts\\spore_batch_all_0063.json",
+    "C:\\SporeAnalysis\\spore_batch_all_parts\\spore_batch_all_0064.json",
+    "C:\\SporeAnalysis\\spore_batch_all_parts\\spore_batch_all_0065.json",
+    "C:\\SporeAnalysis\\spore_batch_all_parts\\spore_batch_all_0066.json",
+    "C:\\SporeAnalysis\\spore_batch_all_parts\\spore_batch_all_0067.json",
+    "C:\\SporeAnalysis\\spore_batch_all_parts\\spore_batch_all_0068.json",
+    "C:\\SporeAnalysis\\spore_batch_all_parts\\spore_batch_all_0069.json",
+    "C:\\SporeAnalysis\\spore_batch_all_parts\\spore_batch_all_0070.json",
+    "C:\\SporeAnalysis\\spore_batch_all_parts\\spore_batch_all_0071.json",
+    "C:\\SporeAnalysis\\spore_batch_all_parts\\spore_batch_all_0072.json",
+    "C:\\SporeAnalysis\\spore_batch_all_parts\\spore_batch_all_0073.json",
+    "C:\\SporeAnalysis\\spore_batch_all_parts\\spore_batch_all_0074.json",
+    "C:\\SporeAnalysis\\spore_batch_all_parts\\spore_batch_all_0075.json",
+    "C:\\SporeAnalysis\\spore_batch_all_parts\\spore_batch_all_0076.json",
+    "C:\\SporeAnalysis\\spore_batch_all_parts\\spore_batch_all_0077.json",
+    "C:\\SporeAnalysis\\spore_batch_all_parts\\spore_batch_all_0078.json",
+    "C:\\SporeAnalysis\\spore_batch_all_parts\\spore_batch_all_0079.json",
+    "C:\\SporeAnalysis\\spore_batch_all_parts\\spore_batch_all_0080.json",
+    "C:\\SporeAnalysis\\spore_batch_all_parts\\spore_batch_all_0081.json",
+    "C:\\SporeAnalysis\\spore_batch_all_parts\\spore_batch_all_0082.json",
+    "C:\\SporeAnalysis\\spore_batch_all_parts\\spore_batch_all_0083.json",
+    "C:\\SporeAnalysis\\spore_batch_all_parts\\spore_batch_all_0084.json",
+    "C:\\SporeAnalysis\\spore_batch_all_parts\\spore_batch_all_0085.json",
+    "C:\\SporeAnalysis\\spore_batch_all_parts\\spore_batch_all_0086.json",
+    "C:\\SporeAnalysis\\spore_batch_all_parts\\spore_batch_all_0087.json",
+    "C:\\SporeAnalysis\\spore_batch_all_parts\\spore_batch_all_0088.json",
+    "C:\\SporeAnalysis\\spore_batch_all_parts\\spore_batch_all_0089.json",
+    "C:\\SporeAnalysis\\spore_batch_all_parts\\spore_batch_all_0090.json",
+    "C:\\SporeAnalysis\\spore_batch_all_parts\\spore_batch_all_0091.json",
+    "C:\\SporeAnalysis\\spore_batch_all_parts\\spore_batch_all_0092.json",
+    "C:\\SporeAnalysis\\spore_batch_all_parts\\spore_batch_all_0093.json",
+    "C:\\SporeAnalysis\\spore_batch_all_parts\\spore_batch_all_0094.json",
+    "C:\\SporeAnalysis\\spore_batch_all_parts\\spore_batch_all_0095.json",
+    "C:\\SporeAnalysis\\spore_batch_all_parts\\spore_batch_all_0096.json",
+    "C:\\SporeAnalysis\\spore_batch_all_parts\\spore_batch_all_0097.json",
+    "C:\\SporeAnalysis\\spore_batch_all_parts\\spore_batch_all_0098.json",
+    "C:\\SporeAnalysis\\spore_batch_all_parts\\spore_batch_all_0099.json",
+    "C:\\SporeAnalysis\\spore_batch_all_parts\\spore_batch_all_0100.json",
+    "C:\\SporeAnalysis\\spore_batch_all_parts\\spore_batch_all_0101.json",
+    "C:\\SporeAnalysis\\spore_batch_all_parts\\spore_batch_all_0102.json",
+    "C:\\SporeAnalysis\\spore_batch_all_parts\\spore_batch_all_0103.json",
+    "C:\\SporeAnalysis\\spore_batch_all_parts\\spore_batch_all_0104.json",
+    "C:\\SporeAnalysis\\spore_batch_all_parts\\spore_batch_all_0105.json",
+    "C:\\SporeAnalysis\\spore_batch_all_parts\\spore_batch_all_0106.json",
+    "C:\\SporeAnalysis\\spore_batch_all_parts\\spore_batch_all_0107.json",
+    "C:\\SporeAnalysis\\spore_batch_all_parts\\spore_batch_all_0108.json",
+    "C:\\SporeAnalysis\\spore_batch_all_parts\\spore_batch_all_0109.json",
+    "C:\\SporeAnalysis\\spore_batch_all_parts\\spore_batch_all_0110.json",
+    "C:\\SporeAnalysis\\spore_batch_all_parts\\spore_batch_all_0111.json",
+    "C:\\SporeAnalysis\\spore_batch_all_parts\\spore_batch_all_0112.json",
+    "C:\\SporeAnalysis\\spore_batch_all_parts\\spore_batch_all_0113.json",
+    "C:\\SporeAnalysis\\spore_batch_all_parts\\spore_batch_all_0114.json",
+    "C:\\SporeAnalysis\\spore_batch_all_parts\\spore_batch_all_0115.json",
+    "C:\\SporeAnalysis\\spore_batch_all_parts\\spore_batch_all_0116.json"
+  ],
+  "root_entries": [
+    "0x00a247f0"
+  ],
+  "reachable_exported_function_count": 5,
+  "import_thunk_count_in_pe": 118,
+  "functions": [
+    {
+      "address": "0x00922150",
+      "name": "FUN_00922150",
+      "batch": "C:\\SporeAnalysis\\spore_batch_all_parts\\spore_batch_all_0034.json",
+      "instruction_count": 34,
+      "verified_byte_count": 84,
+      "byte_validation_error": null,
+      "translation_reasons": [
+        "0x0092216c: indirect or unresolved call is not supported",
+        "0x00922180: unsupported instruction SBB",
+        "0x00922189: indirect or unresolved call is not supported"
+      ],
+      "direct_calls": []
+    },
+    {
+      "address": "0x009222a0",
+      "name": "FUN_009222a0",
+      "batch": "C:\\SporeAnalysis\\spore_batch_all_parts\\spore_batch_all_0034.json",
+      "instruction_count": 38,
+      "verified_byte_count": 102,
+      "byte_validation_error": null,
+      "translation_reasons": [],
+      "direct_calls": [
+        {
+          "site": "0x009222e7",
+          "mnemonic": "CALL",
+          "operand": [
+            "0x00922150"
+          ],
+          "target": {
+            "address": "0x00922150",
+            "classification": "exported_function"
+          }
+        },
+        {
+          "site": "0x009222f8",
+          "mnemonic": "CALL",
+          "operand": [
+            "0x00922150"
+          ],
+          "target": {
+            "address": "0x00922150",
+            "classification": "exported_function"
+          }
+        }
+      ]
+    },
+    {
+      "address": "0x00a247f0",
+      "name": "FUN_00a247f0",
+      "batch": "C:\\SporeAnalysis\\spore_batch_all_parts\\spore_batch_all_0041.json",
+      "instruction_count": 28,
+      "verified_byte_count": 94,
+      "byte_validation_error": null,
+      "translation_reasons": [
+        "0x00a247f7: unsupported operand syntax or width: 'FS:[0x0]'",
+        "0x00a247fe: unsupported operand syntax or width: 'dword ptr FS:[0x0]'",
+        "0x00a24843: unsupported operand syntax or width: 'dword ptr FS:[0x0]'"
+      ],
+      "direct_calls": [
+        {
+          "site": "0x00a24812",
+          "mnemonic": "CALL",
+          "operand": [
+            "0x011e5d80"
+          ],
+          "target": {
+            "address": "0x011e5d80",
+            "classification": "exported_function"
+          }
+        },
+        {
+          "site": "0x00a24837",
+          "mnemonic": "CALL",
+          "operand": [
+            "0x009222a0"
+          ],
+          "target": {
+            "address": "0x009222a0",
+            "classification": "exported_function"
+          }
+        }
+      ]
+    },
+    {
+      "address": "0x011e5d80",
+      "name": "FUN_011e5d80",
+      "batch": "C:\\SporeAnalysis\\spore_batch_all_parts\\spore_batch_all_0086.json",
+      "instruction_count": 12,
+      "verified_byte_count": 32,
+      "byte_validation_error": null,
+      "translation_reasons": [],
+      "direct_calls": [
+        {
+          "site": "0x011e5d92",
+          "mnemonic": "CALL",
+          "operand": [
+            "0x011e8b20"
+          ],
+          "target": {
+            "address": "0x011e8b20",
+            "classification": "exported_function"
+          }
+        }
+      ]
+    },
+    {
+      "address": "0x011e8b20",
+      "name": "FUN_011e8b20",
+      "batch": "C:\\SporeAnalysis\\spore_batch_all_parts\\spore_batch_all_0086.json",
+      "instruction_count": 16,
+      "verified_byte_count": 33,
+      "byte_validation_error": null,
+      "translation_reasons": [],
+      "direct_calls": []
+    }
+  ],
+  "direct_call_edges": [
+    {
+      "from": "0x00a247f0",
+      "to": "0x011e5d80",
+      "kind": "direct",
+      "site": "0x00a24812"
+    },
+    {
+      "from": "0x00a247f0",
+      "to": "0x009222a0",
+      "kind": "direct",
+      "site": "0x00a24837"
+    },
+    {
+      "from": "0x011e5d80",
+      "to": "0x011e8b20",
+      "kind": "direct",
+      "site": "0x011e5d92"
+    },
+    {
+      "from": "0x009222a0",
+      "to": "0x00922150",
+      "kind": "direct",
+      "site": "0x009222e7"
+    },
+    {
+      "from": "0x009222a0",
+      "to": "0x00922150",
+      "kind": "direct",
+      "site": "0x009222f8"
+    }
+  ],
+  "missing_dependencies": [],
+  "indirect_calls": [
+    {
+      "function": "0x00922150",
+      "site": "0x0092216c",
+      "mnemonic": "CALL",
+      "operand": [
+        "dword ptr [0x013cc2d0]"
+      ],
+      "reason": "indirect or unresolved call is not supported",
+      "resolution_status": "unresolved_runtime_target",
+      "destination_classification": "unresolved_destination",
+      "candidate_targets": []
+    },
+    {
+      "function": "0x00922150",
+      "site": "0x00922189",
+      "mnemonic": "CALL",
+      "operand": [
+        "dword ptr [0x013cc180]"
+      ],
+      "reason": "indirect or unresolved call is not supported",
+      "resolution_status": "unresolved_runtime_target",
+      "destination_classification": "unresolved_destination",
+      "candidate_targets": []
+    }
+  ],
+  "unresolved_calls": [],
+  "unsupported_instructions": [
+    {
+      "function": "0x00a247f0",
+      "address": "0x00a247f7",
+      "mnemonic": "MOV",
+      "reason": "unsupported operand syntax or width: 'FS:[0x0]'"
+    },
+    {
+      "function": "0x00a247f0",
+      "address": "0x00a247fe",
+      "mnemonic": "MOV",
+      "reason": "unsupported operand syntax or width: 'dword ptr FS:[0x0]'"
+    },
+    {
+      "function": "0x00a247f0",
+      "address": "0x00a24843",
+      "mnemonic": "MOV",
+      "reason": "unsupported operand syntax or width: 'dword ptr FS:[0x0]'"
+    },
+    {
+      "function": "0x00922150",
+      "address": "0x00922180",
+      "mnemonic": "SBB",
+      "reason": "unsupported instruction SBB"
+    }
+  ],
+  "invalid_functions": [],
+  "counts": {
+    "missing_internal_functions": 0,
+    "import_thunk_call_sites": 0,
+    "indirect_calls": 2,
+    "unresolved_calls": 0,
+    "indirect_calls_without_candidates": 2,
+    "unsupported_instructions": 4,
+    "invalid_functions": 0
+  },
+  "shortest_direct_paths_from_roots": {
+    "0x00a247f0": [
+      "0x00a247f0"
+    ],
+    "0x011e5d80": [
+      "0x00a247f0",
+      "0x011e5d80"
+    ],
+    "0x009222a0": [
+      "0x00a247f0",
+      "0x009222a0"
+    ],
+    "0x011e8b20": [
+      "0x00a247f0",
+      "0x011e5d80",
+      "0x011e8b20"
+    ],
+    "0x00922150": [
+      "0x00a247f0",
+      "0x009222a0",
+      "0x00922150"
+    ]
+  }
+}

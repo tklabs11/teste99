@@ -1,5 +1,6 @@
 import argparse
 import json
+import re
 import struct
 import sys
 from collections import deque
@@ -19,18 +20,18 @@ def _rva_to_offset(pe, rva, size):
     raise ValueError(f"PE RVA 0x{rva:08x} is not backed by file data")
 
 
-def parse_import_thunks(pe):
+def parse_import_thunks(pe, include_iat_slots=False):
     image, image_base, sections = pe
     pe_offset = struct.unpack_from("<I", image, 0x3c)[0]
     optional = pe_offset + 24
     directory_count = struct.unpack_from("<I", image, optional + 92)[0]
     if directory_count <= 1:
-        return {}
+        return ({}, {}) if include_iat_slots else {}
     import_rva, import_size = struct.unpack_from(
         "<II", image, optional + 96 + 8
     )
     if import_rva == 0 or import_size == 0:
-        return {}
+        return ({}, {}) if include_iat_slots else {}
 
     slots = {}
     descriptor_offset = _rva_to_offset(pe, import_rva, 20)
@@ -83,7 +84,23 @@ def parse_import_thunks(pe):
                     "symbol": imported_symbol,
                     "iat_address": f"0x{iat_va:08x}",
                 }
-    return stubs
+    return (stubs, slots) if include_iat_slots else stubs
+
+
+def _indirect_iat_symbol(instruction, iat_slots):
+    for operand in instruction.get("operands", []):
+        match = re.fullmatch(
+            r"(?:(?:byte|word|dword) ptr )?\[\s*(0x[0-9a-f]+|[0-9]+)\s*\]",
+            str(operand).strip(),
+            re.IGNORECASE,
+        )
+        if match is None:
+            continue
+        token = match.group(1)
+        address = int(token, 16 if token.lower().startswith("0x") else 10)
+        if address in iat_slots:
+            return {"iat_address": f"0x{address:08x}", "symbol": iat_slots[address]}
+    return None
 
 
 def build_export_index(batch_paths, source_hash):
@@ -171,7 +188,7 @@ def diagnose_call_closure(executable, batch_paths, root_entries):
             f"PE SHA-256 mismatch: expected {lifter.EXPECTED_SHA256}, got {source_hash}"
         )
     pe = lifter.parse_pe(executable)
-    import_stubs = parse_import_thunks(pe)
+    import_stubs, iat_slots = parse_import_thunks(pe, include_iat_slots=True)
     export_index, names = build_export_index(batch_paths, source_hash)
 
     report_functions = {}
@@ -279,6 +296,7 @@ def diagnose_call_closure(executable, batch_paths, root_entries):
                     try:
                         target = lifter.direct_call_target(instruction)
                     except (KeyError, TypeError, ValueError) as error:
+                        iat_import = _indirect_iat_symbol(instruction, iat_slots)
                         candidates = [
                             _target_record(candidate, export_index, import_stubs, pe)
                             for candidate in _call_references(instruction)
@@ -289,9 +307,12 @@ def diagnose_call_closure(executable, batch_paths, root_entries):
                             "reason": str(error),
                             "resolution_status": "unresolved_runtime_target",
                             "destination_classification": (
+                                "indirect_iat_import"
+                                if iat_import else
                                 "indirect_call_with_static_candidate"
                                 if candidates else "unresolved_destination"
                             ),
+                            "iat_import": iat_import,
                             "candidate_targets": candidates,
                         }
                         indirect_calls.append(record)
@@ -371,6 +392,10 @@ def diagnose_call_closure(executable, batch_paths, root_entries):
                 for call in function["direct_calls"]
             ),
             "indirect_calls": len(indirect_calls),
+            "indirect_iat_import_call_sites": sum(
+                call["destination_classification"] == "indirect_iat_import"
+                for call in indirect_calls
+            ),
             "unresolved_calls": len(unresolved_calls),
             "indirect_calls_without_candidates": sum(
                 call["destination_classification"] == "unresolved_destination"

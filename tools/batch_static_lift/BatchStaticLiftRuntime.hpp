@@ -14,6 +14,7 @@ struct BatchLiftState {
     std::uint32_t regs[8]{};
     std::uint32_t eflags = 0;
     std::uint32_t eip = 0;
+    std::uint32_t fs_base = 0;
 };
 
 inline bool batch_even_parity(std::uint8_t value) {
@@ -64,6 +65,37 @@ inline void batch_set_sub_flags(
     if (result == 0u) state.eflags |= 0x040u;
     if ((result & sign) != 0u) state.eflags |= 0x080u;
     if ((((left ^ right) & (left ^ result)) & sign) != 0u) state.eflags |= 0x800u;
+}
+
+inline void batch_set_sbb_flags(
+    BatchLiftState& state,
+    std::uint32_t left,
+    std::uint32_t right,
+    std::uint32_t borrow,
+    std::uint32_t result,
+    unsigned width) {
+    const std::uint32_t mask = batch_mask(width);
+    const std::uint32_t sign = std::uint32_t{1} << (width - 1u);
+    left &= mask;
+    right &= mask;
+    result &= mask;
+    const std::uint64_t subtrahend = static_cast<std::uint64_t>(right) + borrow;
+    const std::int64_t signed_left =
+        (left & sign) != 0u ? static_cast<std::int64_t>(left) -
+            (std::int64_t{1} << width) : left;
+    const std::int64_t signed_right =
+        (right & sign) != 0u ? static_cast<std::int64_t>(right) -
+            (std::int64_t{1} << width) : right;
+    const std::int64_t signed_result = signed_left - signed_right - borrow;
+    const std::int64_t signed_min = -(std::int64_t{1} << (width - 1u));
+    const std::int64_t signed_max = (std::int64_t{1} << (width - 1u)) - 1;
+    state.eflags &= ~0x8d5u;
+    if (static_cast<std::uint64_t>(left) < subtrahend) state.eflags |= 0x001u;
+    if (batch_even_parity(static_cast<std::uint8_t>(result))) state.eflags |= 0x004u;
+    if (((left ^ right ^ result) & 0x010u) != 0u) state.eflags |= 0x010u;
+    if (result == 0u) state.eflags |= 0x040u;
+    if ((result & sign) != 0u) state.eflags |= 0x080u;
+    if (signed_result < signed_min || signed_result > signed_max) state.eflags |= 0x800u;
 }
 
 inline void batch_set_logic_flags(

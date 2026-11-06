@@ -82,6 +82,24 @@ class StaticBatchLiftTests(unittest.TestCase):
                 }
             },
         )
+        import_stubs_with_slots, iat_slots = diagnostic.parse_import_thunks(
+            pe, include_iat_slots=True
+        )
+        self.assertEqual(import_stubs_with_slots, import_stubs)
+        self.assertEqual(iat_slots, {0x402050: "sample.dll!ImportedThing"})
+        self.assertEqual(
+            diagnostic._indirect_iat_symbol(
+                instruction(
+                    0x401010, "ff1550204000", "CALL",
+                    ("dword ptr [0x00402050]",), flow="CALL",
+                ),
+                iat_slots,
+            ),
+            {
+                "iat_address": "0x00402050",
+                "symbol": "sample.dll!ImportedThing",
+            },
+        )
         self.assertEqual(
             diagnostic._target_record(0x401000, {}, import_stubs, pe)[
                 "classification"
@@ -234,6 +252,28 @@ class StaticBatchLiftTests(unittest.TestCase):
             lifter.translate_function(body)
 
         self.assertIn("32-bit register destination", raised.exception.reasons[0])
+
+    def test_sbb_and_fs_memory_are_lowered_explicitly(self):
+        body = function([
+            instruction(0x401000, "1b03", "SBB", ("EAX", "EBX")),
+            instruction(
+                0x401002, "648b0500000000", "MOV",
+                ("EAX", "dword ptr FS:[0]"),
+            ),
+            instruction(
+                0x401009, "64892500000000", "MOV",
+                ("dword ptr FS:[0]", "ESP"),
+            ),
+            instruction(0x401010, "c3", "RET", flow="TERMINAL"),
+        ])
+
+        source, diagnostics = lifter.translate_function(body)
+
+        self.assertIn("batch_set_sbb_flags(state, t0a, t0b, t0c, t0r, 32u)", source)
+        self.assertIn("state.fs_base + 0x00000000u", source)
+        self.assertIn("memory.load32", source)
+        self.assertIn("memory.store32", source)
+        self.assertEqual([item["status"] for item in diagnostics], ["translated"] * 4)
 
     def test_conditional_branch_uses_exported_static_target(self):
         body = function([
