@@ -487,7 +487,7 @@ def function_call_targets(function, iat_imports=None):
 
 def translate_instruction(
     instruction, index, addresses, next_address, exported_function_entries=None,
-    iat_imports=None,
+    iat_imports=None, direct_import_aliases=None,
 ):
     mnemonic = instruction["mnemonic"].upper()
     operands_text = instruction.get("operands", [])
@@ -496,6 +496,24 @@ def translate_instruction(
     if "CALL" in flow or mnemonic in {"CALL", "CALLF"}:
         if next_address is None or next_address not in addresses:
             raise ValueError("CALL return address is not an exported instruction")
+        alias = (direct_import_aliases or {}).get(
+            parse_address(instruction["address"]))
+        if alias is not None:
+            target = direct_call_target(instruction)
+            expected_target, symbol, iat_address = alias
+            if target != expected_target:
+                raise ValueError(
+                    f"direct import alias target 0x{expected_target:08x} "
+                    f"differs from CALL target 0x{target:08x}")
+            return [
+                f"t{index}_call_status = batch_guest_import_call32("
+                f"memory, state, \"{symbol}\", "
+                f"0x{iat_address:08x}u, 0x{next_address:08x}u);",
+                f"if (t{index}_call_status != BatchLiftStatus::returned) "
+                f"return t{index}_call_status;",
+                f"if (state.eip != 0x{next_address:08x}u) "
+                "return BatchLiftStatus::invalid_control_flow;",
+            ]
         try:
             target = direct_call_target(instruction)
         except ValueError as direct_error:
@@ -1045,7 +1063,7 @@ def static_source(function, translated, call_targets, terminal_status=None):
 
 def translate_function(
     function, exported_function_entries=None, iat_imports=None,
-    stop_call_site=None, stop_call_sites=None,
+    stop_call_site=None, stop_call_sites=None, direct_import_aliases=None,
 ):
     reasons = []
     diagnostics = []
@@ -1139,6 +1157,7 @@ def translate_function(
                     next_address,
                     exported_function_entries,
                     iat_imports,
+                    direct_import_aliases,
                 )
             translated.append((instruction, body))
             diagnostics.append({
@@ -1177,13 +1196,15 @@ def translate_function(
         target
         for instruction in instructions
         if parse_address(instruction["address"]) not in stops
+        and parse_address(instruction["address"]) not in (direct_import_aliases or {})
         for target in function_call_targets({"instructions": [instruction]}, iat_imports)
     ]
     return static_source(function, translated, call_targets), diagnostics
 
 
 def translate_function_prefix(
-    function, stop_address, exported_function_entries=None
+    function, stop_address, exported_function_entries=None,
+    allow_branch_boundary=False,
 ):
     stop_address = (
         parse_address(stop_address) if isinstance(stop_address, str)
@@ -1246,7 +1267,12 @@ def translate_function_prefix(
                 "reason": "prefix boundary is not an exported instruction",
             }],
         )
-    if boundary.get("mnemonic", "").upper() not in {"CALL", "CALLF"}:
+    branch_boundary = (
+        allow_branch_boundary
+        and boundary.get("mnemonic", "").upper() in SUPPORTED_CONDITIONS
+    )
+    if (boundary.get("mnemonic", "").upper() not in {"CALL", "CALLF"}
+            and not branch_boundary):
         raise LiftRejected(
             ["prefix boundary must be a direct call instruction"],
             [{
@@ -1256,18 +1282,20 @@ def translate_function_prefix(
                 "reason": "prefix boundary must be a direct call instruction",
             }],
         )
-    try:
-        boundary_target = direct_call_target(boundary)
-    except (KeyError, TypeError, ValueError) as error:
-        raise LiftRejected(
-            [f"prefix boundary call is not a resolved direct call: {error}"],
-            [{
-                "address": boundary.get("address"),
-                "mnemonic": boundary.get("mnemonic", "CALL").upper(),
-                "status": "rejected",
-                "reason": str(error),
-            }],
-        ) from error
+    boundary_target = None
+    if not branch_boundary:
+        try:
+            boundary_target = direct_call_target(boundary)
+        except (KeyError, TypeError, ValueError) as error:
+            raise LiftRejected(
+                [f"prefix boundary call is not a resolved direct call: {error}"],
+                [{
+                    "address": boundary.get("address"),
+                    "mnemonic": boundary.get("mnemonic", "CALL").upper(),
+                    "status": "rejected",
+                    "reason": str(error),
+                }],
+            ) from error
 
     prefix_instructions = [
         by_address[address]
@@ -1389,9 +1417,12 @@ def translate_function_prefix(
         "mnemonic": boundary["mnemonic"].upper(),
         "status": "blocked",
         "reason": (
+            "prefix stops before conditional branch"
+            if branch_boundary else
             f"prefix stops before direct call to 0x{boundary_target:08x}"
         ),
-        "target": f"0x{boundary_target:08x}",
+        **({} if branch_boundary else {
+            "target": f"0x{boundary_target:08x}"}),
     })
     call_targets = [
         direct_call_target(instruction)

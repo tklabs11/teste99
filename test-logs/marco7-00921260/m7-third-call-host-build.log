@@ -1,0 +1,41 @@
+constructor_prefix_harness.cpp
+spore_00921260.cpp
+spore_009212c0.cpp
+spore_00921300.cpp
+spore_00921340.cpp
+spore_00921360.cpp
+spore_00a221b0.cpp
+test-logs\marco7-00921260\generated-constructor-third-call-v8\spore_00a221b0.cpp(31): warning C4189: 't30_call_status': variável local é inicializada mas não referenciada
+test-logs\marco7-00921260\generated-constructor-third-call-v8\spore_00a221b0.cpp(24): warning C4189: 't22_call_status': variável local é inicializada mas não referenciada
+spore_00a23570.cpp
+spore_00a2a210_prefix.cpp
+spore_00a33600_prefix.cpp
+indexed_memory_store_test.cpp
+spore_00921e00_arm64.cpp
+spore_00921e60_arm64.cpp
+spore_00921f00_arm64.cpp
+spore_00922150_arm64.cpp
+spore_009222a0_arm64.cpp
+spore_009225d0_arm64.cpp
+spore_00922620_arm64.cpp
+spore_00922820_arm64.cpp
+spore_00a0fdf0_arm64.cpp
+Gerando Código...
+C:\Users\wesll\AndroidStudioProjects\SporeAndroid\test-logs\marco7-00921260\generated-constructor-third-call-v8\spore_00a221b0.cpp(124) : warning C4702: código inacessível
+C:\Users\wesll\AndroidStudioProjects\SporeAndroid\test-logs\marco7-00921260\generated-constructor-third-call-v8\spore_00a221b0.cpp(155) : warning C4702: código inacessível
+C:\Users\wesll\AndroidStudioProjects\SporeAndroid\test-logs\marco7-00921260\generated-constructor-third-call-v8\spore_00a221b0.cpp(162) : warning C4702: código inacessível
+C:\Users\wesll\AndroidStudioProjects\SporeAndroid\test-logs\marco7-00921260\generated-constructor-third-call-v8\spore_00a221b0.cpp(164) : warning C4702: código inacessível
+C:\Users\wesll\AndroidStudioProjects\SporeAndroid\test-logs\marco7-00921260\generated-constructor-third-call-v8\spore_00a221b0.cpp(165) : warning C4702: código inacessível
+C:\Users\wesll\AndroidStudioProjects\SporeAndroid\test-logs\marco7-00921260\generated-constructor-third-call-v8\spore_00a221b0.cpp(171) : warning C4702: código inacessível
+C:\Users\wesll\AndroidStudioProjects\SporeAndroid\test-logs\marco7-00921260\generated-constructor-third-call-v8\spore_00a221b0.cpp(172) : warning C4702: código inacessível
+C:\Users\wesll\AndroidStudioProjects\SporeAndroid\test-logs\marco7-00921260\generated-constructor-third-call-v8\spore_00a221b0.cpp(175) : warning C4702: código inacessível
+C:\Users\wesll\AndroidStudioProjects\SporeAndroid\test-logs\marco7-00921260\generated-constructor-third-call-v8\spore_00a221b0.cpp(176) : warning C4702: código inacessível
+Compilando...
+spore_00a247f0_arm64.cpp
+spore_011e5d80_arm64.cpp
+spore_011e64f0_arm64.cpp
+spore_011e8b20_arm64.cpp
+spore_011ecd90_arm64.cpp
+spore_011ecdd0_arm64.cpp
+spore_011ecde0_arm64.cpp
+Gerando Código...

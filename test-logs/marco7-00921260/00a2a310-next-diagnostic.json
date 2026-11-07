@@ -1,0 +1,416 @@
+{
+  "schema": "spore-static-lift-call-diagnostic-v1",
+  "source_sha256": "6aec99cb2dc7fd08851a1718e92a60f359fb3fccca3b244a890ae07e93cbe59b",
+  "batch_exports": [
+    "C:\\SporeAnalysis\\spore_batch_all_parts\\spore_batch_all_0041.json"
+  ],
+  "root_entries": [
+    "0x00a2a310"
+  ],
+  "reachable_exported_function_count": 4,
+  "import_thunk_count_in_pe": 118,
+  "functions": [
+    {
+      "address": "0x00a221b0",
+      "name": "FUN_00a221b0",
+      "batch": "C:\\SporeAnalysis\\spore_batch_all_parts\\spore_batch_all_0041.json",
+      "instruction_count": 37,
+      "verified_byte_count": 98,
+      "byte_validation_error": null,
+      "translation_reasons": [
+        "0x00a221e9: direct call target 0x00f473a0 is not in the exported function set",
+        "0x00a221fc: direct call target 0x011e073e is not in the exported function set"
+      ],
+      "translated_instruction_counts": {
+        "ADD": 4,
+        "CMP": 1,
+        "JMP": 2,
+        "JNZ": 1,
+        "JZ": 1,
+        "LEA": 1,
+        "MOV": 10,
+        "POP": 2,
+        "PUSH": 11,
+        "RET": 1,
+        "TEST": 1
+      },
+      "direct_calls": [
+        {
+          "site": "0x00a221e9",
+          "mnemonic": "CALL",
+          "operand": [
+            "0x00f473a0"
+          ],
+          "target": {
+            "address": "0x00f473a0",
+            "classification": "missing_internal_function",
+            "section": ".text"
+          }
+        },
+        {
+          "site": "0x00a221fc",
+          "mnemonic": "CALL",
+          "operand": [
+            "0x011e073e"
+          ],
+          "target": {
+            "address": "0x011e073e",
+            "classification": "missing_internal_function",
+            "section": ".text"
+          }
+        }
+      ]
+    },
+    {
+      "address": "0x00a22220",
+      "name": "FUN_00a22220",
+      "batch": "C:\\SporeAnalysis\\spore_batch_all_parts\\spore_batch_all_0041.json",
+      "instruction_count": 64,
+      "verified_byte_count": 159,
+      "byte_validation_error": null,
+      "translation_reasons": [
+        "0x00a222aa: direct call target 0x00f47380 is not in the exported function set"
+      ],
+      "translated_instruction_counts": {
+        "ADD": 1,
+        "CALL": 1,
+        "CMP": 6,
+        "DIV": 1,
+        "INC": 1,
+        "JBE": 2,
+        "JC": 2,
+        "JNC": 1,
+        "JNZ": 1,
+        "JZ": 2,
+        "LEA": 2,
+        "MOV": 23,
+        "POP": 8,
+        "PUSH": 6,
+        "RET": 2,
+        "TEST": 2,
+        "XOR": 2
+      },
+      "direct_calls": [
+        {
+          "site": "0x00a2222b",
+          "mnemonic": "CALL",
+          "operand": [
+            "0x00a221b0"
+          ],
+          "target": {
+            "address": "0x00a221b0",
+            "classification": "exported_function"
+          }
+        },
+        {
+          "site": "0x00a222aa",
+          "mnemonic": "CALL",
+          "operand": [
+            "0x00f47380"
+          ],
+          "target": {
+            "address": "0x00f47380",
+            "classification": "missing_internal_function",
+            "section": ".text"
+          }
+        }
+      ]
+    },
+    {
+      "address": "0x00a23620",
+      "name": "FUN_00a23620",
+      "batch": "C:\\SporeAnalysis\\spore_batch_all_parts\\spore_batch_all_0041.json",
+      "instruction_count": 60,
+      "verified_byte_count": 174,
+      "byte_validation_error": null,
+      "translation_reasons": [
+        "0x00a23665: direct call target 0x00921260 is not in the exported function set",
+        "0x00a236b2: direct call target 0x00921360 is not in the exported function set"
+      ],
+      "translated_instruction_counts": {
+        "ADD": 1,
+        "CALL": 1,
+        "CMP": 1,
+        "JNC": 1,
+        "LEA": 2,
+        "MOV": 25,
+        "MOVSS": 4,
+        "POP": 8,
+        "PUSH": 11,
+        "RET": 2,
+        "XOR": 2
+      },
+      "direct_calls": [
+        {
+          "site": "0x00a23665",
+          "mnemonic": "CALL",
+          "operand": [
+            "0x00921260"
+          ],
+          "target": {
+            "address": "0x00921260",
+            "classification": "missing_internal_function",
+            "section": ".text"
+          }
+        },
+        {
+          "site": "0x00a236b2",
+          "mnemonic": "CALL",
+          "operand": [
+            "0x00921360"
+          ],
+          "target": {
+            "address": "0x00921360",
+            "classification": "missing_internal_function",
+            "section": ".text"
+          }
+        },
+        {
+          "site": "0x00a236bd",
+          "mnemonic": "CALL",
+          "operand": [
+            "0x00a221b0"
+          ],
+          "target": {
+            "address": "0x00a221b0",
+            "classification": "exported_function"
+          }
+        }
+      ]
+    },
+    {
+      "address": "0x00a2a310",
+      "name": "FUN_00a2a310",
+      "batch": "C:\\SporeAnalysis\\spore_batch_all_parts\\spore_batch_all_0041.json",
+      "instruction_count": 71,
+      "verified_byte_count": 253,
+      "byte_validation_error": null,
+      "translation_reasons": [
+        "0x00a2a34e: direct call target 0x00921260 is not in the exported function set",
+        "0x00a2a375: direct call target 0x00921340 is not in the exported function set",
+        "0x00a2a3e6: direct call target 0x009213c0 is not in the exported function set"
+      ],
+      "translated_instruction_counts": {
+        "ADD": 3,
+        "CALL": 2,
+        "CMP": 1,
+        "JBE": 1,
+        "LEA": 8,
+        "MOV": 24,
+        "MOVSS": 4,
+        "POP": 2,
+        "PUSH": 20,
+        "RET": 1,
+        "SUB": 1,
+        "XOR": 1
+      },
+      "direct_calls": [
+        {
+          "site": "0x00a2a34e",
+          "mnemonic": "CALL",
+          "operand": [
+            "0x00921260"
+          ],
+          "target": {
+            "address": "0x00921260",
+            "classification": "missing_internal_function",
+            "section": ".text"
+          }
+        },
+        {
+          "site": "0x00a2a375",
+          "mnemonic": "CALL",
+          "operand": [
+            "0x00921340"
+          ],
+          "target": {
+            "address": "0x00921340",
+            "classification": "missing_internal_function",
+            "section": ".text"
+          }
+        },
+        {
+          "site": "0x00a2a39e",
+          "mnemonic": "CALL",
+          "operand": [
+            "0x00a23620"
+          ],
+          "target": {
+            "address": "0x00a23620",
+            "classification": "exported_function"
+          }
+        },
+        {
+          "site": "0x00a2a3e6",
+          "mnemonic": "CALL",
+          "operand": [
+            "0x009213c0"
+          ],
+          "target": {
+            "address": "0x009213c0",
+            "classification": "missing_internal_function",
+            "section": ".text"
+          }
+        },
+        {
+          "site": "0x00a2a3f3",
+          "mnemonic": "CALL",
+          "operand": [
+            "0x00a22220"
+          ],
+          "target": {
+            "address": "0x00a22220",
+            "classification": "exported_function"
+          }
+        }
+      ]
+    }
+  ],
+  "direct_call_edges": [
+    {
+      "from": "0x00a2a310",
+      "to": "0x00a23620",
+      "kind": "direct",
+      "site": "0x00a2a39e"
+    },
+    {
+      "from": "0x00a2a310",
+      "to": "0x00a22220",
+      "kind": "direct",
+      "site": "0x00a2a3f3"
+    },
+    {
+      "from": "0x00a22220",
+      "to": "0x00a221b0",
+      "kind": "direct",
+      "site": "0x00a2222b"
+    },
+    {
+      "from": "0x00a23620",
+      "to": "0x00a221b0",
+      "kind": "direct",
+      "site": "0x00a236bd"
+    }
+  ],
+  "missing_dependencies": [
+    {
+      "address": "0x00921260",
+      "classification": "missing_internal_function",
+      "section": ".text",
+      "referenced_by": [
+        {
+          "function": "0x00a2a310",
+          "site": "0x00a2a34e"
+        },
+        {
+          "function": "0x00a23620",
+          "site": "0x00a23665"
+        }
+      ]
+    },
+    {
+      "address": "0x00921340",
+      "classification": "missing_internal_function",
+      "section": ".text",
+      "referenced_by": [
+        {
+          "function": "0x00a2a310",
+          "site": "0x00a2a375"
+        }
+      ]
+    },
+    {
+      "address": "0x00921360",
+      "classification": "missing_internal_function",
+      "section": ".text",
+      "referenced_by": [
+        {
+          "function": "0x00a23620",
+          "site": "0x00a236b2"
+        }
+      ]
+    },
+    {
+      "address": "0x009213c0",
+      "classification": "missing_internal_function",
+      "section": ".text",
+      "referenced_by": [
+        {
+          "function": "0x00a2a310",
+          "site": "0x00a2a3e6"
+        }
+      ]
+    },
+    {
+      "address": "0x00f47380",
+      "classification": "missing_internal_function",
+      "section": ".text",
+      "referenced_by": [
+        {
+          "function": "0x00a22220",
+          "site": "0x00a222aa"
+        }
+      ]
+    },
+    {
+      "address": "0x00f473a0",
+      "classification": "missing_internal_function",
+      "section": ".text",
+      "referenced_by": [
+        {
+          "function": "0x00a221b0",
+          "site": "0x00a221e9"
+        }
+      ]
+    },
+    {
+      "address": "0x011e073e",
+      "classification": "missing_internal_function",
+      "section": ".text",
+      "referenced_by": [
+        {
+          "function": "0x00a221b0",
+          "site": "0x00a221fc"
+        }
+      ]
+    }
+  ],
+  "indirect_calls": [],
+  "unresolved_calls": [],
+  "unsupported_instructions": [],
+  "unsupported_instruction_groups": [],
+  "invalid_functions": [],
+  "unsupported_instruction_class_counts": {},
+  "translated_instruction_class_counts": {
+    "other": 216,
+    "sse_scalar_data_transfer": 8
+  },
+  "counts": {
+    "missing_internal_functions": 7,
+    "import_thunk_call_sites": 0,
+    "indirect_calls": 0,
+    "indirect_iat_import_call_sites": 0,
+    "unresolved_calls": 0,
+    "indirect_calls_without_candidates": 0,
+    "unsupported_instructions": 0,
+    "invalid_functions": 0
+  },
+  "shortest_direct_paths_from_roots": {
+    "0x00a2a310": [
+      "0x00a2a310"
+    ],
+    "0x00a22220": [
+      "0x00a2a310",
+      "0x00a22220"
+    ],
+    "0x00a23620": [
+      "0x00a2a310",
+      "0x00a23620"
+    ],
+    "0x00a221b0": [
+      "0x00a2a310",
+      "0x00a22220",
+      "0x00a221b0"
+    ]
+  }
+}

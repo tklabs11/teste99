@@ -1,0 +1,3 @@
+
+    topResumedActivity=ActivityRecord{95ade41 u0 dev.sporeport.cellstage/.MainActivity t39}
+

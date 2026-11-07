@@ -1,0 +1,8 @@
+PROCESS_CREATED pid=12460 timeout_ms=30000 through_return=0
+IMAGE_BASE=0x00400000
+BREAKPOINT_TARGET=0x011e073e bytes=e9d10f22ff patched=1
+INITIAL_BREAKPOINT address=0x77b991a8
+THUNK_ENTRY_REACHED thread=14684 eip=0x011e073f eax=0x046fad40 ebx=0x00000000 ecx=0x046fad10 edx=0x40000060 esi=0x046fad10 edi=0xee9b7413 ebp=0x001afeec esp=0x001afe90 eflags=0x00000246
+STACK_TOP= 0092789a 046fad40 00000000 00000400 046facf8 00000000 00f474c7 00000000
+TEST_PROCESS_STOP reason=first_thunk_entry
+RESULT reached=1 return_armed=0 return_reached=0 patched=1 exited=0 events=55

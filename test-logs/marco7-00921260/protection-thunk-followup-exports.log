@@ -1,0 +1,4 @@
+FILE=C:\Windows\SysWOW64\kernel32.dll
+SHA256=7f04765684de5ecb702afb5c4cfbfde12a4e61a125389ee23166aa66430e62f0
+RVA=0x0001ca70 EXPORT=['IsBadReadPtr']
+RVA=0x00032310 EXPORT=['LoadLibraryA']

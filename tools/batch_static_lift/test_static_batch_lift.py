@@ -37,6 +37,26 @@ def function(instructions):
 
 
 class StaticBatchLiftTests(unittest.TestCase):
+    def test_verified_direct_call_alias_uses_guest_import_and_checks_target(self):
+        body = function([
+            instruction(0x401000, "e8fb0f0000", "CALL", ("0x00402000",),
+                        flow="UNCONDITIONAL_CALL", flows_to=("0x00402000",),
+                        references=({"to": "0x00402000", "is_call": True},)),
+            instruction(0x401005, "c3", "RET", flow="TERMINATOR"),
+        ])
+        aliases = {0x401000: (0x402000, "MSVCR90.dll!memset", 0x403000)}
+        source, diagnostics = lifter.translate_function(
+            body, set(), direct_import_aliases=aliases)
+        self.assertIn('"MSVCR90.dll!memset", 0x00403000u, 0x00401005u', source)
+        self.assertNotIn("spore_lift_00402000", source)
+        self.assertEqual([item["status"] for item in diagnostics],
+                         ["translated", "translated"])
+        with self.assertRaises(lifter.LiftRejected) as raised:
+            lifter.translate_function(
+                body, set(), direct_import_aliases={
+                    0x401000: (0x402001, "MSVCR90.dll!memset", 0x403000)})
+        self.assertIn("differs from CALL target", raised.exception.reasons[0])
+
     def test_cfg_call_boundary_preserves_earlier_branch_and_stops_before_call(self):
         body = function([
             instruction(0x401000, "83f802", "CMP", ("EAX", "0x2")),
@@ -203,6 +223,28 @@ class StaticBatchLiftTests(unittest.TestCase):
             lifter.translate_function_prefix(body, 0x401005)
 
         self.assertIn("direct call instruction", raised.exception.reasons[0])
+
+    def test_prefix_can_stop_before_branch_after_verified_call(self):
+        body = function([
+            instruction(
+                0x401000, "e8fb0f0000", "CALL", ("0x00402000",),
+                flow="UNCONDITIONAL_CALL",
+                flows_to=("0x00402000",),
+                references=({"to": "0x00402000", "is_call": True},),
+            ),
+            instruction(0x401005, "3bc1", "CMP", ("EAX", "ECX")),
+            instruction(
+                0x401007, "7602", "JBE", ("0x0040100b",),
+                flow="CONDITIONAL_JUMP",
+            ),
+        ])
+        source, diagnostics = lifter.translate_function_prefix(
+            body, 0x401007, {0x402000}, allow_branch_boundary=True,
+        )
+        self.assertIn("spore_lift_00402000(memory, state)", source)
+        self.assertIn("state.eip = 0x00401007u;", source)
+        self.assertEqual(diagnostics[-1]["mnemonic"], "JBE")
+        self.assertNotIn("target", diagnostics[-1])
 
     def test_prefix_rejects_control_flow_before_boundary(self):
         body = function([

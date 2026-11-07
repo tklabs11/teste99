@@ -39,7 +39,31 @@ def read32(uc, address):
 def run(path: Path, max_instructions: int, probe_peb: bool = False,
         probe_module: bool = False, probe_dll: Path | None = None,
         probe_ntdll: Path | None = None, probe_post_limit: int = 10000,
-        probe_missing_file: bool = False, probe_second_alloc: bool = False):
+        probe_missing_file: bool = False, probe_second_alloc: bool = False,
+        probe_after_second_alloc: bool = False,
+        dump_rtl_input: Path | None = None,
+        probe_rtl_output: Path | None = None,
+        probe_fixed_alloc_failure: bool = False,
+        probe_fallback_alloc_success: bool = False,
+        probe_small_alloc_success: bool = False,
+        probe_read_check: bool = False,
+        probe_user32: Path | None = None):
+    if probe_user32 is not None and not probe_read_check:
+        raise ValueError("USER32 export probe requires read check fixture")
+    if probe_read_check and not probe_small_alloc_success:
+        raise ValueError("read check probe requires small allocation fixture")
+    if probe_small_alloc_success and not probe_fallback_alloc_success:
+        raise ValueError("small allocation probe requires fallback allocation fixture")
+    if probe_fallback_alloc_success and not probe_fixed_alloc_failure:
+        raise ValueError("fallback allocation probe requires fixed-address failure fixture")
+    if probe_fixed_alloc_failure and probe_rtl_output is None:
+        raise ValueError("fixed-address allocation probe requires RTL result fixture")
+    if probe_rtl_output is not None and not probe_after_second_alloc:
+        raise ValueError("RTL result fixture requires post-second-allocation probe")
+    if dump_rtl_input is not None and not probe_after_second_alloc:
+        raise ValueError("RTL input dump requires post-second-allocation probe")
+    if probe_after_second_alloc and not probe_second_alloc:
+        raise ValueError("post-second-allocation probe requires first RW allocation fixture")
     if probe_second_alloc and not probe_missing_file:
         raise ValueError("second allocation probe requires file-failure probe")
     if probe_missing_file and probe_ntdll is None:
@@ -90,6 +114,9 @@ def run(path: Path, max_instructions: int, probe_peb: bool = False,
     ntdll_base = 0x52000000
     ntdll_size = 0
     ntdll_digest = None
+    user32_base = 0x53000000
+    user32_size = 0
+    user32_digest = None
     if probe_dll is not None:
         dll_file = probe_dll.read_bytes()
         dll_digest = hashlib.sha256(dll_file).hexdigest()
@@ -116,8 +143,34 @@ def run(path: Path, max_instructions: int, probe_peb: bool = False,
             if raw_size:
                 uc.mem_write(ntdll_base + rva,
                              ntdll_file[offset:offset + raw_size])
+    if probe_user32 is not None:
+        user32_file = probe_user32.read_bytes()
+        user32_digest = hashlib.sha256(user32_file).hexdigest()
+        user32_pe = lifter.parse_pe(probe_user32)
+        user32_header = struct.unpack_from("<I", user32_file, 0x3C)[0] + 24
+        user32_size = struct.unpack_from("<I", user32_file, user32_header + 56)[0]
+        user32_header_size = struct.unpack_from("<I", user32_file, user32_header + 60)[0]
+        uc.mem_map(user32_base, (user32_size + 0xFFF) & ~0xFFF)
+        uc.mem_write(user32_base, user32_file[:user32_header_size])
+        for _, rva, _, offset, raw_size in user32_pe[2]:
+            if raw_size:
+                uc.mem_write(user32_base + rva,
+                             user32_file[offset:offset + raw_size])
     if probe_second_alloc:
         uc.mem_map(0x32000000, 0x60000)
+    if probe_after_second_alloc:
+        uc.mem_map(0x33000000, 0x11A000)
+    if probe_fallback_alloc_success:
+        uc.mem_map(0x34000000, 0x85000)
+    if probe_small_alloc_success:
+        uc.mem_map(0x35000000, 0x1000)
+    rtl_result = None
+    if probe_rtl_output is not None:
+        rtl_result = probe_rtl_output.read_bytes()
+        if (len(rtl_result) != 0x80C00 or
+                hashlib.sha256(rtl_result).hexdigest() !=
+                "bfb1830574c58bea1674e3735174c52155c1af1cc134880581b294fad189dd36"):
+            raise ValueError("RTL result fixture hash or size mismatch")
     if probe_peb:
         # Unicorn uses a zero FS base here. These are synthetic pointers only;
         # no Windows loader state or module list is being modeled.
@@ -173,14 +226,19 @@ def run(path: Path, max_instructions: int, probe_peb: bool = False,
     stats = {"instructions": 0, "virtual_alloc_calls": 0, "after_peb": None,
              "probe_limit": False, "dll_entry": None, "candidate_name": None,
              "dll_reads": 0, "dll_read_sites": [], "dll_stack": None,
-             "dll_wide_path": None, "file_stub_calls": 0,
-             "second_alloc_calls": 0}
+             "dll_wide_path": None, "dll_ascii_path": None,
+             "file_stub_calls": 0,
+             "second_alloc_calls": 0, "third_alloc_calls": 0,
+             "rtl_result_calls": 0, "fixed_alloc_calls": 0,
+             "fallback_alloc_calls": 0, "small_alloc_calls": 0,
+             "read_check_calls": 0, "user32_load_calls": 0}
 
     def on_code(emu, address, size, _):
         stats["instructions"] += 1
         recent.append(address)
         if ((probe_dll is not None and dll_base <= address < dll_base + dll_size)
-                or (probe_ntdll is not None and ntdll_base <= address < ntdll_base + ntdll_size)):
+                or (probe_ntdll is not None and ntdll_base <= address < ntdll_base + ntdll_size)
+                or (probe_user32 is not None and user32_base <= address < user32_base + user32_size)):
             stats["dll_entry"] = address
             stack = emu.reg_read(UC_X86_REG_ESP)
             stats["dll_stack"] = [read32(emu, stack + 4 * index)
@@ -188,6 +246,9 @@ def run(path: Path, max_instructions: int, probe_peb: bool = False,
             pointer = stats["dll_stack"][1]
             try:
                 raw = bytes(emu.mem_read(pointer, 512))
+                if address == 0x51032310:
+                    stats["dll_ascii_path"] = raw.split(b"\0", 1)[0][:256].decode(
+                        "ascii", "backslashreplace")
                 chars = []
                 for offset in range(0, len(raw), 2):
                     codepoint = int.from_bytes(raw[offset:offset + 2], "little")
@@ -197,6 +258,8 @@ def run(path: Path, max_instructions: int, probe_peb: bool = False,
                 stats["dll_wide_path"] = "".join(chars)
             except UcError:
                 stats["dll_wide_path"] = "unmapped"
+                if address == 0x51032310:
+                    stats["dll_ascii_path"] = "unmapped"
             if (probe_missing_file and address == 0x5101EA50 and
                     stats["dll_wide_path"] == "C:\\Mirc\\mirc.ini" and
                     stats["dll_stack"][2:8] ==
@@ -213,6 +276,77 @@ def run(path: Path, max_instructions: int, probe_peb: bool = False,
                 stats["second_alloc_calls"] += 1
                 emu.reg_write(UC_X86_REG_EAX, 0x32000000)
                 emu.reg_write(UC_X86_REG_ESP, stack + 20)
+                emu.reg_write(UC_X86_REG_EIP, stats["dll_stack"][0])
+                stats["dll_entry"] = None
+                return
+            if (probe_after_second_alloc and address == 0x510165F0 and
+                    stats["dll_stack"][1:5] ==
+                    [0, 0x1198C8, 0x3000, 0x4]):
+                stats["third_alloc_calls"] += 1
+                emu.reg_write(UC_X86_REG_EAX, 0x33000000)
+                emu.reg_write(UC_X86_REG_ESP, stack + 20)
+                emu.reg_write(UC_X86_REG_EIP, stats["dll_stack"][0])
+                stats["dll_entry"] = None
+                return
+            if (rtl_result is not None and address == 0x520F0510 and
+                    stats["dll_stack"][1:6] ==
+                    [0x102, 0x33000000, 0x1198C8, 0x32000000, 0x5DD98]):
+                compressed = bytes(emu.mem_read(0x32000000, 0x5DD98))
+                if hashlib.sha256(compressed).hexdigest() != (
+                        "5ee782dd0f80d0bbce6cb8997644bdfa15ea162c3ca80edd3fb61b2ac03c1e95"):
+                    raise ValueError("RTL input changed before result fixture")
+                stats["rtl_result_calls"] += 1
+                emu.mem_write(0x33000000, rtl_result)
+                emu.mem_write(stats["dll_stack"][6], u32(len(rtl_result)))
+                emu.reg_write(UC_X86_REG_EAX, 0)
+                emu.reg_write(UC_X86_REG_ESP, stack + 28)
+                emu.reg_write(UC_X86_REG_EIP, stats["dll_stack"][0])
+                stats["dll_entry"] = None
+                return
+            if (probe_fixed_alloc_failure and address == 0x510165F0 and
+                    stats["dll_stack"][1:5] ==
+                    [0x10000000, 0x85000, 0x1000, 0x4]):
+                stats["fixed_alloc_calls"] += 1
+                emu.reg_write(UC_X86_REG_EAX, 0)
+                emu.reg_write(UC_X86_REG_ESP, stack + 20)
+                emu.reg_write(UC_X86_REG_EIP, stats["dll_stack"][0])
+                stats["dll_entry"] = None
+                return
+            if (probe_fallback_alloc_success and address == 0x510165F0 and
+                    stats["dll_stack"][1:5] ==
+                    [0, 0x85000, 0x1000, 0x4]):
+                stats["fallback_alloc_calls"] += 1
+                emu.reg_write(UC_X86_REG_EAX, 0x34000000)
+                emu.reg_write(UC_X86_REG_ESP, stack + 20)
+                emu.reg_write(UC_X86_REG_EIP, stats["dll_stack"][0])
+                stats["dll_entry"] = None
+                return
+            if (probe_small_alloc_success and address == 0x510165F0 and
+                    stats["dll_stack"][1:5] ==
+                    [0, 0x14, 0x3000, 0x4]):
+                stats["small_alloc_calls"] += 1
+                emu.reg_write(UC_X86_REG_EAX, 0x35000000)
+                emu.reg_write(UC_X86_REG_ESP, stack + 20)
+                emu.reg_write(UC_X86_REG_EIP, stats["dll_stack"][0])
+                stats["dll_entry"] = None
+                return
+            if (probe_read_check and address == 0x5101CA70 and
+                    stats["dll_stack"][1:3] == [0x340755A0, 0x14] and
+                    stats["read_check_calls"] == 0):
+                # The whole range belongs to the explicit readable allocation.
+                emu.mem_read(0x340755A0, 0x14)
+                stats["read_check_calls"] += 1
+                emu.reg_write(UC_X86_REG_EAX, 0)
+                emu.reg_write(UC_X86_REG_ESP, stack + 12)
+                emu.reg_write(UC_X86_REG_EIP, stats["dll_stack"][0])
+                stats["dll_entry"] = None
+                return
+            if (probe_user32 is not None and address == 0x51032310 and
+                    stats["dll_ascii_path"] == "USER32.dll" and
+                    stats["user32_load_calls"] == 0):
+                stats["user32_load_calls"] += 1
+                emu.reg_write(UC_X86_REG_EAX, user32_base)
+                emu.reg_write(UC_X86_REG_ESP, stack + 8)
                 emu.reg_write(UC_X86_REG_EIP, stats["dll_stack"][0])
                 stats["dll_entry"] = None
                 return
@@ -262,7 +396,8 @@ def run(path: Path, max_instructions: int, probe_peb: bool = False,
 
     def on_read(emu, access, address, size, value, _):
         if ((probe_dll is not None and dll_base <= address < dll_base + dll_size)
-                or (probe_ntdll is not None and ntdll_base <= address < ntdll_base + ntdll_size)):
+                or (probe_ntdll is not None and ntdll_base <= address < ntdll_base + ntdll_size)
+                or (probe_user32 is not None and user32_base <= address < user32_base + user32_size)):
             stats["dll_reads"] += 1
             if len(stats["dll_read_sites"]) < 16:
                 stats["dll_read_sites"].append(
@@ -276,7 +411,8 @@ def run(path: Path, max_instructions: int, probe_peb: bool = False,
     error = None
     try:
         uc.emu_start(ENTRY, RETURN_SENTINEL,
-                     timeout=60_000_000 if probe_missing_file else 20_000_000,
+                     timeout=(120_000_000 if probe_after_second_alloc else
+                              60_000_000 if probe_missing_file else 20_000_000),
                      count=max_instructions)
     except (UcError, ValueError) as exc:
         error = str(exc)
@@ -299,6 +435,29 @@ def run(path: Path, max_instructions: int, probe_peb: bool = False,
     if probe_second_alloc:
         print("SECOND_ALLOC_PROBE=explicit fixture: VirtualAlloc(0,0x5dd98,0x3000,0x4) "
               "returns 0x32000000; not Windows DLL execution")
+    if probe_after_second_alloc:
+        print("THIRD_ALLOC_PROBE=explicit fixture: VirtualAlloc(0,0x1198c8,0x3000,0x4) "
+              "returns 0x33000000; not Windows DLL execution")
+    if rtl_result is not None:
+        print("RTL_RESULT_PROBE=recorded Windows x86 RtlDecompressBuffer output; "
+              f"file={probe_rtl_output} sha256={hashlib.sha256(rtl_result).hexdigest()}; "
+              "synthetic loader and allocation state remain")
+    if probe_fixed_alloc_failure:
+        print("FIXED_ALLOC_FAILURE_PROBE=explicit fixture: "
+              "VirtualAlloc(0x10000000,0x85000,0x1000,0x4) returns zero")
+    if probe_fallback_alloc_success:
+        print("FALLBACK_ALLOC_SUCCESS_PROBE=explicit fixture: "
+              "VirtualAlloc(0,0x85000,0x1000,0x4) returns 0x34000000")
+    if probe_small_alloc_success:
+        print("SMALL_ALLOC_SUCCESS_PROBE=explicit fixture: "
+              "VirtualAlloc(0,0x14,0x3000,0x4) returns 0x35000000")
+    if probe_read_check:
+        print("READ_CHECK_PROBE=explicit fixture: "
+              "IsBadReadPtr(0x340755a0,0x14) returns zero for mapped readable range")
+    if probe_user32 is not None:
+        print(f"USER32_LOAD_PROBE=explicit fixture: LoadLibraryA('USER32.dll') "
+              f"returns 0x{user32_base:08x}; image={probe_user32} "
+              f"sha256={user32_digest}; export data only")
     for ret, requested, length, flags, protection in events:
         print(f"VIRTUALALLOC ret=0x{ret:08x} address=0x{requested:08x} "
               f"size=0x{length:x} flags=0x{flags:x} protect=0x{protection:x}")
@@ -314,10 +473,26 @@ def run(path: Path, max_instructions: int, probe_peb: bool = False,
                     f"0x{value:08x}" for value in stats["dll_stack"]
                 ))
                 print(f"MODULE_PROBE_WIDE_PATH={stats['dll_wide_path']!r}")
+            if stats["dll_ascii_path"] is not None:
+                print(f"MODULE_PROBE_ASCII_PATH={stats['dll_ascii_path']!r}")
             if probe_missing_file:
                 print(f"FILE_PROBE_STUB_CALLS={stats['file_stub_calls']}")
             if probe_second_alloc:
                 print(f"SECOND_ALLOC_PROBE_STUB_CALLS={stats['second_alloc_calls']}")
+            if probe_after_second_alloc:
+                print(f"THIRD_ALLOC_PROBE_STUB_CALLS={stats['third_alloc_calls']}")
+            if rtl_result is not None:
+                print(f"RTL_RESULT_PROBE_STUB_CALLS={stats['rtl_result_calls']}")
+            if probe_fixed_alloc_failure:
+                print(f"FIXED_ALLOC_FAILURE_STUB_CALLS={stats['fixed_alloc_calls']}")
+            if probe_fallback_alloc_success:
+                print(f"FALLBACK_ALLOC_SUCCESS_STUB_CALLS={stats['fallback_alloc_calls']}")
+            if probe_small_alloc_success:
+                print(f"SMALL_ALLOC_SUCCESS_STUB_CALLS={stats['small_alloc_calls']}")
+            if probe_read_check:
+                print(f"READ_CHECK_STUB_CALLS={stats['read_check_calls']}")
+            if probe_user32 is not None:
+                print(f"USER32_LOAD_STUB_CALLS={stats['user32_load_calls']}")
             print(f"MODULE_PROBE_DLL_READS={stats['dll_reads']} " + ",".join(
                 f"0x{site:08x}->0x{address:08x}:{size}"
                 for site, address, size in stats["dll_read_sites"]
@@ -350,6 +525,23 @@ def run(path: Path, max_instructions: int, probe_peb: bool = False,
     print(f"FINAL_EIP=0x{uc.reg_read(UC_X86_REG_EIP):08x} "
           f"EAX=0x{uc.reg_read(UC_X86_REG_EAX):08x} "
           f"ESP=0x{uc.reg_read(UC_X86_REG_ESP):08x} ERROR={error or 'none'}")
+    if probe_after_second_alloc and stats["dll_entry"] == 0x520F0510:
+        call = stats["dll_stack"]
+        if call is None or call[1:6] != [0x102, 0x33000000, 0x1198C8,
+                                         0x32000000, 0x5DD98]:
+            raise ValueError("RtlDecompressBuffer call differs from bounded probe")
+        compressed = bytes(uc.mem_read(0x32000000, 0x5DD98))
+        print("RTL_DECOMPRESS_ARGS=format:0x102 output:0x33000000 "
+              "output_size:0x1198c8 input:0x32000000 input_size:0x5dd98 "
+              f"final_size_ptr:0x{call[6]:08x}")
+        print(f"RTL_COMPRESSED_SHA256={hashlib.sha256(compressed).hexdigest()} "
+              f"nonzero_bytes={sum(byte != 0 for byte in compressed)} "
+              f"head={compressed[:32].hex()}")
+        if dump_rtl_input is not None:
+            dump_rtl_input.parent.mkdir(parents=True, exist_ok=True)
+            with dump_rtl_input.open("xb") as output:
+                output.write(compressed)
+            print(f"RTL_COMPRESSED_DUMP={dump_rtl_input}")
     print("REGISTERS=" + " ".join(
         f"{name}:0x{uc.reg_read(register):08x}" for name, register in (
             ("EAX", UC_X86_REG_EAX), ("EBX", UC_X86_REG_EBX),
@@ -385,8 +577,21 @@ if __name__ == "__main__":
     parser.add_argument("--probe-post-limit", type=int, default=10000)
     parser.add_argument("--probe-missing-file", action="store_true")
     parser.add_argument("--probe-second-alloc", action="store_true")
+    parser.add_argument("--probe-after-second-alloc", action="store_true")
+    parser.add_argument("--dump-rtl-input", type=Path)
+    parser.add_argument("--probe-rtl-output", type=Path)
+    parser.add_argument("--probe-fixed-alloc-failure", action="store_true")
+    parser.add_argument("--probe-fallback-alloc-success", action="store_true")
+    parser.add_argument("--probe-small-alloc-success", action="store_true")
+    parser.add_argument("--probe-read-check", action="store_true")
+    parser.add_argument("--probe-user32", type=Path)
     args = parser.parse_args()
     raise SystemExit(run(args.exe, args.max_instructions, args.probe_peb,
                          args.probe_module, args.probe_dll, args.probe_ntdll,
                          args.probe_post_limit, args.probe_missing_file,
-                         args.probe_second_alloc))
+                         args.probe_second_alloc, args.probe_after_second_alloc,
+                         args.dump_rtl_input, args.probe_rtl_output,
+                         args.probe_fixed_alloc_failure,
+                         args.probe_fallback_alloc_success,
+                         args.probe_small_alloc_success,
+                         args.probe_read_check, args.probe_user32))

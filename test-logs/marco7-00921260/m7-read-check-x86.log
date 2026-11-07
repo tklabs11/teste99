@@ -1,0 +1,2 @@
+WIN32_X86_ISBADREADPTR offset=0x755a0 size=0x14 result=0
+WIN32_X86_LOADLIBRARYA name=USER32.dll success=1

@@ -1,0 +1,5 @@
+C:\Users\wesll\AndroidStudioProjects\SporeAndroid\test-logs\marco7-00921260\m7_constructor_memset_arm64: 1 file pushed, 0 skipped. 39.4 MB/s (183744 bytes in 0.004s)
+
+PASS indexed_mov guest=arm64_lift valid_indices=0,1,52,ffffffff invalid_index=53 flags=preserved
+PASS lifted_arm64 stop=0x00a2a2e6 child=0x00a2a210
+

@@ -1,0 +1,5 @@
+C:\Users\wesll\AndroidStudioProjects\SporeAndroid\test-logs\marco7-00921260\m7_memset_semantics_arm64: 1 file pushed, 0 skipped. 63.0 MB/s (102208 bytes in 0.002s)
+PASS memset_low_byte_return_cdecl_and_canaries
+PASS memset_zero_count_no_destination_access
+PASS memset_bounds_overflow_and_read_only_rejection
+PASS memset_last_byte_boundary

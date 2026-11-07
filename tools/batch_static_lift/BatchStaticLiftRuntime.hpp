@@ -687,6 +687,9 @@ public:
         if (call.symbol == "MSVCR90.dll!strncpy") {
             return strncpy_guest(memory, state, call);
         }
+        if (call.symbol == "MSVCR90.dll!memset") {
+            return memset_guest(memory, state, call);
+        }
         if (call.symbol == "KERNEL32.dll!CreateMutexA") {
             return create_mutex(memory, state, call);
         }
@@ -797,6 +800,7 @@ private:
         }
         if (symbol == "KERNEL32.dll!CreateMutexA") return 3u;
         if (symbol == "MSVCR90.dll!strncpy") return 3u;
+        if (symbol == "MSVCR90.dll!memset") return 3u;
         if (symbol == "KERNEL32.dll!CreateSemaphoreA") return 4u;
         return 0u;
     }
@@ -864,6 +868,35 @@ private:
         call.result = result;
         call.last_error = state.last_error;
         complete_import_call(state, return_address, argument_bytes);
+    }
+
+    BatchLiftStatus memset_guest(
+        BatchLiftMemory& memory,
+        BatchLiftState& state,
+        const BatchGuestImportCall& call) {
+        const std::uint32_t destination = call.arguments[0];
+        const std::uint8_t value = static_cast<std::uint8_t>(call.arguments[1]);
+        const std::uint32_t count = call.arguments[2];
+        std::uint32_t return_address{};
+        if (!memory.load32(state.regs[4], return_address)) {
+            last_error_ = "memset return address is outside guest memory";
+            return BatchLiftStatus::invalid_memory;
+        }
+        if (count != 0u
+            && (static_cast<std::uint64_t>(destination) + count
+                    > (std::uint64_t{1} << 32u)
+                || !memory.is_writable(destination, count))) {
+            last_error_ = "memset destination is outside writable guest memory";
+            return BatchLiftStatus::invalid_memory;
+        }
+        for (std::uint32_t offset = 0; offset < count; ++offset) {
+            if (!memory.store8(destination + offset, value)) {
+                last_error_ = "memset destination changed after validation";
+                return BatchLiftStatus::invalid_memory;
+            }
+        }
+        complete_api_call(state, calls_.back(), return_address, 0u, destination);
+        return BatchLiftStatus::returned;
     }
 
     BatchLiftStatus strncpy_guest(

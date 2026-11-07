@@ -1,0 +1,317 @@
+{
+  "schema": "spore-static-lift-call-diagnostic-v1",
+  "source_sha256": "6aec99cb2dc7fd08851a1718e92a60f359fb3fccca3b244a890ae07e93cbe59b",
+  "batch_exports": [
+    "C:\\SporeAnalysis\\spore_batch_all_parts\\spore_batch_all_0041.json",
+    "C:\\SporeAnalysis\\spore_batch_all_parts\\spore_batch_all_0021.json",
+    "C:\\SporeAnalysis\\spore_batch_all_parts\\spore_batch_all_0034.json",
+    "C:\\SporeAnalysis\\spore_batch_all_parts\\spore_batch_all_0040.json",
+    "C:\\SporeAnalysis\\spore_batch_all_parts\\spore_batch_all_0086.json"
+  ],
+  "root_entries": [
+    "0x00a236d0"
+  ],
+  "reachable_exported_function_count": 5,
+  "import_thunk_count_in_pe": 118,
+  "functions": [
+    {
+      "address": "0x00921260",
+      "name": "FUN_00921260",
+      "batch": "C:\\SporeAnalysis\\spore_batch_all_parts\\spore_batch_all_0034.json",
+      "instruction_count": 38,
+      "verified_byte_count": 92,
+      "byte_validation_error": null,
+      "translation_reasons": [],
+      "translated_instruction_counts": {
+        "ADD": 1,
+        "AND": 2,
+        "CMP": 4,
+        "DEC": 2,
+        "DIV": 1,
+        "IMUL": 1,
+        "JC": 1,
+        "JNC": 3,
+        "LEA": 4,
+        "MOV": 9,
+        "NOT": 2,
+        "POP": 3,
+        "PUSH": 3,
+        "RET": 1,
+        "XOR": 1
+      },
+      "direct_calls": []
+    },
+    {
+      "address": "0x00921300",
+      "name": "FUN_00921300",
+      "batch": "C:\\SporeAnalysis\\spore_batch_all_parts\\spore_batch_all_0034.json",
+      "instruction_count": 26,
+      "verified_byte_count": 63,
+      "byte_validation_error": null,
+      "translation_reasons": [],
+      "translated_instruction_counts": {
+        "ADD": 1,
+        "CMP": 1,
+        "JG": 1,
+        "JLE": 1,
+        "JMP": 1,
+        "JNC": 1,
+        "LEA": 2,
+        "MOV": 6,
+        "OR": 1,
+        "POP": 2,
+        "PUSH": 2,
+        "RET": 1,
+        "SAR": 2,
+        "SUB": 2,
+        "TEST": 2
+      },
+      "direct_calls": []
+    },
+    {
+      "address": "0x00921360",
+      "name": "FUN_00921360",
+      "batch": "C:\\SporeAnalysis\\spore_batch_all_parts\\spore_batch_all_0034.json",
+      "instruction_count": 30,
+      "verified_byte_count": 94,
+      "byte_validation_error": null,
+      "translation_reasons": [],
+      "translated_instruction_counts": {
+        "ADD": 3,
+        "CALL": 1,
+        "CMOVC": 1,
+        "CVTSI2SS": 1,
+        "CVTSS2SI": 1,
+        "FADD": 1,
+        "FILD": 1,
+        "FMUL": 1,
+        "FSTP": 1,
+        "JGE": 1,
+        "LEA": 1,
+        "MOV": 7,
+        "MOVSS": 1,
+        "POP": 1,
+        "PUSH": 4,
+        "RET": 1,
+        "SUB": 1,
+        "TEST": 1,
+        "UCOMISS": 1
+      },
+      "direct_calls": [
+        {
+          "site": "0x00921375",
+          "mnemonic": "CALL",
+          "operand": [
+            "0x00921300"
+          ],
+          "target": {
+            "address": "0x00921300",
+            "classification": "exported_function"
+          }
+        }
+      ]
+    },
+    {
+      "address": "0x00a21e40",
+      "name": "FUN_00a21e40",
+      "batch": "C:\\SporeAnalysis\\spore_batch_all_parts\\spore_batch_all_0041.json",
+      "instruction_count": 37,
+      "verified_byte_count": 98,
+      "byte_validation_error": null,
+      "translation_reasons": [
+        "0x00a21e79: direct call target 0x00f473a0 is not in the exported function set",
+        "0x00a21e8c: direct call target 0x011e073e is not in the exported function set"
+      ],
+      "translated_instruction_counts": {
+        "ADD": 4,
+        "CMP": 1,
+        "JMP": 2,
+        "JNZ": 1,
+        "JZ": 1,
+        "LEA": 1,
+        "MOV": 10,
+        "POP": 2,
+        "PUSH": 11,
+        "RET": 1,
+        "TEST": 1
+      },
+      "direct_calls": [
+        {
+          "site": "0x00a21e79",
+          "mnemonic": "CALL",
+          "operand": [
+            "0x00f473a0"
+          ],
+          "target": {
+            "address": "0x00f473a0",
+            "classification": "missing_internal_function",
+            "section": ".text"
+          }
+        },
+        {
+          "site": "0x00a21e8c",
+          "mnemonic": "CALL",
+          "operand": [
+            "0x011e073e"
+          ],
+          "target": {
+            "address": "0x011e073e",
+            "classification": "missing_internal_function",
+            "section": ".text"
+          }
+        }
+      ]
+    },
+    {
+      "address": "0x00a236d0",
+      "name": "FUN_00a236d0",
+      "batch": "C:\\SporeAnalysis\\spore_batch_all_parts\\spore_batch_all_0041.json",
+      "instruction_count": 60,
+      "verified_byte_count": 174,
+      "byte_validation_error": null,
+      "translation_reasons": [],
+      "translated_instruction_counts": {
+        "ADD": 1,
+        "CALL": 3,
+        "CMP": 1,
+        "JNC": 1,
+        "LEA": 2,
+        "MOV": 25,
+        "MOVSS": 4,
+        "POP": 8,
+        "PUSH": 11,
+        "RET": 2,
+        "XOR": 2
+      },
+      "direct_calls": [
+        {
+          "site": "0x00a23715",
+          "mnemonic": "CALL",
+          "operand": [
+            "0x00921260"
+          ],
+          "target": {
+            "address": "0x00921260",
+            "classification": "exported_function"
+          }
+        },
+        {
+          "site": "0x00a23762",
+          "mnemonic": "CALL",
+          "operand": [
+            "0x00921360"
+          ],
+          "target": {
+            "address": "0x00921360",
+            "classification": "exported_function"
+          }
+        },
+        {
+          "site": "0x00a2376d",
+          "mnemonic": "CALL",
+          "operand": [
+            "0x00a21e40"
+          ],
+          "target": {
+            "address": "0x00a21e40",
+            "classification": "exported_function"
+          }
+        }
+      ]
+    }
+  ],
+  "direct_call_edges": [
+    {
+      "from": "0x00a236d0",
+      "to": "0x00921260",
+      "kind": "direct",
+      "site": "0x00a23715"
+    },
+    {
+      "from": "0x00a236d0",
+      "to": "0x00921360",
+      "kind": "direct",
+      "site": "0x00a23762"
+    },
+    {
+      "from": "0x00a236d0",
+      "to": "0x00a21e40",
+      "kind": "direct",
+      "site": "0x00a2376d"
+    },
+    {
+      "from": "0x00921360",
+      "to": "0x00921300",
+      "kind": "direct",
+      "site": "0x00921375"
+    }
+  ],
+  "missing_dependencies": [
+    {
+      "address": "0x00f473a0",
+      "classification": "missing_internal_function",
+      "section": ".text",
+      "referenced_by": [
+        {
+          "function": "0x00a21e40",
+          "site": "0x00a21e79"
+        }
+      ]
+    },
+    {
+      "address": "0x011e073e",
+      "classification": "missing_internal_function",
+      "section": ".text",
+      "referenced_by": [
+        {
+          "function": "0x00a21e40",
+          "site": "0x00a21e8c"
+        }
+      ]
+    }
+  ],
+  "indirect_calls": [],
+  "unresolved_calls": [],
+  "unsupported_instructions": [],
+  "unsupported_instruction_groups": [],
+  "invalid_functions": [],
+  "unsupported_instruction_class_counts": {},
+  "translated_instruction_class_counts": {
+    "other": 178,
+    "sse_conversion": 2,
+    "sse_scalar_data_transfer": 5,
+    "x87": 4
+  },
+  "counts": {
+    "missing_internal_functions": 2,
+    "import_thunk_call_sites": 0,
+    "indirect_calls": 0,
+    "indirect_iat_import_call_sites": 0,
+    "unresolved_calls": 0,
+    "indirect_calls_without_candidates": 0,
+    "unsupported_instructions": 0,
+    "invalid_functions": 0
+  },
+  "shortest_direct_paths_from_roots": {
+    "0x00a236d0": [
+      "0x00a236d0"
+    ],
+    "0x00921260": [
+      "0x00a236d0",
+      "0x00921260"
+    ],
+    "0x00921360": [
+      "0x00a236d0",
+      "0x00921360"
+    ],
+    "0x00a21e40": [
+      "0x00a236d0",
+      "0x00a21e40"
+    ],
+    "0x00921300": [
+      "0x00a236d0",
+      "0x00921360",
+      "0x00921300"
+    ]
+  }
+}

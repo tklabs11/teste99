@@ -1,0 +1,4 @@
+PASS memset_low_byte_return_cdecl_and_canaries
+PASS memset_zero_count_no_destination_access
+PASS memset_bounds_overflow_and_read_only_rejection
+PASS memset_last_byte_boundary

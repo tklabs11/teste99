@@ -3498,6 +3498,106 @@ e [Android](./test-logs/marco7-00921260/m7-second-call-android.log),
 e [relatório completo](./test-logs/marco7-00921260/report.md).
 É uma execução do harness, ainda sem boot ou renderização do jogo.
 
+O caminho real dessa fixture do construtor também entrou em `FUN_00a23570`,
+passou por `FUN_00921360` e `FUN_00921300` e alcançou `FUN_00a221b0`.
+Os bytes x86 originais, o lift x86 e o lift ARM64 executado no aparelho
+coincidiram até **antes de `CALL 0x011e073e` em `0x00a221fc`**. O último byte
+executado foi `0x00a221fb`. A [comparação](./test-logs/marco7-00921260/m7-third-call-differential.log),
+os [logs x86](./test-logs/marco7-00921260/m7-third-call-x86.log) e
+[Android](./test-logs/marco7-00921260/m7-third-call-android.log), os
+[artefatos gerados v9](./test-logs/marco7-00921260/generated-constructor-third-call-v9/report.json)
+e o [relatório](./test-logs/marco7-00921260/report.md) documentam a prova.
+O thunk protegido continua sem semântica validada. Esta execução usa uma
+fixture do harness e não comprova boot ou renderização do jogo.
+
+Uma sonda separada dos bytes x86 originais do thunk identificou a chamada
+`NTDLL!RtlDecompressBuffer` após alocações e um PEB **modelados pelo harness**.
+A API real do Windows x86 descomprimiu a entrada produzida nessa fixture:
+`0x5dd98` bytes de entrada, `0x80c00` bytes de saída, status `0`. Depois,
+o fluxo alcançou uma solicitação `VirtualAlloc(0x10000000,0x85000,0x1000,0x4)`;
+num ramo de falha também modelado, alcançou outra solicitação com endereço
+zero. [Identificação do export](./test-logs/marco7-00921260/protection-thunk-rtl-export-identification.log),
+[resultado da API x86](./test-logs/marco7-00921260/m7-rtl-decompress-x86.log),
+[sonda posterior](./test-logs/marco7-00921260/protection-thunk-after-rtl-result-probe.log)
+e [relatório com os limites](./test-logs/marco7-00921260/report.md).
+Essas sondas não estabelecem o retorno do thunk no jogo; o limite validado
+no Android permanece **antes de `0x00a221fc`**.
+
+As referências comunitárias [Spore ModAPI SDK](https://github.com/Spore-Community/Spore-ModAPI/tree/721b87f46f3673d8fd0cf4380655b1b7e54bd969)
+e [SporeModder-FX](https://github.com/Spore-Community/SporeModder-FX/tree/804c17b0a4c4c57afd337ffacc11660cefa8c90b)
+foram examinadas. O primeiro oferece símbolos e tipos para Ghidra e
+detours de funções do executável; o segundo trata os arquivos de dados do
+jogo. Os endereços desta closure não apareceram no XML `SporeGhidra_disk.xml`
+consultado, portanto nenhuma correspondência de versão foi presumida. Uma
+[sonda adicional do thunk](./test-logs/marco7-00921260/protection-thunk-fallback-allocation-probe.log)
+com falha da alocação fixa e sucesso **artificiais** da alocação alternativa
+chegou à próxima chamada `VirtualAlloc(0,0x14,0x3000,0x4)`; parou antes de
+executar essa API. O [relatório](./test-logs/marco7-00921260/report.md)
+registra os limites e os [56 testes Python aprovados](./test-logs/marco7-00921260/python-tests-fallback-alloc.log).
+O thunk não retornou, e não houve novo teste no celular nesta sonda.
+
+Outra sonda modelou o sucesso de `VirtualAlloc(0,0x14,0x3000,0x4)` e
+alcançou `KERNEL32!IsBadReadPtr(0x340755a0,0x14)`. O retorno zero para
+essa região legível foi conferido também por uma [execução Windows x86](./test-logs/marco7-00921260/m7-read-check-x86.log).
+Com esse resultado modelado, os bytes x86 originais chegaram a
+`KERNEL32!LoadLibraryA("USER32.dll")` e pararam antes da DLL:
+[sonda](./test-logs/marco7-00921260/protection-thunk-read-check-probe.log),
+[exports verificados](./test-logs/marco7-00921260/protection-thunk-followup-exports.log).
+Esses resultados ainda dependem das fixtures anteriores. O construtor no
+Android continua parado antes do thunk em `0x00a221fc`.
+
+Uma [sonda adicional](./test-logs/marco7-00921260/protection-thunk-user32-export-probe.log)
+forneceu **artificialmente** um módulo `USER32.dll` como dados de exportação
+e parou 27 instruções depois, antes de `VirtualAlloc(0,0x4,0x3000,0x4)`.
+Um [programa Windows x86 independente](./test-logs/marco7-00921260/m7-read-check-x86.log)
+confirmou que `LoadLibraryA("USER32.dll")` funciona neste PC; isso não
+substitui a execução do thunk no processo real do Spore. Nenhuma nova
+fronteira do lift ARM64 foi validada.
+
+## Marco 7: desvio resolvido e novo limite do construtor
+
+Uma [captura do processo SporeApp.exe no Windows](./test-logs/marco7-00921260/m7-live-first-thunk-return-bytes-x86.log) identificou o desvio 0x011e073e após sua primeira resolução: ele passa a saltar para a importação MSVCR90.dll!memset. Nessa primeira chamada, [1.024 bytes foram zerados](./test-logs/marco7-00921260/m7-live-first-thunk-return-x86.log). A [chamada posterior do construtor](./test-logs/marco7-00921260/m7-live-thunk-return-memory-x86.log) retornou do mesmo desvio com os argumentos destino, zero e 0x31c. As sondas anteriores de proteção continuam identificadas como fixtures sintéticas; elas não descrevem a chamada já resolvida nesse processo real.
+
+O [gerador do Marco 7](./tools/batch_static_lift/generate_m7_00a2a210_entry.py) passou a tratar apenas a chamada de 0x00a221fc como essa importação. O [prefixo gerado](./test-logs/marco7-00921260/generated-constructor-through-memset-v11/report.json) contém 58 instruções verificadas de FUN_00a2a210 e para antes da próxima chamada, em **0x00a2a2e6 → FUN_009213c0**. O último byte executado no harness x86 foi **0x00a2a2e5**. A [comparação dos bytes x86 originais com o lift x86](./test-logs/marco7-00921260/m7-constructor-memset-x86.log) passou; a importação no harness é um modelo CRT, enquanto a captura acima veio do processo real. Passaram também os [testes semânticos da importação](./test-logs/marco7-00921260/m7-memset-semantics-x86.log), os [57 testes Python](./test-logs/marco7-00921260/python-tests-memset-final.log) e a [regressão x86 anterior](./test-logs/marco7-00921260/m7-third-call-x86-regression.log).
+
+O [binário ARM64 compilou](./test-logs/marco7-00921260/m7-constructor-memset-arm64-build.log) e [executou no aparelho PJMZAEJRX4YLFIDI](./test-logs/marco7-00921260/m7-constructor-memset-android.log). A [comparação x86 original / lift x86 / lift ARM64](./test-logs/marco7-00921260/m7-constructor-memset-differential.log) passou no novo limite. Os [casos-limite do memset também passaram no Android](./test-logs/marco7-00921260/m7-memset-semantics-android.log). O APK existente não foi alterado. Estes resultados ainda são de um prefixo isolado; não comprovam boot nem renderização. [Relatório detalhado e comandos](./test-logs/marco7-00921260/report.md).
+
+### Continuação: retorno ao construtor no Android
+
+A chamada em **0x00a2a2e6 → FUN_009213c0** foi integrada e comparada com os bytes x86 originais. Na fixture do construtor, ela retornou EAX=2; a comparação com 0xc7 tomou o ramo que não executa a chamada em 0x00a2a2f3. Assim, FUN_00a2a210 retornou e o construtor executou mais seis instruções. O último byte comparado é **0x00a33830**, antes da próxima chamada **0x00a33831 → FUN_00a2f210**.
+
+O [novo prefixo gerado](./test-logs/marco7-00921260/generated-constructor-child-return-v14/report.json) tem 71 instruções verificadas da função filha (70 traduzidas e uma chamada guardada se alcançada). A [comparação x86 original / lift x86 / lift ARM64](./test-logs/marco7-00921260/m7-child-return-differential.log) passou no aparelho PJMZAEJRX4YLFIDI; [58 testes Python](./test-logs/marco7-00921260/python-tests-child-return.log) e a [regressão anterior](./test-logs/marco7-00921260/m7-constructor-memset-regression-differential.log) também passaram. [Relatório completo e comandos](./test-logs/marco7-00921260/report.md). O teste Android executou um binário independente via ADB; o APK não foi alterado. Ainda não há prova de boot ou renderização do jogo.
+
+### Continuação: segundo subobjeto
+
+O construtor executou a chamada **0x00a33831 → FUN_00a2f210**, recebeu o retorno da função filha e parou antes da chamada seguinte em **0x00a3384b → FUN_00a2a210**. O último byte comparado foi **0x00a3384a**. A fixture de memória foi ampliada para 0x2500 bytes para conter o segundo subobjeto e mantém um canário após esse limite.
+
+O [prefixo gerado e os bytes do PE](./test-logs/marco7-00921260/generated-constructor-second-child-v15/report.json) foram comparados entre [x86 original, lift x86 e ARM64 no aparelho](./test-logs/marco7-00921260/m7-second-child-differential.log), com resultado aprovado. Também passaram os [58 testes Python](./test-logs/marco7-00921260/python-tests-second-child.log). O [relatório](./test-logs/marco7-00921260/report.md) registra os endereços e comandos. O APK não foi alterado; ainda não há boot ou renderização comprovados.
+
+### Continuação: terceira região
+
+A chamada em **0x00a3384b** reutilizou FUN_00a2a210 para a terceira região do objeto. Ela retornou, e o construtor chegou ao último byte comparado **0x00a33864**, antes de **0x00a33865 → FUN_00a2a310**. A [comparação x86 original / lift x86 / ARM64 no aparelho](./test-logs/marco7-00921260/m7-third-child-differential.log) passou; [58 testes Python](./test-logs/marco7-00921260/python-tests-third-child.log) também passaram. [Manifesto dos bytes verificados](./test-logs/marco7-00921260/generated-constructor-third-child-v16/report.json) e [relatório completo](./test-logs/marco7-00921260/report.md).
+
+O próximo alvo usa uma lista muito maior, indicada pelos bytes do PE como 0x75300, e ainda não foi executado nesta fixture. O APK existente não foi alterado. Não há boot ou renderização comprovados.
+
+### Continuação: quarta função e lista grande
+
+A chamada do construtor em **0x00a33865 → FUN_00a2a310** foi executada na fixture isolada. O [prefixo v17](./test-logs/marco7-00921260/generated-constructor-fourth-entry-v17/report.json) confirmou os argumentos da lista antes de **0x00a2a34e → FUN_00921260**. O [prefixo v18](./test-logs/marco7-00921260/generated-constructor-fourth-first-call-v18/report.json) executou essa chamada; o [prefixo v19](./test-logs/marco7-00921260/generated-constructor-fourth-second-call-v19/report.json) executou também **0x00a2a375 → FUN_00921340**, incluindo FUN_009212c0. O último byte validado nessa função é **0x00a2a39d**, antes de **0x00a2a39e → FUN_00a23620**.
+
+A [comparação v19](./test-logs/marco7-00921260/m7-fourth-second-call-differential.log) passou entre x86 original, lift x86 e o binário ARM64 executado no aparelho PJMZAEJRX4YLFIDI. O objeto artificial de 0x7c600 bytes e seu canário foram conferidos. Passaram também os [58 testes Python](./test-logs/marco7-00921260/python-tests-fourth-second-call.log) e a [regressão do limite anterior](./test-logs/marco7-00921260/m7-third-child-regression-differential.log). O [relatório](./test-logs/marco7-00921260/report.md) traz os comandos, snapshots, instruções executadas e o diagnóstico da próxima chamada. Nenhuma semântica nova de instrução x86 foi necessária nesta extensão. O APK existente não foi alterado; estes testes não comprovam boot nem renderização do jogo.
+
+### Continuação: terceira chamada da quarta função
+
+A chamada **0x00a2a39e → FUN_00a23620** foi executada na fixture. O [prefixo v20 verificado no PE](./test-logs/marco7-00921260/generated-constructor-fourth-third-entry-v20/report.json) executou as primeiras 24 instruções dessa função, com último byte **0x00a23664**, e parou antes de **0x00a23665 → FUN_00921260**. A [comparação entre x86 original, lift x86 e ARM64 no aparelho](./test-logs/marco7-00921260/m7-fourth-third-entry-differential.log) passou para registradores comparáveis, flags, pilha e o objeto artificial completo. Passaram também [58 testes Python](./test-logs/marco7-00921260/python-tests-fourth-third-entry.log) e a [regressão v19 recompilada](./test-logs/marco7-00921260/m7-fourth-second-call-regression-v20.log). O [relatório do Marco 7](./test-logs/marco7-00921260/report.md) contém os comandos e limites da prova. O APK não foi alterado; não há boot nem renderização comprovados.
+
+O [prefixo v21](./test-logs/marco7-00921260/generated-constructor-fourth-third-first-call-v21/report.json) executou a chamada em **0x00a23665**. No estado da fixture, o desvio em **0x00a2368e** foi tomado; 37 instruções de FUN_00a23620 foram executadas, até o último byte **0x00a236b1**. A [comparação x86 original / lift x86 / ARM64 no aparelho](./test-logs/marco7-00921260/m7-fourth-third-first-call-differential.log) passou, assim como os [58 testes Python](./test-logs/marco7-00921260/python-tests-fourth-third-first-call.log). O próximo limite é **0x00a236b2 → FUN_00921360**. O [relatório](./test-logs/marco7-00921260/report.md) registra o caminho, os comandos e os logs. O APK continua sem esta extensão e não há boot ou renderização comprovados.
+
+O [v22](./test-logs/marco7-00921260/m7-fourth-helper-float-differential.log) executou FUN_00921360, e o [v23](./test-logs/marco7-00921260/m7-fourth-helper-return-differential.log) executou FUN_00a221b0 e retornou de FUN_00a23620. Ambos passaram na comparação x86 original / lift x86 / ARM64 no aparelho. O [prefixo v24](./test-logs/marco7-00921260/generated-constructor-fourth-child-return-v24/report.json) executou a chamada em **0x00a2a3e6 → FUN_009213c0**, retornou ao construtor e chegou ao último byte comparado **0x00a3387e**, antes de **0x00a3387f → FUN_00a30e10**. A [comparação v24 no aparelho](./test-logs/marco7-00921260/m7-fourth-child-return-differential.log), os [58 testes Python](./test-logs/marco7-00921260/python-tests-fourth-child-return.log) e a [regressão v23](./test-logs/marco7-00921260/m7-fourth-helper-return-regression-v24.log) passaram. O [relatório](./test-logs/marco7-00921260/report.md) explica o ponteiro calculado para a próxima região e os limites da fixture. O APK não foi alterado por esta extensão; ainda não há boot nem renderização do jogo comprovados.
+
+### Continuação: quinta região do construtor
+
+O [v25](./test-logs/marco7-00921260/m7-fifth-entry-differential.log) entrou em **0x00a3387f → FUN_00a30e10** e confirmou os argumentos da lista antes de sua escrita. O [v26](./test-logs/marco7-00921260/m7-fifth-first-call-differential.log) executou **0x00a30e4e → FUN_00921260**, com fixture ampliada para 0x115b10 bytes e canário; x86 original, lift x86 e ARM64 no aparelho coincidiram. O [v27](./test-logs/marco7-00921260/generated-constructor-fifth-second-call-v27/report.json) executou também **0x00a30e75 → FUN_00921340** e chegou ao último byte validado **0x00a30e9d**, antes de **0x00a30e9e → FUN_00a236d0**. A [comparação v27 no aparelho](./test-logs/marco7-00921260/m7-fifth-second-call-differential.log), os [58 testes Python](./test-logs/marco7-00921260/python-tests-fifth-second-call.log) e a [regressão v26](./test-logs/marco7-00921260/m7-fifth-first-call-regression-v27.log) passaram. O [relatório](./test-logs/marco7-00921260/report.md) contém os endereços, comandos e o diagnóstico estático da próxima função. A chamada do construtor em 0x00a3387f ainda não retornou na fixture; o APK não foi alterado e não há boot ou renderização comprovados.
+
 ## Preserved one-function recursive-call pilot
 
 The earlier recursive pilot and its runtime are retained unchanged as a
@@ -3564,3 +3664,26 @@ and
 The separate recursive pilot remains unchanged. The recovered backend now has
 a first tested initialization-linked closure, while startup from the game's
 entry point and the `CreateMutexA` branch remain unimplemented.
+
+### Android APK boot audit — 2026-11-07
+
+The connected phone showed two separate installations: the older
+`dev.sporeport.cellstage` launcher and the current debug package
+`dev.sporeport.cellstage.dev`. The debug APK opened its validation screen and
+its Marco 7 JNI fixture passed at `0x00a221fc`; this remains an isolated
+test, not Spore boot. The latest constructor prefix through `0x00a30e9d`
+is still run as a standalone ARM64 binary, not by the APK. The APK currently
+has no game startup-to-menu path. See the [audit, commands and device
+screenshots](./test-logs/android-boot-audit-20261107/README.md).
+
+### Marco 7 v28: entrada na próxima função do construtor
+
+O prefixo isolado agora executa **0x00a30e9e → FUN_00a236d0** e as primeiras
+24 instruções dessa função, até o último byte **0x00a23714**. O próximo
+limite é **0x00a23715 → FUN_00921260**. A [comparação x86 original / lift x86 /
+ARM64 no celular](./test-logs/marco7-00921260/m7-fifth-third-entry-differential.log),
+os [58 testes Python](./test-logs/marco7-00921260/python-tests-fifth-third-entry.log)
+e a [regressão v27](./test-logs/marco7-00921260/m7-fifth-second-call-regression-v28.log)
+passaram. A execução usa entradas artificiais do harness; o APK ainda não
+contém esse prefixo e não houve boot ou renderização do Spore. Endereços,
+comandos e logs estão no [relatório do Marco 7](./test-logs/marco7-00921260/report.md).

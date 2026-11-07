@@ -1,0 +1,3 @@
+Diagnosed 5 exported function(s); no code emitted.
+Findings: {"import_thunk_call_sites": 0, "indirect_calls": 0, "indirect_calls_without_candidates": 0, "indirect_iat_import_call_sites": 0, "invalid_functions": 0, "missing_internal_functions": 2, "unresolved_calls": 0, "unsupported_instructions": 0}
+Report: test-logs\marco7-00921260\00a236d0-next-diagnostic.json
