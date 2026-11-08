@@ -146,14 +146,44 @@ inline void batch_set_sbb_flags(
 inline void batch_set_logic_flags(
     BatchLiftState& state,
     std::uint32_t result,
-    unsigned width) {
-    const std::uint32_t mask = batch_mask(width);
+    unsigned width) {    const std::uint32_t mask = batch_mask(width);
     const std::uint32_t sign = std::uint32_t{1} << (width - 1u);
     result &= mask;
     state.eflags &= ~0x8d5u;
     if (batch_even_parity(static_cast<std::uint8_t>(result))) state.eflags |= 0x004u;
     if (result == 0u) state.eflags |= 0x040u;
     if ((result & sign) != 0u) state.eflags |= 0x080u;
+}
+
+// SHL semantics: CF is the last bit shifted out, SF/ZF/PF come from the
+// result. OF is defined only for a count of one; for larger counts the x86
+// manual leaves it undefined, so it is preserved instead of invented.
+inline void batch_set_shl_flags(
+    BatchLiftState& state,
+    std::uint32_t value,
+    unsigned count,
+    std::uint32_t result,
+    unsigned width) {
+    if (count == 0u) return;
+    const std::uint32_t mask = batch_mask(width);
+    const std::uint32_t sign = std::uint32_t{1} << (width - 1u);
+    value &= mask;
+    result &= mask;
+    state.eflags &= ~0x8c5u;
+    if (count >= width
+        || (value & (std::uint32_t{1} << (width - count))) != 0u) {
+        state.eflags |= 0x001u;
+    }
+    if (batch_even_parity(static_cast<std::uint8_t>(result))) {
+        state.eflags |= 0x004u;
+    }
+    if (result == 0u) state.eflags |= 0x040u;
+    if ((result & sign) != 0u) state.eflags |= 0x080u;
+    if (count == 1u) {
+        const bool carry = (state.eflags & 0x001u) != 0u;
+        const bool high = (result & sign) != 0u;
+        if (high != carry) state.eflags |= 0x800u;
+    }
 }
 
 inline void batch_set_inc_flags(
@@ -625,6 +655,11 @@ static_assert(offsetof(GuestCriticalSection32, owning_thread) == 0x0cu);
 static_assert(offsetof(GuestCriticalSection32, lock_semaphore) == 0x10u);
 static_assert(offsetof(GuestCriticalSection32, spin_count) == 0x14u);
 
+// The guest process id stands in for the host process id. Only the CRT entropy
+// mix consumes it, and the host value is machine-specific, so no comparison
+// across hosts can require the original number. It stays fixed and nonzero.
+inline constexpr std::uint32_t kBatchGuestProcessId = 0x1234u;
+
 struct BatchGuestImportCall {
     std::string symbol;
     std::uint32_t iat_address;
@@ -706,6 +741,18 @@ public:
         }
         if (call.symbol == "KERNEL32.dll!GetSystemTimeAsFileTime") {
             return get_system_time_as_file_time(memory, state, call);
+        }
+        if (call.symbol == "KERNEL32.dll!GetCurrentProcessId") {
+            return get_current_process_id(state, calls_.back());
+        }
+        if (call.symbol == "KERNEL32.dll!GetCurrentThreadId") {
+            return get_current_thread_id(state, calls_.back());
+        }
+        if (call.symbol == "KERNEL32.dll!GetTickCount") {
+            return get_tick_count(state, calls_.back());
+        }
+        if (call.symbol == "KERNEL32.dll!QueryPerformanceCounter") {
+            return query_performance_counter(memory, state, calls_.back());
         }
         if (call.symbol == "KERNEL32.dll!InitializeCriticalSection") {
             return initialize_critical_section(memory, state, call);
@@ -797,6 +844,10 @@ private:
 
     static std::uint32_t import_argument_count(const std::string& symbol) {
         if (symbol == "KERNEL32.dll!GetSystemTimeAsFileTime") return 1u;
+        if (symbol == "KERNEL32.dll!GetCurrentProcessId") return 0u;
+        if (symbol == "KERNEL32.dll!GetCurrentThreadId") return 0u;
+        if (symbol == "KERNEL32.dll!GetTickCount") return 0u;
+        if (symbol == "KERNEL32.dll!QueryPerformanceCounter") return 1u;
         if (symbol == "KERNEL32.dll!InitializeCriticalSection"
             || symbol == "KERNEL32.dll!EnterCriticalSection"
             || symbol == "KERNEL32.dll!LeaveCriticalSection"
@@ -911,6 +962,69 @@ private:
         }
         // The API returns void. EAX and flags have no defined result here.
         complete_import_call(state, call.return_address, 4u);
+        return BatchLiftStatus::returned;
+    }
+
+    BatchLiftStatus get_current_process_id(
+        BatchLiftState& state,
+        BatchGuestImportCall& call) {
+        // stdcall with no arguments: only the four return-address bytes leave
+        // the stack. EFLAGS after a Win32 call are not part of the contract.
+        complete_api_call(
+            state, call, call.return_address, 0u, kBatchGuestProcessId);
+        return BatchLiftStatus::returned;
+    }
+
+    BatchLiftStatus get_current_thread_id(
+        BatchLiftState& state,
+        BatchGuestImportCall& call) {
+        const std::uint32_t id = guest_thread_id(std::this_thread::get_id());
+        complete_api_call(state, call, call.return_address, 0u, id);
+        return BatchLiftStatus::returned;
+    }
+
+    BatchLiftStatus get_tick_count(
+        BatchLiftState& state,
+        BatchGuestImportCall& call) {
+        const std::uint32_t ticks = static_cast<std::uint32_t>(
+            std::chrono::duration_cast<std::chrono::milliseconds>(
+                std::chrono::steady_clock::now().time_since_epoch()).count());
+        complete_api_call(state, call, call.return_address, 0u, ticks);
+        return BatchLiftStatus::returned;
+    }
+
+    BatchLiftStatus query_performance_counter(
+        BatchLiftMemory& memory,
+        BatchLiftState& state,
+        BatchGuestImportCall& call) {
+        const std::uint32_t destination = call.arguments[0];
+        if (!memory.is_writable(destination, 8u)) {
+            last_error_ =
+                "QueryPerformanceCounter destination is outside writable "
+                "guest memory";
+            return BatchLiftStatus::invalid_memory;
+        }
+#if defined(_WIN32)
+        LARGE_INTEGER counter{};
+        if (QueryPerformanceCounter(&counter) == 0) {
+            set_guest_error(state, GetLastError(),
+                            "QueryPerformanceCounter failed");
+            complete_api_call(
+                state, call, call.return_address, 4u, 0u);
+            return BatchLiftStatus::returned;
+        }
+        const std::uint64_t value =
+            static_cast<std::uint64_t>(counter.QuadPart);
+#else
+        const std::uint64_t value = static_cast<std::uint64_t>(
+            std::chrono::steady_clock::now().time_since_epoch().count());
+#endif
+        if (!memory.store64(destination, value)) {
+            last_error_ =
+                "QueryPerformanceCounter destination changed after validation";
+            return BatchLiftStatus::invalid_memory;
+        }
+        complete_api_call(state, call, call.return_address, 4u, 1u);
         return BatchLiftStatus::returned;
     }
 

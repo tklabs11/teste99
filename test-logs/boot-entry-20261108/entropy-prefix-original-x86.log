@@ -1,0 +1,2 @@
+PASS pid_prefix boundary=0x011e15b5 executed=32 pid_call_executed=1 esp_delta=-32 ebp_delta=-4 ebx=0xffff0000 edi=0xbb40e64e esi_mix=verified filetime=within_host_window data=unchanged
+DETAIL pid_prefix filetime_mix=0x2e56cd56 pid=0x00001dc8 tid=0x00003f18 tick=0x078cd471 qpc=0x00000126ed53643f imports=5

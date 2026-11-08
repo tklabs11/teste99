@@ -1,0 +1,120 @@
+{
+  "schema": "spore-static-lift-call-diagnostic-v1",
+  "source_sha256": "6aec99cb2dc7fd08851a1718e92a60f359fb3fccca3b244a890ae07e93cbe59b",
+  "batch_exports": [
+    "C:\\SporeAnalysis\\spore_batch_all_parts\\spore_batch_all_0086.json",
+    "C:\\SporeAnalysis\\spore_batch_all_parts\\spore_batch_all_0041.json",
+    "C:\\SporeAnalysis\\spore_batch_all_parts\\spore_batch_all_0034.json",
+    "C:\\SporeAnalysis\\spore_batch_all_parts\\spore_batch_all_0021.json",
+    "C:\\SporeAnalysis\\spore_batch_all_parts\\spore_batch_all_0040.json"
+  ],
+  "root_entries": [
+    "0x00a221b0"
+  ],
+  "reachable_exported_function_count": 1,
+  "import_thunk_count_in_pe": 118,
+  "functions": [
+    {
+      "address": "0x00a221b0",
+      "name": "FUN_00a221b0",
+      "batch": "C:\\SporeAnalysis\\spore_batch_all_parts\\spore_batch_all_0041.json",
+      "instruction_count": 37,
+      "verified_byte_count": 98,
+      "byte_validation_error": null,
+      "translation_reasons": [
+        "0x00a221e9: direct call target 0x00f473a0 is not in the exported function set",
+        "0x00a221fc: direct call target 0x011e073e is not in the exported function set"
+      ],
+      "translated_instruction_counts": {
+        "ADD": 4,
+        "CMP": 1,
+        "JMP": 2,
+        "JNZ": 1,
+        "JZ": 1,
+        "LEA": 1,
+        "MOV": 10,
+        "POP": 2,
+        "PUSH": 11,
+        "RET": 1,
+        "TEST": 1
+      },
+      "direct_calls": [
+        {
+          "site": "0x00a221e9",
+          "mnemonic": "CALL",
+          "operand": [
+            "0x00f473a0"
+          ],
+          "target": {
+            "address": "0x00f473a0",
+            "classification": "missing_internal_function",
+            "section": ".text"
+          }
+        },
+        {
+          "site": "0x00a221fc",
+          "mnemonic": "CALL",
+          "operand": [
+            "0x011e073e"
+          ],
+          "target": {
+            "address": "0x011e073e",
+            "classification": "missing_internal_function",
+            "section": ".text"
+          }
+        }
+      ],
+      "tail_jumps": []
+    }
+  ],
+  "direct_call_edges": [],
+  "missing_dependencies": [
+    {
+      "address": "0x00f473a0",
+      "classification": "missing_internal_function",
+      "section": ".text",
+      "referenced_by": [
+        {
+          "function": "0x00a221b0",
+          "site": "0x00a221e9"
+        }
+      ]
+    },
+    {
+      "address": "0x011e073e",
+      "classification": "missing_internal_function",
+      "section": ".text",
+      "referenced_by": [
+        {
+          "function": "0x00a221b0",
+          "site": "0x00a221fc"
+        }
+      ]
+    }
+  ],
+  "indirect_calls": [],
+  "unresolved_calls": [],
+  "unsupported_instructions": [],
+  "unsupported_instruction_groups": [],
+  "invalid_functions": [],
+  "unsupported_instruction_class_counts": {},
+  "translated_instruction_class_counts": {
+    "other": 35
+  },
+  "counts": {
+    "missing_internal_functions": 2,
+    "import_thunk_call_sites": 0,
+    "tail_jump_sites": 0,
+    "indirect_calls": 0,
+    "indirect_iat_import_call_sites": 0,
+    "unresolved_calls": 0,
+    "indirect_calls_without_candidates": 0,
+    "unsupported_instructions": 0,
+    "invalid_functions": 0
+  },
+  "shortest_direct_paths_from_roots": {
+    "0x00a221b0": [
+      "0x00a221b0"
+    ]
+  }
+}

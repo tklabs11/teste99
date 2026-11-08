@@ -871,6 +871,29 @@ def translate_instruction(
             "if (product < -2147483648ll || product > 2147483647ll) state.eflags |= 0x801u;",
             "}",
         ]
+    elif mnemonic == "SHL":
+        require(2)
+        if operands[0][0] != "register" or operand_width(operands[0]) != 32:
+            raise ValueError("SHL currently requires a 32-bit register destination")
+        if operands[1][0] != "immediate" or not 0 <= operands[1][1] <= 31:
+            raise ValueError("SHL currently supports immediate counts 0 through 31")
+        count = operands[1][1]
+        lines += emit_load(operands[0], f"{temp}a")
+        lines += [
+            f"{temp}r = static_cast<std::uint32_t>({temp}a << {count}u) "
+            "& 0xffffffffu;",
+            f"batch_set_shl_flags(state, {temp}a, {count}u, {temp}r, 32u);",
+        ]
+        lines += emit_store(operands[0], f"{temp}r")
+    elif mnemonic == "LEAVE":
+        require(0)
+        lines += [
+            "state.regs[4] = state.regs[5];",
+            f"if (!memory.load32(state.regs[4], {temp})) "
+            "return BatchLiftStatus::invalid_memory;",
+            f"state.regs[5] = {temp};",
+            "state.regs[4] = static_cast<std::uint32_t>(state.regs[4] + 4u);",
+        ]
     elif mnemonic == "SAR":
         require(2)
         if operands[0][0] != "register" or operand_width(operands[0]) != 32:

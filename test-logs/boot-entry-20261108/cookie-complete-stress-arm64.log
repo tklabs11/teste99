@@ -1,0 +1,2 @@
+stress stage=cookie-complete iterations=100 device=PJMZAEJRX4YLFIDI date=2026-11-08T08:00:59.8225632-03:00
+COOKIE ok=100 bad=0 distinct_cookies=100

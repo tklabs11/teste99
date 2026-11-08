@@ -1,0 +1,55 @@
+{
+  "reference_sha256": "6aec99cb2dc7fd08851a1718e92a60f359fb3fccca3b244a890ae07e93cbe59b",
+  "candidate_sha256": "6aec99cb2dc7fd08851a1718e92a60f359fb3fccca3b244a890ae07e93cbe59b",
+  "stage": "cookie-complete",
+  "function": "0x011e1548",
+  "boundary": "0x011e15de",
+  "boundary_bytes": null,
+  "function_complete": true,
+  "verified_function_instructions": 53,
+  "prefix_instructions_before_boundary": 53,
+  "prefix_bytes_including_boundary": 150,
+  "alternate_branch_guard": "0x011e1578",
+  "initial_data_address": "0x015cfe70",
+  "initial_data_bytes": "4ee640bbb119bf44",
+  "imports": [
+    {
+      "address": "0x011e157f",
+      "symbol": "KERNEL32.dll!GetSystemTimeAsFileTime",
+      "iat": "0x013cc1cc",
+      "argument_count": 1,
+      "executed": true
+    },
+    {
+      "address": "0x011e158b",
+      "symbol": "KERNEL32.dll!GetCurrentProcessId",
+      "iat": "0x013cc114",
+      "argument_count": 0,
+      "executed": true
+    },
+    {
+      "address": "0x011e1593",
+      "symbol": "KERNEL32.dll!GetCurrentThreadId",
+      "iat": "0x013cc13c",
+      "argument_count": 0,
+      "executed": true
+    },
+    {
+      "address": "0x011e159b",
+      "symbol": "KERNEL32.dll!GetTickCount",
+      "iat": "0x013cc130",
+      "argument_count": 0,
+      "executed": true
+    },
+    {
+      "address": "0x011e15a7",
+      "symbol": "KERNEL32.dll!QueryPerformanceCounter",
+      "iat": "0x013cc2b8",
+      "argument_count": 1,
+      "executed": true
+    }
+  ],
+  "process_id_call_executed": true,
+  "entropy_mix_complete": true,
+  "scope": "complete ___security_init_cookie with real Win32 entropy"
+}

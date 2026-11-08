@@ -1,0 +1,1 @@
+PASS original_x86_real_win32_vs_lift_x86 PASS pid_prefix boundary=0x011e158b executed=20 pid_call_executed=0 esp_delta=-32 ebp_delta=-4 ebx=0xffff0000 edi=0xbb40e64e esi_mix=verified filetime=within_host_window data=unchanged

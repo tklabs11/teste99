@@ -1,0 +1,2 @@
+PASS cookie_complete returned=1 esp_delta=4 regs_restored=1 cookie_consistent=1 cookie_high_word=1 guards=1 imports=5 instructions=53
+DETAIL cookie_complete cookie=0x7e37b4f7 complement=0x81c84b08

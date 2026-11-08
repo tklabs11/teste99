@@ -3846,3 +3846,192 @@ e [60 testes Python](./test-logs/boot-entry-20261108/time-import-python-tests.lo
 passaram. Veja [bytes, comandos e limites](./test-logs/boot-entry-20261108/report.md#continuação-primeira-api-win32-executada).
 O próximo import é `GetCurrentProcessId` em `0x011e158b` após dois MOV/XOR.
 O APK ainda não executa a entrada do PE; nenhum boot ou menu foi observado.
+
+### GetCurrentProcessId no prefixo de boot — 2026-11-08
+
+O prefixo real de boot foi estendido até a chamada de
+`KERNEL32.dll!GetCurrentProcessId` e o handler correspondente foi
+implementado no runtime guest. A validação foi feita primeiro localmente
+(bytes x86 originais executando a API real do Windows contra o lift x86) e
+depois no aparelho `PJMZAEJRX4YLFIDI`, com os dois estágios aprovados.
+
+O [gerador novo](../../tools/batch_static_lift/generate_boot_pid_prefix.py)
+confere nos dois PEs os bytes `ff15ccc13c01` em `0x011e157f`, `8b75fc` em
+`0x011e1585`, `3375f8` em `0x011e1588` e `ff1514c13c01` em `0x011e158b`,
+além dos slots IAT `0x013cc1cc` (`GetSystemTimeAsFileTime`) e `0x013cc114`
+(`GetCurrentProcessId`). Ele emite dois estágios verificados:
+
+- **`generated-cookie-pid-prefix`** — executa o cookie, a chamada de tempo, o
+  `MOV ESI,[EBP-4]` e o `XOR ESI,[EBP-8]`, e para em **`0x011e158b`**.
+  [Manifesto](./test-logs/boot-entry-20261108/generated-cookie-pid-prefix/manifest.json).
+- **`generated-cookie-pid-call-prefix`** — executa também a chamada e para em
+  **`0x011e1591`**.
+  [Manifesto](./test-logs/boot-entry-20261108/generated-cookie-pid-call-prefix/manifest.json).
+
+O handler em [BatchStaticLiftRuntime.hpp](../../tools/batch_static_lift/BatchStaticLiftRuntime.hpp)
+é `stdcall` sem argumentos, devolve um identificador guest fixo e diferente de
+zero (`0x1234`) em `EAX` e remove apenas os quatro bytes do endereço de
+retorno. O valor real do processo é específico de cada host e alimenta somente
+a mistura de entropia do CRT, então nenhuma comparação exige o número
+original: o que se compara é a identidade
+`ESI == FILETIME_alto ^ FILETIME_baixo`, válida nas duas implementações, e a
+exigência de `EAX != 0` quando a chamada executa.
+
+No [harness x86 original](../../tools/batch_static_lift/boot_cookie_pid_original_x86.cpp)
+os mesmos bytes PE realocados chamam as APIs reais do Windows por slots IAT
+locais; `INT3` captura o estado no limite. O
+[lift x86](../../tools/batch_static_lift/boot_cookie_pid_prefix_harness.cpp)
+usa o runtime guest. Resultados:
+
+- [estágio `0x011e158b`](./test-logs/boot-entry-20261108/pid-prefix-differential.log):
+  20 instruções executadas, sem chamada de processo, aprovado.
+- [estágio `0x011e1591`](./test-logs/boot-entry-20261108/pid-call-prefix-differential.log):
+  21 instruções, chamada executada, `EAX` diferente de zero, aprovado.
+- [build ARM64 `aarch64-linux-android29`](./test-logs/boot-entry-20261108/pid-call-prefix-arm64-build.log)
+  concluído e [executado no aparelho](./test-logs/boot-entry-20261108/pid-call-prefix-arm64.log),
+  com os dois estágios comparados contra o lift x86 e aprovados.
+- [68 testes Python](./test-logs/boot-entry-20261108/pid-prefix-python-tests.log)
+  aprovados (65 do lifter e 3 de endereçamento efetivo). O estágio anterior de
+  tempo foi recompilado e reexecutado tanto em x86 quanto no aparelho, e
+  continua aprovado com o runtime alterado.
+
+O primeiro run no aparelho emitiu `*** stack smashing detected ***:  terminated`
+depois de cada linha de PASS, e o script aceitou o resultado porque só
+procurava linhas `^PASS `. O caso está registrado em
+[observação do aborto](./test-logs/boot-entry-20261108/pid-prefix-crash-observation.md),
+com o console original. O binário foi recompilado e não abortou em mais de 440
+execuções ([stress de 300 no aparelho](./test-logs/boot-entry-20261108/pid-prefix-stress-arm64.log)),
+então a causa raiz continua desconhecida. Duas correções foram aplicadas para
+que o caso não volte a passar em silêncio: o harness ganhou palavras de guarda
+em volta da página de dados verificada e uma região de guarda acima do `ESP`
+inicial da pilha guest, e o runner agora reprova qualquer linha de saída que
+não seja `PASS ` ou `DETAIL `.
+
+Reprodução local, com o aparelho opcional:
+
+```powershell
+.\tools\run_boot_pid_prefix_tests.ps1 -BuildOnly
+.\tools\run_boot_pid_prefix_tests.ps1 -DeviceSerial <serial>
+```
+
+**Próximo bloqueio:** `0x011e1591 XOR ESI,EAX` e depois
+`0x011e1593 CALL [0x013cc13c]`. O prefixo continua sendo state de fixture
+isolada; o APK não chama a entrada do PE e não houve boot, menu ou
+renderização.
+
+### Mistura de entropia do CRT completa — 2026-11-08
+
+O prefixo de boot agora executa a mistura de entropia do cookie de segurança
+até o último XOR, parando em `0x011e15b5` (`CMP ESI,EDI`). Foram executadas 32
+instruções originais, incluindo as cinco chamadas Win32 do caminho:
+`GetSystemTimeAsFileTime`, `GetCurrentProcessId`, `GetCurrentThreadId`,
+`GetTickCount` e `QueryPerformanceCounter(LARGE_INTEGER*)`.
+
+Três handlers novos no runtime guest, todos `stdcall` com limpeza correta:
+
+- `GetCurrentThreadId` devolve o identificador guest da thread (começa em `1`),
+  reutilizando o mesmo registro usado pelas seções críticas.
+- `GetTickCount` devolve o relógio monotônico do host em milissegundos.
+- `QueryPerformanceCounter` valida o destino como memória guest gravável de 8
+  bytes, grava o contador real e devolve `1`; destino inválido falha antes da
+  escrita.
+
+O [gerador](../../tools/batch_static_lift/generate_boot_pid_prefix.py) ganhou o
+estágio `entropy-complete` e confere, byte a byte, os XOR em `0x011e1591`,
+`0x011e1599`, `0x011e15a1` e `0x011e15b3`, o `LEA [EBP-0x10]`, o `PUSH`, o
+`MOV [EBP-0xc]` e o `XOR [EBP-0x10]`, além dos três slots IAT
+(`0x013cc13c`, `0x013cc130`, `0x013cc2b8`).
+[Manifesto](./test-logs/boot-entry-20261108/generated-cookie-entropy-prefix/manifest.json).
+
+Como os valores de relógio, contador, pid e tid diferem entre hosts, a
+comparação do `ESI` não usa igualdade de número: cada lado verifica a
+identidade `ESI == FILETIME_alto ^ FILETIME_baixo ^ pid ^ tid ^ tick ^
+(qpc_alto ^ qpc_baixo)`, aplicada exatamente nos XOR que a fixture alcançou.
+No x86 original os cinco imports passam por thunks que registram o valor real
+devolvido pela API do Windows e o repassam; assim o harness conhece cada
+parcela sem inventar nenhuma.
+
+Resultados:
+
+- [x86 original vs lift x86 no limite `0x011e15b5`](./test-logs/boot-entry-20261108/entropy-prefix-differential.log),
+  32 instruções, `imports=5`.
+- [execução no aparelho `PJMZAEJRX4YLFIDI`](./test-logs/boot-entry-20261108/entropy-prefix-arm64.log)
+  equivalente ao lift x86 na comparação `x86_vs_arm64`.
+- [120 execuções de stress no aparelho](./test-logs/boot-entry-20261108/entropy-prefix-stress-arm64.log),
+  sem falha e com as guardas de dados e de pilha intactas.
+- [71 testes Python](./test-logs/boot-entry-20261108/entropy-prefix-python-tests.log)
+  aprovados, incluindo os novos casos do bloco de entropia.
+- Os dois estágios anteriores (`0x011e158b`, `0x011e1591`) continuam aprovados
+  em x86 e no aparelho no mesmo run.
+
+**Próximo bloqueio:** `0x011e15b5 CMP ESI,EDI`, `0x011e15b7 JNZ 0x011e15c0`,
+`0x011e15c0 TEST EBX,ESI` e a escrita final do cookie em `0x015cfe70` /
+`0x015cfe74`, seguida de `POP ESI`, `POP EDI`, `POP EBX`, `LEAVE`, `RET`. Nada
+disso foi executado ainda; o APK continua sem chamar a entrada do PE e não há
+boot, menu ou renderização.
+### Marco 8 engatilhado — v43 do construtor
+
+A varredura do próximo alvo do construtor está registrada em
+[scan-00a221b0.json](./test-logs/marco8-00a23817/scan-00a221b0.json) e o plano
+em [plan.md](./test-logs/marco8-00a23817/plan.md). `FUN_00a221b0` tem 37
+instruções e 98 bytes verificados, sem instruções não suportadas e sem
+chamadas indiretas; os dois destinos ausentes dos exports são `0x00f473a0`
+(ramo pulado com lista livre não vazia) e `0x011e073e` (thunk já observado
+resolvendo para `MSVCR90.dll!memset` no processo real). O v43 deve parar em
+`0x00a221fc`, com último byte `0x00a221fb`. Nada foi executado nesse marco.
+
+
+### `___security_init_cookie` completa no ARM64 — 2026-11-08
+
+A função do cookie de segurança executa agora de ponta a ponta: 53 instruções
+originais, cinco imports Win32 reais, escrita do cookie e retorno ao chamador.
+Isto fecha a primeira função do caminho de boot que depende de APIs do Windows
+e é executada por inteiro no lift, sem stub no meio.
+
+Duas instruções x86 novas no lifter:
+
+- `SHL r32, imm8` — `CF` recebe o último bit deslocado, `SF`/`ZF`/`PF` vêm do
+  resultado. `OF` só é definido para contagem 1; para contagens maiores o
+  manual x86 o deixa indefinido, então ele é preservado em vez de inventado.
+  `AF` idem.
+- `LEAVE` — `ESP = EBP` e `POP EBP`, sem efeito em flags.
+
+O [gerador](../../tools/batch_static_lift/generate_boot_pid_prefix.py) ganhou o
+estágio `cookie-complete`, que emite o corpo inteiro (sem instrução de
+fronteira) e marca `SPORE_COOKIE_FUNCTION_COMPLETE` no cabeçalho gerado.
+[Manifesto](./test-logs/boot-entry-20261108/generated-cookie-cookie-prefix/manifest.json).
+
+No harness x86 original, os mesmos bytes do PE são chamados por `push` + `jmp`
+para um stub, então o `RET` da própria função devolve o controle e o `INT3`
+captura o estado depois do retorno. Um defeito real apareceu nesse caminho e
+foi corrigido: além dos dois operandos absolutos de `0x011e1550` e
+`0x011e1573`, o rabo da função escreve o cookie em `0x011e15cb` e
+`0x011e15d3`, que também precisavam de relocação — sem isso o teste original
+dava access violation.
+
+Verificações comparadas entre bytes x86 originais, lift x86 e lift ARM64:
+
+| Propriedade | Resultado |
+| --- | --- |
+| Retorno ao chamador | `ESP` +4 em relação à entrada, `EIP` no endereço de retorno |
+| Registradores callee-saved | `EBX`, `EBP`, `ESI`, `EDI` restaurados |
+| Cookie em `0x015cfe70` | Não zero e com palavra alta não zero |
+| Complemento em `0x015cfe74` | Igual ao `NOT` do cookie |
+| Guardas da fixture | Dados e pilha guest intactos |
+| Imports executados | 5, na ordem `GetSystemTimeAsFileTime`, `GetCurrentProcessId`, `GetCurrentThreadId`, `GetTickCount`, `QueryPerformanceCounter` |
+
+O valor do cookie **não** é comparado entre hosts, porque é entropia real:
+[100 execuções no aparelho](./test-logs/boot-entry-20261108/cookie-complete-stress-arm64.log)
+produziram 100 valores distintos, todos consistentes com o complemento
+gravado. A [comparação x86 versus ARM64](./test-logs/boot-entry-20261108/cookie-prefix-differential.log)
+é sobre as propriedades acima.
+
+- [execução no aparelho `PJMZAEJRX4YLFIDI`](./test-logs/boot-entry-20261108/cookie-prefix-arm64.log)
+- [73 testes Python](./test-logs/boot-entry-20261108/cookie-complete-python-tests.log)
+- os três estágios anteriores (`0x011e158b`, `0x011e1591`, `0x011e15b5`)
+  continuam aprovados em x86 e no aparelho no mesmo run
+
+**Próximo bloqueio:** com o cookie pronto, o chamador retoma em `0x011e11a5`
+com o `JMP` terminal para `0x011e0ee0`, o CRT. Esse destino continua sem corpo
+executado e é o próximo limite real do boot. O APK ainda não chama a entrada do
+PE; não há boot, menu ou renderização.

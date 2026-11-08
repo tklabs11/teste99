@@ -1,0 +1,2 @@
+boot_cookie_pid_original_x86.cpp
+C:\Users\wesll\AndroidStudioProjects\SporeAndroid\tools\batch_static_lift\boot_cookie_pid_original_x86.cpp(141) : warning C4740: fluxo para dentro ou para fora de código asm embutido suprime otimização global

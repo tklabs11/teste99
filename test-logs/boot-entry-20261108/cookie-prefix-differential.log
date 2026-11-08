@@ -1,1 +1,1 @@
-PASS original_x86_relocated_vs_lift_x86_vs_arm64 PASS cookie_prefix boundary=0x011e157f executed=16 eax_stack_delta=-12 esp_delta=-36 ebp_delta=-4 ebx=0xffff0000 edi=0xbb40e64e flags=0x044 locals=zero data=unchanged
+PASS original_x86_real_win32_vs_lift_x86 PASS cookie_complete returned=1 esp_delta=4 regs_restored=1 cookie_consistent=1 cookie_high_word=1 guards=1 imports=5 instructions=53

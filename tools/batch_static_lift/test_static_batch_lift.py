@@ -8,6 +8,7 @@ from pathlib import Path
 
 import BatchStaticLift as lifter
 import diagnose_call_closure as diagnostic
+import generate_boot_pid_prefix as boot_pid
 import generate_function_prefix as prefix_generator
 
 
@@ -1356,6 +1357,228 @@ class StaticBatchLiftTests(unittest.TestCase):
                 item for item in summary["functions"] if item["status"] == "rejected"
             )
             self.assertEqual(rejected["instruction_diagnostics"][0]["mnemonic"], "FLD")
+
+    def test_boot_pid_stage_boundaries_stop_at_declared_addresses(self):
+        self.assertEqual(
+            boot_pid.resolve_boundary("pid-call-boundary"), 0x011e158B
+        )
+        self.assertEqual(
+            boot_pid.resolve_boundary("pid-call-executed"), 0x011E1591
+        )
+        with self.assertRaisesRegex(ValueError, "unknown boot prefix stage"):
+            boot_pid.resolve_boundary("pid-call")
+
+    def test_boot_pid_prefix_requires_contiguous_verified_bytes(self):
+        body = {
+            0x011E1548: instruction(0x011E1548, "8bff", "MOV", ("EDI", "EDI")),
+            0x011E154A: instruction(0x011E154A, "55", "PUSH", ("EBP",)),
+            0x011E154B: instruction(0x011E154B, "8bec", "MOV", ("EBP", "ESP")),
+        }
+        prefix, boundary = boot_pid.build_prefix(body, 0x011E154B)
+
+        self.assertEqual(
+            [item["address"] for item in prefix],
+            ["0x011e1548", "0x011e154a"],
+        )
+        self.assertEqual(boundary["address"], "0x011e154b")
+        with self.assertRaisesRegex(ValueError, "gap in boot prefix"):
+            boot_pid.build_prefix(
+                {
+                    0x011E1548: body[0x011E1548],
+                    0x011E154B: body[0x011E154B],
+                },
+                0x011E154D,
+            )
+        with self.assertRaisesRegex(ValueError, "expected the boundary"):
+            boot_pid.build_prefix(body, 0x011E154C)
+
+    def test_boot_pid_esi_mix_rejects_other_encodings(self):
+        good = {
+            0x011E1585: instruction(
+                0x011E1585, "8b75fc", "MOV", ("ESI", "dword ptr [EBP + -0x4]")
+            ),
+            0x011E1588: instruction(
+                0x011E1588, "3375f8", "XOR", ("ESI", "dword ptr [EBP + -0x8]")
+            ),
+        }
+        boot_pid.validate_esi_mix(good)
+
+        wrong_encoding = dict(good)
+        wrong_encoding[0x011E1588] = instruction(
+            0x011E1588, "33f0", "XOR", ("ESI", "EAX")
+        )
+        with self.assertRaisesRegex(ValueError, "differ from 3375f8"):
+            boot_pid.validate_esi_mix(wrong_encoding)
+
+        wrong_mnemonic = dict(good)
+        wrong_mnemonic[0x011E1585] = instruction(
+            0x011E1585, "8b75fc", "LEA", ("ESI", "dword ptr [EBP + -0x4]")
+        )
+        with self.assertRaisesRegex(ValueError, "not the expected MOV"):
+            boot_pid.validate_esi_mix(wrong_mnemonic)
+
+    def test_boot_pid_import_call_requires_matching_iat_symbol(self):
+        by_address = {
+            0x011E158B: instruction(
+                0x011E158B, "ff1514c13c01", "CALL",
+                ("dword ptr [0x013cc114]",), flow="COMPUTED_CALL",
+            ),
+        }
+        iat = {0x013CC114: "KERNEL32.dll!GetCurrentProcessId"}
+        boot_pid.validate_import_call(
+            by_address, 0x011E158B, "ff1514c13c01",
+            ["dword ptr [0x013cc114]"], "KERNEL32.dll!GetCurrentProcessId",
+            0x013CC114, iat,
+        )
+        with self.assertRaisesRegex(ValueError, "does not resolve to"):
+            boot_pid.validate_import_call(
+                by_address, 0x011E158B, "ff1514c13c01",
+                ["dword ptr [0x013cc114]"], "KERNEL32.dll!GetCurrentProcessId",
+                0x013CC114, {0x013CC114: "KERNEL32.dll!GetSystemTimeAsFileTime"},
+            )
+        with self.assertRaisesRegex(
+            ValueError, "bytes ff1514c13c01 differ from ff15ccc13c01"
+        ):
+            boot_pid.validate_import_call(
+                by_address, 0x011E158B, "ff15ccc13c01",
+                ["dword ptr [0x013cc114]"], "KERNEL32.dll!GetCurrentProcessId",
+                0x013CC114, iat,
+            )
+
+    def test_boot_entropy_stage_reaches_the_counter_mix(self):
+        self.assertEqual(
+            boot_pid.resolve_boundary("entropy-complete"), 0x011E15B5
+        )
+
+    @staticmethod
+    def _entropy_block():
+        return {
+            0x011E1591: instruction(0x011E1591, "33f0", "XOR", ("ESI", "EAX")),
+            0x011E1593: instruction(
+                0x011E1593, "ff153cc13c01", "CALL",
+                ("dword ptr [0x013cc13c]",), flow="COMPUTED_CALL",
+            ),
+            0x011E1599: instruction(0x011E1599, "33f0", "XOR", ("ESI", "EAX")),
+            0x011E159B: instruction(
+                0x011E159B, "ff1530c13c01", "CALL",
+                ("dword ptr [0x013cc130]",), flow="COMPUTED_CALL",
+            ),
+            0x011E15A1: instruction(0x011E15A1, "33f0", "XOR", ("ESI", "EAX")),
+            0x011E15A3: instruction(
+                0x011E15A3, "8d45f0", "LEA", ("EAX", "[EBP + -0x10]")
+            ),
+            0x011E15A6: instruction(0x011E15A6, "50", "PUSH", ("EAX",)),
+            0x011E15A7: instruction(
+                0x011E15A7, "ff15b8c23c01", "CALL",
+                ("dword ptr [0x013cc2b8]",), flow="COMPUTED_CALL",
+            ),
+            0x011E15AD: instruction(
+                0x011E15AD, "8b45f4", "MOV", ("EAX", "dword ptr [EBP + -0xc]")
+            ),
+            0x011E15B0: instruction(
+                0x011E15B0, "3345f0", "XOR", ("EAX", "dword ptr [EBP + -0x10]")
+            ),
+            0x011E15B3: instruction(0x011E15B3, "33f0", "XOR", ("ESI", "EAX")),
+        }
+
+    def test_boot_entropy_block_requires_the_measured_encodings(self):
+        iat = {
+            0x013CC13C: "KERNEL32.dll!GetCurrentThreadId",
+            0x013CC130: "KERNEL32.dll!GetTickCount",
+            0x013CC2B8: "KERNEL32.dll!QueryPerformanceCounter",
+        }
+        block = self._entropy_block()
+        boot_pid.validate_entropy_block(block, iat)
+
+        wrong_xor = dict(block)
+        wrong_xor[0x011E1599] = instruction(
+            0x011E1599, "33c0", "XOR", ("EAX", "EAX")
+        )
+        with self.assertRaisesRegex(ValueError, "differ from 33f0"):
+            boot_pid.validate_entropy_block(wrong_xor, iat)
+
+        missing = dict(block)
+        del missing[0x011E15A7]
+        with self.assertRaisesRegex(ValueError, "0x011e15a7.*absent"):
+            boot_pid.validate_entropy_block(missing, iat)
+
+        wrong_iat = dict(iat)
+        wrong_iat[0x013CC130] = "KERNEL32.dll!GetCurrentThreadId"
+        with self.assertRaisesRegex(ValueError, "does not resolve to"):
+            boot_pid.validate_entropy_block(block, wrong_iat)
+
+    def test_boot_entropy_header_emits_every_call_and_xor_site(self):
+        header = boot_pid.reference_header(
+            b"\x90", b"\x4e\xe6\x40\xbb\xb1\x19\xbf\x44", 0x011E15B5
+        )
+        for name, value in (
+            ("kCookieBoundaryAddress", "0x011e15b5u"),
+            ("kCookieThreadIdCallAddress", "0x011e1593u"),
+            ("kCookieTickCountCallAddress", "0x011e159bu"),
+            ("kCookiePerformanceCounterCallAddress", "0x011e15a7u"),
+            ("kCookieProcessIdXorAddress", "0x011e1591u"),
+            ("kCookieThreadIdXorAddress", "0x011e1599u"),
+            ("kCookieTickCountXorAddress", "0x011e15a1u"),
+            ("kCookiePerformanceCounterXorAddress", "0x011e15b3u"),
+        ):
+            self.assertIn(f"{name} = {value};", header)
+
+    def test_boot_cookie_complete_stage_allows_a_function_tail(self):
+        self.assertEqual(
+            boot_pid.resolve_boundary("cookie-complete"), 0x011E15DE
+        )
+        body = {
+            0x011E1548: instruction(0x011E1548, "8bff", "MOV", ("EDI", "EDI")),
+            0x011E154A: instruction(0x011E154A, "c3", "RET", flow="TERMINAL"),
+        }
+        prefix, boundary = boot_pid.build_prefix(body, 0x011E154B)
+
+        self.assertEqual(len(prefix), 2)
+        self.assertIsNone(boundary)
+
+    def test_shift_left_and_leave_emit_documented_semantics(self):
+        shl = instruction(
+            0x011E15C6, "c1e010", "SHL", ("EAX", "0x10")
+        )
+        source = lifter.translate_instruction(
+            shl, 0, {0x011E15C6, 0x011E15C9}, 0x011E15C9
+        )
+        joined = "\n".join(source)
+        self.assertIn("batch_set_shl_flags(state, t0a, 16u, t0r, 32u);", joined)
+        self.assertIn("t0r = static_cast<std::uint32_t>(t0a << 16u)", joined)
+
+        leave = instruction(0x011E15DC, "c9", "LEAVE")
+        leave_source = lifter.translate_instruction(
+            leave, 0, {0x011E15DC, 0x011E15DD}, 0x011E15DD
+        )
+        leave_joined = "\n".join(leave_source)
+        self.assertIn("state.regs[4] = state.regs[5];", leave_joined)
+        self.assertIn("state.regs[5] = t0;", leave_joined)
+
+        with self.assertRaisesRegex(ValueError, "immediate counts 0 through 31"):
+            lifter.translate_instruction(
+                instruction(0x011E15C6, "c1e020", "SHL", ("EAX", "0x20")),
+                0, {0x011E15C6, 0x011E15C9}, 0x011E15C9,
+            )
+
+    def test_boot_pid_reference_header_emits_boundary_and_imports(self):
+        header = boot_pid.reference_header(
+            b"\x90\xc3", b"\x4e\xe6\x40\xbb\xb1\x19\xbf\x44", 0x011E1591
+        )
+
+        self.assertIn(
+            "inline constexpr std::uint32_t kCookieBoundaryAddress = "
+            "0x011e1591u;", header
+        )
+        self.assertIn(
+            "inline constexpr std::uint32_t kCookieTimeCallAddress = "
+            "0x011e157fu;", header
+        )
+        self.assertIn(
+            "inline constexpr std::uint32_t kCookieProcessIdCallAddress = "
+            "0x011e158bu;", header
+        )
+        self.assertIn("kCookieCodeBytes{0x90u, 0xc3u};", header)
 
 
 if __name__ == "__main__":

@@ -1,0 +1,4 @@
+stress arm64 stages=pid-prefix,pid-call-prefix iterations=150 each device=PJMZAEJRX4YLFIDI date=2026-11-08T02:41:52.2718047-03:00
+STAGE pid-prefix ok=150 bad=0
+STAGE pid-call-prefix ok=150 bad=0
+TOTAL ok=300 bad=0
