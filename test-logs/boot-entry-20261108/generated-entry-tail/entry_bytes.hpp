@@ -1,0 +1,4 @@
+#pragma once
+#include <array>
+#include <cstdint>
+inline constexpr std::array<std::uint8_t, 10> kVerifiedPeEntryBytes{0xe8u, 0xa3u, 0x03u, 0x00u, 0x00u, 0xe9u, 0x36u, 0xfdu, 0xffu, 0xffu};

@@ -110,7 +110,11 @@ BatchLiftStatus spore_lift_00a2a210(
 namespace {
 
 constexpr std::uint32_t kObjectBase = 0x20000000u;
-#if defined(M7_THROUGH_FIFTH_FIRST_CALL)
+#if defined(M7_THROUGH_SIXTH_FIRST_CALL)
+constexpr std::uint32_t kObjectBytes = 0x118b60u;
+#elif defined(M7_THROUGH_FIFTH_CHILD_RETURN)
+constexpr std::uint32_t kObjectBytes = 0x118b00u;
+#elif defined(M7_THROUGH_FIFTH_FIRST_CALL)
 constexpr std::uint32_t kObjectBytes = 0x115b10u;
 #elif defined(M7_THROUGH_FOURTH_FIRST_CALL)
 constexpr std::uint32_t kObjectBytes = 0x7c600u;
@@ -130,7 +134,35 @@ constexpr std::uint32_t kPrefixEntryEsp =
     kPrefixStackBase + kPrefixStackTopOffset - sizeof(std::uint32_t);
 constexpr std::uint32_t kObjectCanary = 0x8badf00du;
 #if defined(M7_COMPOSITE_ENTRY)
-#if defined(M7_THROUGH_FIFTH_THIRD_ENTRY)
+#if defined(M7_THROUGH_SIXTH_HELPER_FLOAT_CALL)
+constexpr std::uint32_t kCompositeStop = 0x00a23817u;
+#elif defined(M7_THROUGH_SIXTH_HELPER_BRANCH)
+constexpr std::uint32_t kCompositeStop = 0x00a2380cu;
+#elif defined(M7_THROUGH_SIXTH_HELPER_FIRST_CALL)
+constexpr std::uint32_t kCompositeStop = 0x00a237e8u;
+#elif defined(M7_THROUGH_SIXTH_HELPER_ENTRY)
+constexpr std::uint32_t kCompositeStop = 0x00a237c2u;
+#elif defined(M7_THROUGH_SIXTH_SECOND_CALL)
+constexpr std::uint32_t kCompositeStop = 0x00a2a492u;
+#elif defined(M7_THROUGH_SIXTH_FIRST_CALL)
+constexpr std::uint32_t kCompositeStop = 0x00a2a469u;
+#elif defined(M7_THROUGH_SIXTH_CHILD_ENTRY)
+constexpr std::uint32_t kCompositeStop = 0x00a2a448u;
+#elif defined(M7_THROUGH_FIFTH_CHILD_RETURN)
+constexpr std::uint32_t kCompositeStop = 0x00a3394fu;
+#elif defined(M7_THROUGH_FIFTH_FLOAT_CALL)
+constexpr std::uint32_t kCompositeStop = 0x00a30eeeu;
+#elif defined(M7_THROUGH_FIFTH_ALLOCATOR_MEMSET)
+constexpr std::uint32_t kCompositeStop = 0x00a30ee6u;
+#elif defined(M7_THROUGH_FIFTH_ALLOCATOR_ENTRY)
+constexpr std::uint32_t kCompositeStop = 0x00a21e8cu;
+#elif defined(M7_THROUGH_FIFTH_HELPER_FLOAT_CALL)
+constexpr std::uint32_t kCompositeStop = 0x00a2376du;
+#elif defined(M7_THROUGH_FIFTH_THIRD_BRANCH)
+constexpr std::uint32_t kCompositeStop = 0x00a23762u;
+#elif defined(M7_THROUGH_FIFTH_THIRD_FIRST_CALL)
+constexpr std::uint32_t kCompositeStop = 0x00a2373eu;
+#elif defined(M7_THROUGH_FIFTH_THIRD_ENTRY)
 constexpr std::uint32_t kCompositeStop = 0x00a23715u;
 #elif defined(M7_THROUGH_FIFTH_SECOND_CALL)
 constexpr std::uint32_t kCompositeStop = 0x00a30e9eu;
@@ -180,7 +212,9 @@ constexpr std::size_t kIndexedObjectBytes = 0x100u;
 constexpr std::uint32_t kIndexedStoreValue = 0xdecafbad;
 constexpr std::uint32_t kIndexedTestFlags = 0x000008d7u;
 #if defined(_M_IX86)
-#if defined(M7_THROUGH_FIFTH_CHILD_ENTRY)
+#if defined(M7_THROUGH_FIFTH_ALLOCATOR_ENTRY)
+constexpr std::uint32_t kAllocationBytes = 0x13000u;
+#elif defined(M7_THROUGH_FIFTH_CHILD_ENTRY)
 constexpr std::uint32_t kAllocationBytes = 0x12000u;
 #else
 constexpr std::uint32_t kAllocationBytes = 0x10000u;
@@ -1182,7 +1216,9 @@ std::uint32_t normalize_object_pointer(
     if (address < native_base
         || address - native_base >
 #if defined(M7_COMPOSITE_ENTRY)
-#if defined(M7_THROUGH_FIFTH_FIRST_CALL)
+#if defined(M7_THROUGH_FIFTH_CHILD_RETURN)
+            0x119000u
+#elif defined(M7_THROUGH_FIFTH_FIRST_CALL)
             0x116000u
 #elif defined(M7_THROUGH_FOURTH_FIRST_CALL)
             0x7d000u
@@ -1277,7 +1313,9 @@ bool run_original_prefix(Snapshot& snapshot) {
         PAGE_EXECUTE_READWRITE);
     void* object = VirtualAlloc(
         nullptr,
-#if defined(M7_THROUGH_FIFTH_FIRST_CALL)
+#if defined(M7_THROUGH_FIFTH_CHILD_RETURN)
+        0x119000u,
+#elif defined(M7_THROUGH_FIFTH_FIRST_CALL)
         0x116000u,
 #elif defined(M7_THROUGH_FOURTH_FIRST_CALL)
         0x7d000u,
@@ -1407,12 +1445,124 @@ bool run_original_prefix(Snapshot& snapshot) {
     std::memcpy(m7_fifth_code, kM7FifthEntryBytes.data(),
                 kM7FifthEntryBytes.size());
     m7_fifth_code[kM7FifthEntryBytes.size()] = 0xccu;
+#if defined(M7_THROUGH_FIFTH_CHILD_RETURN)
+    constexpr std::uint32_t kFifthChildGuardOffset =
+        0x00a30ef3u - 0x00a30e10u;
+    if (m7_fifth_code[kFifthChildGuardOffset] != 0xe8u) {
+        std::fprintf(stderr, "unexpected fifth child guarded CALL bytes\n");
+        VirtualFree(code_allocation, 0, MEM_RELEASE);
+        VirtualFree(object, 0, MEM_RELEASE);
+        return false;
+    }
+    m7_fifth_code[kFifthChildGuardOffset] = 0xccu;
+#endif
+#if defined(M7_THROUGH_SIXTH_CHILD_ENTRY)
+    auto* m7_sixth_code =
+        static_cast<std::uint8_t*>(code_allocation) + 0x12400u;
+    std::memcpy(m7_sixth_code, kM7SixthEntryBytes.data(),
+                kM7SixthEntryBytes.size());
+    m7_sixth_code[kM7SixthEntryBytes.size()] = 0xccu;
+#if defined(M7_THROUGH_SIXTH_HELPER_ENTRY)
+    auto* m7_sixth_helper_code =
+        static_cast<std::uint8_t*>(code_allocation) + 0x12500u;
+    std::memcpy(m7_sixth_helper_code, kM7SixthHelperBytes.data(),
+                kM7SixthHelperBytes.size());
+    m7_sixth_helper_code[kM7SixthHelperBytes.size()] = 0xccu;
+#if defined(M7_THROUGH_SIXTH_HELPER_BRANCH)
+    constexpr std::uint32_t kSixthHelperTakenGuardOffset =
+        0x00a2380cu - 0x00a23780u;
+    constexpr std::uint32_t kSixthHelperSecondGuardOffset =
+        0x00a23817u - 0x00a23780u;
+    if (m7_sixth_helper_code[kSixthHelperTakenGuardOffset] != 0xe8u
+        || m7_sixth_helper_code[kSixthHelperSecondGuardOffset] != 0xe8u) {
+        std::fprintf(stderr, "unexpected sixth helper guarded CALL bytes\n");
+        VirtualFree(code_allocation, 0, MEM_RELEASE);
+        VirtualFree(object, 0, MEM_RELEASE);
+        return false;
+    }
+#if !defined(M7_THROUGH_SIXTH_HELPER_FLOAT_CALL)
+    m7_sixth_helper_code[kSixthHelperTakenGuardOffset] = 0xccu;
+#endif
+    m7_sixth_helper_code[kSixthHelperSecondGuardOffset] = 0xccu;
+#endif
+#endif
+#endif
 #if defined(M7_THROUGH_FIFTH_THIRD_ENTRY)
     auto* m7_fifth_helper_code =
         static_cast<std::uint8_t*>(code_allocation) + 0x11000u;
     std::memcpy(m7_fifth_helper_code, kM7FifthHelperBytes.data(),
                 kM7FifthHelperBytes.size());
     m7_fifth_helper_code[kM7FifthHelperBytes.size()] = 0xccu;
+#if defined(M7_THROUGH_FIFTH_THIRD_BRANCH)
+    constexpr std::uint32_t kFifthHelperTakenCallOffset =
+        0x00a23762u - 0x00a236d0u;
+    constexpr std::uint32_t kFifthHelperFollowingCallOffset =
+        0x00a2376du - 0x00a236d0u;
+    if (m7_fifth_helper_code[kFifthHelperTakenCallOffset] != 0xe8u
+        || m7_fifth_helper_code[kFifthHelperFollowingCallOffset] != 0xe8u) {
+        std::fprintf(stderr, "unexpected fifth helper guarded CALL bytes\n");
+        VirtualFree(code_allocation, 0, MEM_RELEASE);
+        VirtualFree(object, 0, MEM_RELEASE);
+        return false;
+    }
+#if !defined(M7_THROUGH_FIFTH_HELPER_FLOAT_CALL)
+    m7_fifth_helper_code[kFifthHelperTakenCallOffset] = 0xccu;
+#endif
+#if !defined(M7_THROUGH_FIFTH_ALLOCATOR_ENTRY)
+    m7_fifth_helper_code[kFifthHelperFollowingCallOffset] = 0xccu;
+#endif
+#if defined(M7_THROUGH_FIFTH_HELPER_FLOAT_CALL)
+    if (!relocate_direct_call(
+            m7_fifth_helper_code + kFifthHelperTakenCallOffset,
+            m7_float_code)) {
+        std::fprintf(stderr, "could not relocate fifth helper float CALL\n");
+        VirtualFree(code_allocation, 0, MEM_RELEASE);
+        VirtualFree(object, 0, MEM_RELEASE);
+        return false;
+    }
+#endif
+#endif
+#if defined(M7_THROUGH_FIFTH_THIRD_FIRST_CALL)
+    if (!relocate_direct_call(
+            m7_fifth_helper_code + (0x00a23715u - 0x00a236d0u),
+            m7_target_code)) {
+        std::fprintf(stderr, "could not relocate fifth helper first CALL\n");
+        VirtualFree(code_allocation, 0, MEM_RELEASE);
+        VirtualFree(object, 0, MEM_RELEASE);
+        return false;
+    }
+#endif
+#endif
+#endif
+#if defined(M7_THROUGH_FIFTH_ALLOCATOR_ENTRY)
+    auto* m7_fifth_allocator_code =
+        static_cast<std::uint8_t*>(code_allocation) + 0x12000u;
+    std::memcpy(m7_fifth_allocator_code, kM7FifthAllocatorBytes.data(),
+                kM7FifthAllocatorBytes.size());
+    m7_fifth_allocator_code[kM7FifthAllocatorBytes.size()] = 0xccu;
+    constexpr std::uint32_t kFifthAllocatorFirstGuardOffset =
+        0x00a21e79u - 0x00a21e40u;
+    constexpr std::uint32_t kFifthAllocatorSecondGuardOffset =
+        0x00a21e8cu - 0x00a21e40u;
+    if (m7_fifth_allocator_code[kFifthAllocatorFirstGuardOffset] != 0xe8u
+        || m7_fifth_allocator_code[kFifthAllocatorSecondGuardOffset] != 0xe8u) {
+        std::fprintf(stderr, "unexpected fifth allocator guarded CALL bytes\n");
+        VirtualFree(code_allocation, 0, MEM_RELEASE);
+        VirtualFree(object, 0, MEM_RELEASE);
+        return false;
+    }
+    m7_fifth_allocator_code[kFifthAllocatorFirstGuardOffset] = 0xccu;
+#if !defined(M7_THROUGH_FIFTH_ALLOCATOR_MEMSET)
+    m7_fifth_allocator_code[kFifthAllocatorSecondGuardOffset] = 0xccu;
+#else
+    if (!relocate_direct_call(
+            m7_fifth_allocator_code + kFifthAllocatorSecondGuardOffset,
+            reinterpret_cast<const std::uint8_t*>(&prefix_memset))) {
+        std::fprintf(stderr, "could not relocate fifth allocator memset CALL\n");
+        VirtualFree(code_allocation, 0, MEM_RELEASE);
+        VirtualFree(object, 0, MEM_RELEASE);
+        return false;
+    }
 #endif
 #endif
 #if defined(M7_THROUGH_CHILD_RETURN)
@@ -1440,7 +1590,11 @@ bool run_original_prefix(Snapshot& snapshot) {
     std::memcpy(root_code + (kSporePrefixStop - kSporePrefixEntry),
                 kM7RootTailBytes.data(), kM7RootTailBytes.size());
 #if defined(M7_THROUGH_FIFTH_CHILD_ENTRY)
+#if defined(M7_THROUGH_SIXTH_CHILD_ENTRY)
+    root_code[0x00a339a1u - kSporePrefixEntry] = 0xccu;
+#else
     root_code[0x00a3394fu - kSporePrefixEntry] = 0xccu;
+#endif
 #elif !defined(M7_THROUGH_FOURTH_CHILD_ENTRY) || defined(M7_THROUGH_FOURTH_CHILD_RETURN)
     root_code[kCompositeStop - kSporePrefixEntry] = 0xccu;
 #endif
@@ -1569,6 +1723,66 @@ bool run_original_prefix(Snapshot& snapshot) {
         VirtualFree(object, 0, MEM_RELEASE);
         return false;
     }
+#if defined(M7_THROUGH_SIXTH_CHILD_ENTRY)
+    if (!relocate_direct_call(
+            root_code + (0x00a3394fu - kSporePrefixEntry),
+            m7_sixth_code)) {
+        std::fprintf(stderr, "could not relocate sixth constructor CALL\n");
+        VirtualFree(code_allocation, 0, MEM_RELEASE);
+        VirtualFree(object, 0, MEM_RELEASE);
+        return false;
+    }
+#if defined(M7_THROUGH_SIXTH_FIRST_CALL)
+    if (!relocate_direct_call(
+            m7_sixth_code + (0x00a2a448u - 0x00a2a410u),
+            m7_target_code)) {
+        std::fprintf(stderr, "could not relocate sixth child first CALL\n");
+        VirtualFree(code_allocation, 0, MEM_RELEASE);
+        VirtualFree(object, 0, MEM_RELEASE);
+        return false;
+    }
+#if defined(M7_THROUGH_SIXTH_SECOND_CALL)
+    if (!relocate_direct_call(
+            m7_sixth_code + (0x00a2a469u - 0x00a2a410u),
+            m7_next_code)) {
+        std::fprintf(stderr, "could not relocate sixth child second CALL\n");
+        VirtualFree(code_allocation, 0, MEM_RELEASE);
+        VirtualFree(object, 0, MEM_RELEASE);
+        return false;
+    }
+#if defined(M7_THROUGH_SIXTH_HELPER_ENTRY)
+    if (!relocate_direct_call(
+            m7_sixth_code + (0x00a2a492u - 0x00a2a410u),
+            m7_sixth_helper_code)) {
+        std::fprintf(stderr, "could not relocate sixth child helper CALL\n");
+        VirtualFree(code_allocation, 0, MEM_RELEASE);
+        VirtualFree(object, 0, MEM_RELEASE);
+        return false;
+    }
+#if defined(M7_THROUGH_SIXTH_HELPER_FIRST_CALL)
+    if (!relocate_direct_call(
+            m7_sixth_helper_code + (0x00a237c2u - 0x00a23780u),
+            m7_target_code)) {
+        std::fprintf(stderr, "could not relocate sixth helper first CALL\n");
+        VirtualFree(code_allocation, 0, MEM_RELEASE);
+        VirtualFree(object, 0, MEM_RELEASE);
+        return false;
+    }
+#if defined(M7_THROUGH_SIXTH_HELPER_FLOAT_CALL)
+    if (!relocate_direct_call(
+            m7_sixth_helper_code + (0x00a2380cu - 0x00a23780u),
+            m7_float_code)) {
+        std::fprintf(stderr, "could not relocate sixth helper float CALL\n");
+        VirtualFree(code_allocation, 0, MEM_RELEASE);
+        VirtualFree(object, 0, MEM_RELEASE);
+        return false;
+    }
+#endif
+#endif
+#endif
+#endif
+#endif
+#endif
 #if defined(M7_THROUGH_FIFTH_FIRST_CALL)
     if (!relocate_direct_call(
             m7_fifth_code + (0x00a30e4eu - 0x00a30e10u),
@@ -1596,6 +1810,26 @@ bool run_original_prefix(Snapshot& snapshot) {
         VirtualFree(object, 0, MEM_RELEASE);
         return false;
     }
+#if defined(M7_THROUGH_FIFTH_ALLOCATOR_ENTRY)
+    if (!relocate_direct_call(
+            m7_fifth_helper_code + (0x00a2376du - 0x00a236d0u),
+            m7_fifth_allocator_code)) {
+        std::fprintf(stderr, "could not relocate fifth allocator CALL\n");
+        VirtualFree(code_allocation, 0, MEM_RELEASE);
+        VirtualFree(object, 0, MEM_RELEASE);
+        return false;
+    }
+#if defined(M7_THROUGH_FIFTH_FLOAT_CALL)
+    if (!relocate_direct_call(
+            m7_fifth_code + (0x00a30ee6u - 0x00a30e10u),
+            m7_float_call_code)) {
+        std::fprintf(stderr, "could not relocate fifth child float CALL\n");
+        VirtualFree(code_allocation, 0, MEM_RELEASE);
+        VirtualFree(object, 0, MEM_RELEASE);
+        return false;
+    }
+#endif
+#endif
 #endif
 #endif
 #endif
@@ -1800,6 +2034,62 @@ bool run_original_prefix(Snapshot& snapshot) {
         m7_fifth_helper_code + (0x00a236f4u - 0x00a236d0u) + 4u,
         &scale_address, sizeof(scale_address));
 #endif
+#if defined(M7_THROUGH_FIFTH_ALLOCATOR_MEMSET)
+    if (std::memcmp(
+            m7_fifth_code + (0x00a30ea3u - 0x00a30e10u),
+            kM7PostFloatLoad.data(), kM7PostFloatLoad.size()) != 0
+        || std::memcmp(
+            m7_fifth_code + (0x00a30eb1u - 0x00a30e10u),
+            kM7PostScaleLoad.data(), kM7PostScaleLoad.size()) != 0) {
+        std::fprintf(stderr, "unexpected fifth child post-call MOVSS bytes\n");
+        VirtualFree(code_allocation, 0, MEM_RELEASE);
+        VirtualFree(object, 0, MEM_RELEASE);
+        return false;
+    }
+    std::memcpy(
+        m7_fifth_code + (0x00a30ea3u - 0x00a30e10u) + 4u,
+        &post_float_address, sizeof(post_float_address));
+    std::memcpy(
+        m7_fifth_code + (0x00a30eb1u - 0x00a30e10u) + 4u,
+        &scale_address, sizeof(scale_address));
+#if defined(M7_THROUGH_FIFTH_CHILD_RETURN)
+    constexpr std::array<std::uint8_t, 8> kRootFifthScaleLoad{
+        0xf3u, 0x0fu, 0x10u, 0x0du, 0x14u, 0x0fu, 0x47u, 0x01u};
+    if (!relocate_absolute_data_operand(
+            root_code, kSporePrefixEntry, 0x00a33884u,
+            kM7InitialLoad.data(), kM7InitialLoad.size(), 4u,
+            0x01485718u, pe_data)
+        || std::memcmp(
+            root_code + (0x00a3388cu - kSporePrefixEntry),
+            kRootFifthScaleLoad.data(),
+            kRootFifthScaleLoad.size()) != 0) {
+        std::fprintf(stderr, "could not relocate fifth root PE data\n");
+        VirtualFree(code_allocation, 0, MEM_RELEASE);
+        VirtualFree(object, 0, MEM_RELEASE);
+        return false;
+    }
+    std::memcpy(
+        root_code + (0x00a3388cu - kSporePrefixEntry) + 4u,
+        &scale_address, sizeof(scale_address));
+#if defined(M7_THROUGH_SIXTH_HELPER_ENTRY)
+    if (!relocate_absolute_data_operand(
+            m7_sixth_helper_code, 0x00a23780u, 0x00a23780u,
+            kM7InitialLoad.data(), kM7InitialLoad.size(), 4u,
+            0x01485718u, pe_data)
+        || std::memcmp(
+            m7_sixth_helper_code + (0x00a237a4u - 0x00a23780u),
+            kM7ScaleLoad.data(), kM7ScaleLoad.size()) != 0) {
+        std::fprintf(stderr, "could not relocate sixth helper PE data\n");
+        VirtualFree(code_allocation, 0, MEM_RELEASE);
+        VirtualFree(object, 0, MEM_RELEASE);
+        return false;
+    }
+    std::memcpy(
+        m7_sixth_helper_code + (0x00a237a4u - 0x00a23780u) + 4u,
+        &scale_address, sizeof(scale_address));
+#endif
+#endif
+#endif
 #endif
 #if defined(M7_THROUGH_MEMSET)
     if (std::memcmp(m7_code + (0x00a2a2a3u - 0x00a2a210u),
@@ -1892,7 +2182,34 @@ bool run_original_prefix(Snapshot& snapshot) {
 #endif
 #endif
 #if defined(M7_THROUGH_THIRD_CALL)
-#if defined(M7_THROUGH_FIFTH_THIRD_ENTRY)
+#if defined(M7_THROUGH_SIXTH_HELPER_ENTRY)
+    const std::uint32_t boundary_runtime_address = native_address32(
+#if defined(M7_THROUGH_SIXTH_HELPER_FLOAT_CALL)
+        m7_sixth_helper_code + (0x00a23817u - 0x00a23780u));
+#elif defined(M7_THROUGH_SIXTH_HELPER_BRANCH)
+        m7_sixth_helper_code + (0x00a2380cu - 0x00a23780u));
+#else
+        m7_sixth_helper_code + kM7SixthHelperBytes.size());
+#endif
+#elif defined(M7_THROUGH_SIXTH_CHILD_ENTRY)
+    const std::uint32_t boundary_runtime_address = native_address32(
+        m7_sixth_code + kM7SixthEntryBytes.size());
+#elif defined(M7_THROUGH_FIFTH_CHILD_RETURN)
+    const std::uint32_t boundary_runtime_address = native_address32(
+        root_code + (kCompositeStop - kSporePrefixEntry));
+#elif defined(M7_THROUGH_FIFTH_ALLOCATOR_MEMSET)
+    const std::uint32_t boundary_runtime_address = native_address32(
+        m7_fifth_code + kM7FifthEntryBytes.size());
+#elif defined(M7_THROUGH_FIFTH_ALLOCATOR_ENTRY)
+    const std::uint32_t boundary_runtime_address = native_address32(
+        m7_fifth_allocator_code + (0x00a21e8cu - 0x00a21e40u));
+#elif defined(M7_THROUGH_FIFTH_HELPER_FLOAT_CALL)
+    const std::uint32_t boundary_runtime_address = native_address32(
+        m7_fifth_helper_code + (0x00a2376du - 0x00a236d0u));
+#elif defined(M7_THROUGH_FIFTH_THIRD_BRANCH)
+    const std::uint32_t boundary_runtime_address = native_address32(
+        m7_fifth_helper_code + (0x00a23762u - 0x00a236d0u));
+#elif defined(M7_THROUGH_FIFTH_THIRD_ENTRY)
     const std::uint32_t boundary_runtime_address = native_address32(
         m7_fifth_helper_code + kM7FifthHelperBytes.size());
 #elif defined(M7_THROUGH_FIFTH_CHILD_ENTRY)
@@ -1935,7 +2252,9 @@ bool run_original_prefix(Snapshot& snapshot) {
         root_runtime_address + (kSporePrefixStop - kSporePrefixEntry);
     root_code[kSporePrefixStop - kSporePrefixEntry] = 0xccu;
 #endif
-#if defined(M7_THROUGH_FIFTH_FIRST_CALL)
+#if defined(M7_THROUGH_FIFTH_CHILD_RETURN)
+    std::memset(object, 0, 0x119000u);
+#elif defined(M7_THROUGH_FIFTH_FIRST_CALL)
     std::memset(object, 0, 0x116000u);
 #elif defined(M7_THROUGH_FOURTH_FIRST_CALL)
     std::memset(object, 0, 0x7d000u);
@@ -2053,10 +2372,21 @@ bool run_original_prefix(Snapshot& snapshot) {
     const auto* object_words = static_cast<const std::uint32_t*>(object);
     for (std::size_t index = 0;
          index < kObjectBytes / sizeof(std::uint32_t); ++index) {
-        std::uint32_t value = normalize_native_object_value(
-            object_words[index], native_object_base);
         const std::uint32_t object_offset =
             static_cast<std::uint32_t>(index * sizeof(std::uint32_t));
+        std::uint32_t value = normalize_native_object_value(
+            object_words[index], native_object_base);
+#if defined(M7_THROUGH_SIXTH_HELPER_ENTRY)
+        // Root PE MOVs at 0x00a338af, 0x00a338d7 and 0x00a338ff
+        // store this literal vtable address. It can overlap a native
+        // fixture allocation by chance; preserve the literal at these slots.
+        if ((object_offset == 0x118a00u
+             || object_offset == 0x118a20u
+             || object_offset == 0x118a40u)
+            && object_words[index] == 0x0154df28u) {
+            value = object_words[index];
+        }
+#endif
         for (std::size_t section_index = 0;
              section_index < g_native_critical_section_count;
              ++section_index) {

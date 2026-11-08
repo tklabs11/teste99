@@ -1,0 +1,14 @@
+{
+  "reference_sha256": "6aec99cb2dc7fd08851a1718e92a60f359fb3fccca3b244a890ae07e93cbe59b",
+  "candidate_sha256": "fb66afc320730dec6f80b79301c7c525689859e3d0a99616b657559e8f11a1ae",
+  "function": "0x011e1548",
+  "boundary": "0x011e157f",
+  "verified_function_instructions": 53,
+  "prefix_instructions_before_boundary": 21,
+  "prefix_bytes_including_boundary": 61,
+  "alternate_branch_guard": "0x011e1578",
+  "initial_data_address": "0x015cfe70",
+  "initial_data_bytes": "4ee640bbb119bf44",
+  "boundary_call": "KERNEL32.dll!GetSystemTimeAsFileTime",
+  "scope": "original initial cookie data, no Win32 call executed"
+}

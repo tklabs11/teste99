@@ -1,0 +1,1 @@
+PASS time_import writable_unaligned=2 null=guarded wrap=guarded readonly=guarded short=guarded stdcall=4bytes

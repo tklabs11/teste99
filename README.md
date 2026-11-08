@@ -3687,3 +3687,162 @@ e a [regressão v27](./test-logs/marco7-00921260/m7-fifth-second-call-regression
 passaram. A execução usa entradas artificiais do harness; o APK ainda não
 contém esse prefixo e não houve boot ou renderização do Spore. Endereços,
 comandos e logs estão no [relatório do Marco 7](./test-logs/marco7-00921260/report.md).
+
+### Marco 7 v29–v33: retorno pelo alocador da quinta região
+
+O caminho isolado entrou em `FUN_00a21e40` e comprovou que, nesta fixture,
+o desvio pula `0x00f473a0` e alcança `0x00a21e8c → 0x011e073e`. Os bytes do
+PE, o slot IAT e uma observação anterior do processo real identificam o
+thunk resolvido como `MSVCR90.dll!memset`; o v33 usa esse alias somente no
+callsite observado. Depois da escrita modelada de 11.884 bytes, as funções
+filhas retornaram e o prefixo parou antes de **0x00a30ee6 → FUN_009213c0**,
+com último byte executado **0x00a30ee5**. A [comparação x86 / ARM64 no
+aparelho](./test-logs/marco7-00921260/m7-fifth-allocator-memset-differential.log),
+os [58 testes Python](./test-logs/marco7-00921260/python-tests-fifth-allocator-memset.log)
+e a [regressão v32](./test-logs/marco7-00921260/m7-fifth-allocator-entry-regression-v33.log)
+passaram. Veja os [endereços, comandos e limites da prova](./test-logs/marco7-00921260/report.md).
+O APK não foi alterado; esta fixture não comprova boot ou renderização do jogo.
+
+### Marco 7 v34–v35: retorno da quinta função ao construtor
+
+O [v34](./test-logs/marco7-00921260/generated-constructor-fifth-float-call-v34/report.json)
+executou `0x00a30ee6 → FUN_009213c0` e parou antes do `JBE` em
+`0x00a30eee`. A comparação x86 original / lift x86 / ARM64 no celular
+[passou](./test-logs/marco7-00921260/m7-fifth-float-call-differential.log).
+O carry ativo nessa fixture levou ao ramo `0x00a30ef8`, pulando a chamada
+guardada em `0x00a30ef3 → FUN_00a21eb0`.
+
+O [v35](./test-logs/marco7-00921260/generated-constructor-fifth-child-return-v35/report.json)
+validou o retorno de `FUN_00a30e10`, as escritas seguintes no construtor
+e parou antes de **`0x00a3394f → FUN_00a2a410`**, com último byte
+executado `0x00a3394e`. A [comparação tripla no aparelho](./test-logs/marco7-00921260/m7-fifth-child-return-differential.log),
+os [58 testes Python](./test-logs/marco7-00921260/python-tests-fifth-child-return.log)
+e a [regressão v34 recompilada](./test-logs/marco7-00921260/m7-fifth-float-call-regression-v35-x86.log)
+passaram. Veja [relatório, comandos e limites da prova](./test-logs/marco7-00921260/report.md).
+O binário ARM64 testado é independente do APK; o jogo ainda não deu boot.
+
+### Marco 7 v36–v40: entrada na sexta função
+
+O prefixo isolado executou `0x00a3394f → FUN_00a2a410`, passou pelas
+chamadas `0x00a2a448 → FUN_00921260` e
+`0x00a2a469 → FUN_00921340`, e entrou em
+`0x00a2a492 → FUN_00a23780`. Dentro dessa função, executou
+`0x00a237c2 → FUN_00921260` e parou antes do `JNC` em
+**`0x00a237e8`**, último byte **`0x00a237e7`**. EAX=`0x0b` e carry limpo
+indicam o ramo `0x00a23809`, ainda sem execução nesta variante. As cinco
+comparações x86 original / lift x86 / ARM64 no aparelho passaram; veja a
+[comparação v40](./test-logs/marco7-00921260/m7-sixth-helper-first-call-differential.log).
+O [relatório](./test-logs/marco7-00921260/report.md) liga cada
+limite e seus logs. [58 testes Python](./test-logs/marco7-00921260/python-tests-sixth-helper-first-call.log)
+e a [regressão v39 recompilada](./test-logs/marco7-00921260/m7-sixth-helper-entry-regression-v40-x86.log)
+passaram. O APK não recebeu esse código e o teste não demonstra boot.
+
+### Marco 7 v41–v42: ramo tomado e chamada de ponto flutuante
+
+O `JNC` em `0x00a237e8` foi executado e levou a `0x00a23809`. O v41 parou
+antes da chamada em `0x00a2380c`; o v42 executou essa chamada a
+`FUN_00921360` e parou antes de **`0x00a23817 → FUN_00a221b0`**, com último
+byte **`0x00a23816`**. As comparações no aparelho passaram para
+[v41](./test-logs/marco7-00921260/m7-sixth-helper-branch-differential.log)
+e [v42](./test-logs/marco7-00921260/m7-sixth-helper-float-call-differential.log).
+Passaram também [58 testes Python](./test-logs/marco7-00921260/python-tests-sixth-helper-float-call.log)
+e a [regressão v41 recompilada](./test-logs/marco7-00921260/m7-sixth-helper-branch-regression-v42-x86.log).
+Veja [endereços, comandos e limites](./test-logs/marco7-00921260/report.md).
+O APK continua sem esse prefixo e não há boot comprovado.
+
+### Auditoria da entrada real do PE no Android — 2026-11-08
+
+O PE verificado começa em `0x011e11a0` com uma chamada a
+`___security_init_cookie` (`0x011e1548`) e um salto terminal em
+`0x011e11a5 → 0x011e0ee0` para o CRT. O diagnóstico antigo classificava
+esse `JMP` como chamada indireta e encerrava a closure da entrada em duas
+funções. Corrigida essa classificação, a [medição estática da entrada](./test-logs/boot-entry-20261108/entry-closure.json)
+alcançou 606 funções exportadas, incluindo 13 saltos terminais, e confirmou
+o caminho até `FUN_00f47ed0`. Isso **não** significa que elas executaram.
+
+O [teste ARM64 v42 repetido no aparelho](./test-logs/boot-entry-20261108/v42-android-rerun.log)
+e sua [comparação x86/ARM64](./test-logs/boot-entry-20261108/v42-differential-rerun.log)
+passaram, ainda com fixture isolada. O APK debug abriu apenas a tela de
+validação. A mensagem inicial de “importação incompleta” foi investigada:
+o EXE estava na pasta correta, mas tinha outro SHA-256. A
+[comparação das versões](./test-logs/boot-entry-20261108/imported-exe-comparison.md)
+localizou 516 bytes de código diferentes, todos abaixo de `0x00500000`.
+A [tela debug corrigida](./test-logs/boot-entry-20261108/apk-import-diagnostic-ui.xml)
+agora mostra o caminho e os hashes. O APK ainda não chama a entrada do PE.
+O [relatório de boot](./test-logs/boot-entry-20261108/report.md)
+traz bytes, endereços, comandos, testes, limites e a
+[hierarquia da tela observada](./test-logs/boot-entry-20261108/apk-ui.xml).
+[Passaram 59 testes Python](./test-logs/boot-entry-20261108/python-tests.log).
+Nenhum boot ou menu do Spore foi observado.
+
+### Variante do executável atual aceita para sondas verificadas
+
+O EXE importado da instalação que funciona no PC tem SHA-256
+`fb66afc320730dec6f80b79301c7c525689859e3d0a99616b657559e8f11a1ae`.
+A [comparação reproduzível da closure](./test-logs/boot-entry-20261108/current-pe-closure-comparison.json)
+conferiu **606 funções, 42.996 instruções e 128.601 bytes sem divergências**
+com o PE de referência; `.rdata` e `.data` também são idênticas. A variante
+foi liberada apenas para as sondas nativas existentes no APK. No celular, o
+[botão Marco 1 ficou habilitado](./test-logs/boot-entry-20261108/apk-current-variant-ui.xml)
+e a [execução de `FUN_00461520` recompilada em ARM64 passou](./test-logs/boot-entry-20261108/apk-current-variant-marco1-ui.xml)
+com 91/91 buscas verificadas. [APK compilado](./test-logs/boot-entry-20261108/current-variant-apk-build.log)
+e [59 testes Python aprovados](./test-logs/boot-entry-20261108/current-variant-python-tests.log).
+A [análise detalhada](./test-logs/boot-entry-20261108/imported-exe-comparison.md)
+delimita as diferenças restantes. Chamadas indiretas e recursos alterados
+continuam sem validação de boot; não houve menu nem renderização do jogo.
+
+### Primeiro salto da entrada do PE traduzido — 2026-11-08
+
+O lift agora reconhece o `JMP` terminal em **`0x011e11a5 → 0x011e0ee0`**:
+transfere o estado ao destino sem empilhar novo endereço de retorno e sem
+alterar flags. Os [dez bytes da entrada verificados nos dois executáveis](./test-logs/boot-entry-20261108/generated-entry-tail/manifest.json)
+foram executados em [Windows x86 original](./test-logs/boot-entry-20261108/entry-original-x86.log),
+[lift x86](./test-logs/boot-entry-20261108/entry-tail-x86.log) e
+[lift ARM64 no aparelho](./test-logs/boot-entry-20261108/entry-tail-arm64-device.log).
+As [três provas comparadas](./test-logs/boot-entry-20261108/entry-tail-differential.log)
+passaram para visita dos destinos, pilha e flags; os corpos
+do cookie e do CRT foram **stubs de teste identificados**, portanto esse
+resultado não é boot. O último byte da entrada executado é `0x011e11a9`.
+O próximo bloqueio de execução original é o corpo
+`___security_init_cookie` em `0x011e1548`, incluindo a primeira API de
+tempo em `0x011e157f`. O [relatório](./test-logs/boot-entry-20261108/report.md)
+traz os comandos e limites. [60 testes Python](./test-logs/boot-entry-20261108/tail-jump-python-tests.log)
+passaram; nenhum commit ou push foi feito.
+
+### Prefixo composto da entrada até a primeira API do Windows
+
+Os dois PEs verificados têm os mesmos bytes de `___security_init_cookie`
+em `0x011e1548` e os mesmos dados iniciais em `0x015cfe70`. O novo prefixo
+começa na entrada `0x011e11a0`, executa a chamada ao cookie e suas 16
+instruções no ramo dos dados iniciais, e para **antes de `0x011e157f`**,
+chamada a `KERNEL32.dll!GetSystemTimeAsFileTime`. O último byte executado
+do cookie é `0x011e157e`. A
+[comparação x86 original realocado / lift x86 / ARM64 no celular](./test-logs/boot-entry-20261108/boot-entry-prefix-differential.log)
+passou para registradores normalizados, flags, pilha e dados do PE; veja o
+[manifesto dos bytes](./test-logs/boot-entry-20261108/generated-cookie-prefix/manifest.json)
+e o [relatório com comandos e limites](./test-logs/boot-entry-20261108/report.md).
+A API ainda não foi executada e o APK ainda não chama a entrada. O teste
+ARM64 foi um binário isolado via ADB, sem boot ou menu do jogo.
+[Passaram 60 testes Python](./test-logs/boot-entry-20261108/cookie-prefix-python-tests.log).
+
+A referência [Skyrim_Android](https://github.com/ttom795/Skyrim_Android)
+foi inspecionada após essa prova. Seu carregador liga a imagem PE à entrada
+recompilada e identifica imports sem implementação. A
+[análise no relatório](./test-logs/boot-entry-20261108/report.md#referência-externa-skyrim_android)
+registra a aplicação possível ao próximo passo do Spore; nenhum código da
+referência foi incorporado.
+
+### Primeira chamada Win32 no prefixo de boot
+
+O prefixo composto agora executa `0x011e157f`, chamada real de
+`KERNEL32.dll!GetSystemTimeAsFileTime`, e para em **`0x011e1585`**.
+O último byte executado é `0x011e1584`. O
+[x86 original com a API real do Windows, o lift x86 e o ARM64 no aparelho](./test-logs/boot-entry-20261108/boot-entry-time-differential.log)
+passaram para os efeitos definidos: oito bytes `FILETIME` na pilha, retorno
+`stdcall`, registradores preservados e dados PE inalterados. O tempo foi
+comparado com leituras reais do relógio em cada host, sem valor fixo.
+[Casos de memória inválida](./test-logs/boot-entry-20261108/time-import-tests-arm64-device.log)
+e [60 testes Python](./test-logs/boot-entry-20261108/time-import-python-tests.log)
+passaram. Veja [bytes, comandos e limites](./test-logs/boot-entry-20261108/report.md#continuação-primeira-api-win32-executada).
+O próximo import é `GetCurrentProcessId` em `0x011e158b` após dois MOV/XOR.
+O APK ainda não executa a entrada do PE; nenhum boot ou menu foi observado.

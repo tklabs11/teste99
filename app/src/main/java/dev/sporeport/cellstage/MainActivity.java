@@ -42,6 +42,9 @@ public final class MainActivity extends Activity {
     private static final String KEY_IMPORT_URI = "import_uri";
     private static final String EXPECTED_SHA256 =
             "6aec99cb2dc7fd08851a1718e92a60f359fb3fccca3b244a890ae07e93cbe59b";
+    // Exact device build checked against the current direct-call closure and PE data.
+    private static final String VERIFIED_PROBE_VARIANT_SHA256 =
+            "fb66afc320730dec6f80b79301c7c525689859e3d0a99616b657559e8f11a1ae";
     private static final String RUNTIME_DOWNLOAD_URL =
             "https://github.com/Arda9995/sch1levo-runtime/releases/download/"
             + "runtime-r4-wine11.0-box64-0.4.4/"
@@ -381,6 +384,7 @@ public final class MainActivity extends Activity {
         String uri = prefs.getString(KEY_IMPORT_URI, null);
         File installed = new File(getExternalFilesDir(null), "Spore");
         File exe = findVerifiedSporeExe(installed);
+        File otherExe = exe.isFile() ? exe : findAnySporeExe(installed);
         File gamePackage = findSporeGamePackage(installed);
         dbpfResourceButton.setEnabled(gamePackage.isFile() && !importing);
         File runtimeDir = getRuntimeDir();
@@ -392,13 +396,22 @@ public final class MainActivity extends Activity {
                 launchButton.setEnabled(runtimeWrapper != null);
                 nativeChainButton.setEnabled(true);
             } else {
-                status.setText("EXE encontrado, mas SHA-256 diferente\nEsperado: "
-                        + EXPECTED_SHA256 + "\nRecebido: " + hash);
+                status.setText("EXE da instalação atual verificado para as sondas nativas.\n"
+                        + exe.getAbsolutePath() + "\nSHA-256: " + hash
+                        + "\nBoot do jogo ainda não validado.");
                 launchButton.setEnabled(false);
-                nativeChainButton.setEnabled(false);
+                nativeChainButton.setEnabled(true);
             }
+        } else if (otherExe.isFile()) {
+            status.setText("SporeApp.exe copiado, mas esta versão difere da usada na recompilação.\n"
+                    + otherExe.getAbsolutePath() + "\nEsperado: " + EXPECTED_SHA256
+                    + "\nEncontrado: " + sha256(otherExe));
+            launchButton.setEnabled(false);
+            nativeChainButton.setEnabled(false);
         } else if (uri != null) {
-            status.setText("Pasta configurada, aguardando importação completa.\n" + uri);
+            status.setText("Pasta selecionada, mas SporeApp.exe não foi encontrado na cópia.\n"
+                    + uri);
+            launchButton.setEnabled(false);
             nativeChainButton.setEnabled(false);
         } else {
             status.setText("Nenhuma instalação do Spore importada.");
@@ -410,7 +423,7 @@ public final class MainActivity extends Activity {
         File root = new File(getExternalFilesDir(null), "Spore");
         File exe = findVerifiedSporeExe(root);
         String actualHash = exe.isFile() ? sha256(exe) : "ausente";
-        if (!EXPECTED_SHA256.equalsIgnoreCase(actualHash)) {
+        if (!isVerifiedProbeHash(actualHash)) {
             status.setText(R.string.native_chain_blocked);
             nativeChainButton.setEnabled(false);
             return;
@@ -431,7 +444,7 @@ public final class MainActivity extends Activity {
                     "FUN_00461520 recompilada em ARM64: PASS");
             String verifiedResult = passed
                     ? "MARCO 1 — EXECUÇÃO REAL PASS\n"
-                            + "PE original verificado: SHA-256 " + actualHash + "\n"
+                            + "PE verificado para esta sonda: SHA-256 " + actualHash + "\n"
                             + renderedResult
                     : renderedResult;
             runOnUiThread(() -> {
@@ -542,11 +555,45 @@ public final class MainActivity extends Activity {
         };
         for (File candidate : exactCandidates) {
             if (candidate.isFile()
-                    && EXPECTED_SHA256.equalsIgnoreCase(sha256(candidate))) {
+                    && isVerifiedProbeHash(sha256(candidate))) {
                 return candidate;
             }
         }
         return findSporeExeRecursively(root);
+    }
+
+    private File findAnySporeExe(File root) {
+        if (!root.isDirectory()) {
+            return new File(root, "__missing__");
+        }
+        File[] exactCandidates = new File[]{
+                new File(root, "SPOREFILES/SporeBin/SporeApp.exe"),
+                new File(root, "SporeBin/SporeApp.exe"),
+                new File(root, "SporeApp.exe")
+        };
+        for (File candidate : exactCandidates) {
+            if (candidate.isFile()) {
+                return candidate;
+            }
+        }
+        return findAnySporeExeRecursively(root);
+    }
+
+    private File findAnySporeExeRecursively(File directory) {
+        File[] children = directory.listFiles();
+        if (children != null) {
+            for (File child : children) {
+                if (child.isDirectory()) {
+                    File result = findAnySporeExeRecursively(child);
+                    if (result.isFile()) {
+                        return result;
+                    }
+                } else if (child.getName().equalsIgnoreCase("SporeApp.exe")) {
+                    return child;
+                }
+            }
+        }
+        return new File(directory, "__missing__");
     }
 
     private File findSporeExeRecursively(File directory) {
@@ -561,12 +608,17 @@ public final class MainActivity extends Activity {
                     return result;
                 }
             } else if (child.getName().equalsIgnoreCase("SporeApp.exe")) {
-                if (EXPECTED_SHA256.equalsIgnoreCase(sha256(child))) {
+                if (isVerifiedProbeHash(sha256(child))) {
                     return child;
                 }
             }
         }
         return new File(directory, "__missing__");
+    }
+
+    private static boolean isVerifiedProbeHash(String hash) {
+        return EXPECTED_SHA256.equalsIgnoreCase(hash)
+                || VERIFIED_PROBE_VARIANT_SHA256.equalsIgnoreCase(hash);
     }
 
     private void importRuntimeZip(Uri zipUri) {
@@ -1043,7 +1095,6 @@ public final class MainActivity extends Activity {
                     status.setText("Importando 0/" + totalFiles + " arquivos...");
                 });
                 copyDocumentTree(treeUri, destination);
-                File exe = findVerifiedSporeExe(destination);
                 runOnUiThread(() -> {
                     if (importCancelled) {
                         deleteTree(destination);
@@ -1051,13 +1102,6 @@ public final class MainActivity extends Activity {
                         refreshStatus();
                         setImporting(false);
                         return;
-                    }
-                    if (exe.isFile()) {
-                        String hash = sha256(exe);
-                        status.setText("Importação concluída\nEXE SHA-256: " + hash);
-                    } else {
-                        status.setText("A pasta foi copiada, mas SporeApp.exe não foi encontrada.\n"
-                                + "Selecione a raiz da instalação, não apenas SporeBin.");
                     }
                     refreshStatus();
                     setImporting(false);

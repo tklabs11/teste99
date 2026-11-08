@@ -1,0 +1,2 @@
+PASS original_x86_vs_lifted_x86 constructor_call=0x00a33817 boundary=0x00a2a469 registers=matched_except_caller_saved_edx flags=matched stack=matched object=matched
+PASS original_x86_vs_lifted_arm64 constructor_call=0x00a33817 boundary=0x00a2a469 registers=matched_except_caller_saved_edx flags=matched stack=matched object=matched

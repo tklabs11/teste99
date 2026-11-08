@@ -1,0 +1,136 @@
+PE SHA-256: 6aec99cb2dc7fd08851a1718e92a60f359fb3fccca3b244a890ae07e93cbe59b
+v33 fixture path reconstructed from PE-verified CFG, branch values and final snapshots; not an instrumented per-instruction trace.
+The x86 reference calls a host CRT memset model at 0x00a21e8c. The ARM64 lift uses the modeled MSVCR90.dll!memset import.
+
+FUN_00a30e10: 58 selected instruction records
+  0x00a30e10 6aff               PUSH    -0x1
+  0x00a30e12 68688e2101         PUSH    0x1218e68
+  0x00a30e17 64a100000000       MOV     EAX, FS:[0x0]
+  0x00a30e1d 50                 PUSH    EAX
+  0x00a30e1e 64892500000000     MOV     dword ptr FS:[0x0], ESP
+  0x00a30e25 83ec28             SUB     ESP, 0x28
+  0x00a30e28 56                 PUSH    ESI
+  0x00a30e29 57                 PUSH    EDI
+  0x00a30e2a 6a00               PUSH    0x0
+  0x00a30e2c 6a04               PUSH    0x4
+  0x00a30e2e 8bf1               MOV     ESI, ECX
+  0x00a30e30 6a14               PUSH    0x14
+  0x00a30e32 68c0270900         PUSH    0x927c0
+  0x00a30e37 8dbe1c2f0000       LEA     EDI, [ESI + 0x2f1c]
+  0x00a30e3d 57                 PUSH    EDI
+  0x00a30e3e 8d4c242c           LEA     ECX, [ESP + 0x2c]
+  0x00a30e42 8974241c           MOV     dword ptr [ESP + 0x1c], ESI
+  0x00a30e46 c744242c00000000   MOV     dword ptr [ESP + 0x2c], 0x0
+  0x00a30e4e e80d04efff         CALL    0x00921260
+  0x00a30e53 897c2420           MOV     dword ptr [ESP + 0x20], EDI
+  0x00a30e57 8d4634             LEA     EAX, [ESI + 0x34]
+  0x00a30e5a 81c7c0270900       ADD     EDI, 0x927c0
+  0x00a30e60 68b90b0000         PUSH    0xbb9
+  0x00a30e65 897c2428           MOV     dword ptr [ESP + 0x28], EDI
+  0x00a30e69 c744242c14000000   MOV     dword ptr [ESP + 0x2c], 0x14
+  0x00a30e71 89442430           MOV     dword ptr [ESP + 0x30], EAX
+  0x00a30e75 e8c604efff         CALL    0x00921340
+  0x00a30e7a 83c404             ADD     ESP, 0x4
+  0x00a30e7d 8d4c2418           LEA     ECX, [ESP + 0x18]
+  0x00a30e81 51                 PUSH    ECX
+  0x00a30e82 8b4c2448           MOV     ECX, dword ptr [ESP + 0x48]
+  0x00a30e86 8d542448           LEA     EDX, [ESP + 0x48]
+  0x00a30e8a 52                 PUSH    EDX
+  0x00a30e8b 51                 PUSH    ECX
+  0x00a30e8c 8d542450           LEA     EDX, [ESP + 0x50]
+  0x00a30e90 52                 PUSH    EDX
+  0x00a30e91 8b542450           MOV     EDX, dword ptr [ESP + 0x50]
+  0x00a30e95 8d4c2454           LEA     ECX, [ESP + 0x54]
+  0x00a30e99 51                 PUSH    ECX
+  0x00a30e9a 52                 PUSH    EDX
+  0x00a30e9b 50                 PUSH    EAX
+  0x00a30e9c 8bce               MOV     ECX, ESI
+  0x00a30e9e e82d28ffff         CALL    0x00a236d0
+  0x00a30ea3 f30f100520063f01   MOVSS   XMM0, dword ptr [0x013f0620]
+  0x00a30eab f30f1144240c       MOVSS   dword ptr [ESP + 0xc], XMM0
+  0x00a30eb1 f30f1005140f4701   MOVSS   XMM0, dword ptr [0x01470f14]
+  0x00a30eb9 8b4c240c           MOV     ECX, dword ptr [ESP + 0xc]
+  0x00a30ebd f30f11442410       MOVSS   dword ptr [ESP + 0x10], XMM0
+  0x00a30ec3 8b542410           MOV     EDX, dword ptr [ESP + 0x10]
+  0x00a30ec7 33c0               XOR     EAX, EAX
+  0x00a30ec9 894e10             MOV     dword ptr [ESI + 0x10], ECX
+  0x00a30ecc 895614             MOV     dword ptr [ESI + 0x14], EDX
+  0x00a30ecf 89442414           MOV     dword ptr [ESP + 0x14], EAX
+  0x00a30ed3 894618             MOV     dword ptr [ESI + 0x18], EAX
+  0x00a30ed6 8b460c             MOV     EAX, dword ptr [ESI + 0xc]
+  0x00a30ed9 50                 PUSH    EAX
+  0x00a30eda 8d4c2410           LEA     ECX, [ESP + 0x10]
+  0x00a30ede c744243c00000000   MOV     dword ptr [ESP + 0x3c], 0x0
+
+FUN_00a236d0: 49 selected instruction records
+  0x00a236d0 f30f100518574801   MOVSS   XMM0, dword ptr [0x01485718]
+  0x00a236d8 53                 PUSH    EBX
+  0x00a236d9 55                 PUSH    EBP
+  0x00a236da 56                 PUSH    ESI
+  0x00a236db 57                 PUSH    EDI
+  0x00a236dc 8bf1               MOV     ESI, ECX
+  0x00a236de 8b4c242c           MOV     ECX, dword ptr [ESP + 0x2c]
+  0x00a236e2 33c0               XOR     EAX, EAX
+  0x00a236e4 50                 PUSH    EAX
+  0x00a236e5 894608             MOV     dword ptr [ESI + 0x8], EAX
+  0x00a236e8 89460c             MOV     dword ptr [ESI + 0xc], EAX
+  0x00a236eb 8d5e10             LEA     EBX, [ESI + 0x10]
+  0x00a236ee 6a04               PUSH    0x4
+  0x00a236f0 f30f1103           MOVSS   dword ptr [EBX], XMM0
+  0x00a236f4 f30f1005140f4701   MOVSS   XMM0, dword ptr [0x01470f14]
+  0x00a236fc 6a14               PUSH    0x14
+  0x00a236fe f30f114304         MOVSS   dword ptr [EBX + 0x4], XMM0
+  0x00a23703 894308             MOV     dword ptr [EBX + 0x8], EAX
+  0x00a23706 8b29               MOV     EBP, dword ptr [ECX]
+  0x00a23708 8d7e1c             LEA     EDI, [ESI + 0x1c]
+  0x00a2370b 68c0270900         PUSH    0x927c0
+  0x00a23710 55                 PUSH    EBP
+  0x00a23711 8bcf               MOV     ECX, EDI
+  0x00a23713 8907               MOV     dword ptr [EDI], EAX
+  0x00a23715 e846dbefff         CALL    0x00921260
+  0x00a2371a 8b54242c           MOV     EDX, dword ptr [ESP + 0x2c]
+  0x00a2371e 896f08             MOV     dword ptr [EDI + 0x8], EBP
+  0x00a23721 81c5c0270900       ADD     EBP, 0x927c0
+  0x00a23727 896f0c             MOV     dword ptr [EDI + 0xc], EBP
+  0x00a2372a c7471014000000     MOV     dword ptr [EDI + 0x10], 0x14
+  0x00a23731 8b4214             MOV     EAX, dword ptr [EDX + 0x14]
+  0x00a23734 894714             MOV     dword ptr [EDI + 0x14], EAX
+  0x00a23737 8b442414           MOV     EAX, dword ptr [ESP + 0x14]
+  0x00a2373b 83f802             CMP     EAX, 0x2
+  0x00a2373e 731f               JNC     0x00a2375f
+  0x00a2375f 50                 PUSH    EAX
+  0x00a23760 8bcb               MOV     ECX, EBX
+  0x00a23762 e8f9dbefff         CALL    0x00921360
+  0x00a23767 50                 PUSH    EAX
+  0x00a23768 8bce               MOV     ECX, ESI
+  0x00a2376a 894608             MOV     dword ptr [ESI + 0x8], EAX
+  0x00a2376d e8cee6ffff         CALL    0x00a21e40
+  0x00a23772 5f                 POP     EDI
+  0x00a23773 894604             MOV     dword ptr [ESI + 0x4], EAX
+  0x00a23776 8bc6               MOV     EAX, ESI
+  0x00a23778 5e                 POP     ESI
+  0x00a23779 5d                 POP     EBP
+  0x00a2377a 5b                 POP     EBX
+  0x00a2377b c21c00             RET     0x1c
+
+FUN_00a21e40: 19 selected instruction records
+  0x00a21e40 56                 PUSH    ESI
+  0x00a21e41 57                 PUSH    EDI
+  0x00a21e42 8b7c240c           MOV     EDI, dword ptr [ESP + 0xc]
+  0x00a21e46 03ff               ADD     EDI, EDI
+  0x00a21e48 03ff               ADD     EDI, EDI
+  0x00a21e4a 8d4704             LEA     EAX, [EDI + 0x4]
+  0x00a21e4d 83f814             CMP     EAX, 0x14
+  0x00a21e50 7533               JNZ     0x00a21e85
+  0x00a21e85 8b7130             MOV     ESI, dword ptr [ECX + 0x30]
+  0x00a21e88 57                 PUSH    EDI
+  0x00a21e89 6a00               PUSH    0x0
+  0x00a21e8b 56                 PUSH    ESI
+  0x00a21e8c e8ade87b00         CALL    0x011e073e
+  0x00a21e91 83c40c             ADD     ESP, 0xc
+  0x00a21e94 c70437ffffffff     MOV     dword ptr [EDI + ESI*0x1], 0xffffffff
+  0x00a21e9b 5f                 POP     EDI
+  0x00a21e9c 8bc6               MOV     EAX, ESI
+  0x00a21e9e 5e                 POP     ESI
+  0x00a21e9f c20400             RET     0x4
+

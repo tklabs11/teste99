@@ -1,0 +1,18 @@
+PE SHA-256: 6aec99cb2dc7fd08851a1718e92a60f359fb3fccca3b244a890ae07e93cbe59b
+The generator verified all FUN_00a23780 bytes against this PE.
+This is a CFG reconstruction using boundary snapshots, not per-instruction tracing.
+The earlier selected path through 0x00a237e7 is in m7-v40-pe-path.txt.
+
+v41: EAX=0x0b, EFLAGS=0x04 at 0x00a237e8; JNC goes to 0x00a23809.
+SELECTED 0x00a237e8 731f       JNC 0x00a23809
+SKIPPED  0x00a237ea..0x00a23808 alternate return arm
+SELECTED 0x00a23809 50         PUSH EAX
+SELECTED 0x00a2380a 8bcb       MOV ECX, EBX
+v41 boundary: 0x00a2380c CALL 0x00921360; last byte 0x00a2380b.
+
+v42:
+SELECTED 0x00a2380c e84fdbefff CALL 0x00921360
+SELECTED 0x00a23811 50         PUSH EAX
+SELECTED 0x00a23812 8bce       MOV ECX, ESI
+SELECTED 0x00a23814 894608     MOV dword ptr [ESI+0x8], EAX
+v42 boundary: 0x00a23817 CALL 0x00a221b0; last byte 0x00a23816.

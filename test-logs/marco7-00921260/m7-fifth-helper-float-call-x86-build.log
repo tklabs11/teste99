@@ -1,0 +1,56 @@
+constructor_prefix_harness.cpp
+spore_00921260.cpp
+spore_009212c0.cpp
+spore_00921300.cpp
+spore_00921340.cpp
+spore_00921360.cpp
+spore_009213c0.cpp
+spore_00a221b0.cpp
+test-logs\marco7-00921260\generated-constructor-fifth-helper-float-call-v31\spore_00a221b0.cpp(24): warning C4189: 't22_call_status': variável local é inicializada mas não referenciada
+spore_00a23570.cpp
+spore_00a23620_prefix.cpp
+spore_00a236d0_prefix.cpp
+test-logs\marco7-00921260\generated-constructor-fifth-helper-float-call-v31\spore_00a236d0_prefix.cpp(53): warning C4189: 't52_call_status': variável local é inicializada mas não referenciada
+spore_00a2a210_prefix.cpp
+test-logs\marco7-00921260\generated-constructor-fifth-helper-float-call-v31\spore_00a2a210_prefix.cpp(67): warning C4189: 't63_call_status': variável local é inicializada mas não referenciada
+spore_00a2a310_prefix.cpp
+test-logs\marco7-00921260\generated-constructor-fifth-helper-float-call-v31\spore_00a2a310_prefix.cpp(67): warning C4189: 't63_call_status': variável local é inicializada mas não referenciada
+spore_00a2f210.cpp
+test-logs\marco7-00921260\generated-constructor-fifth-helper-float-call-v31\spore_00a2f210.cpp(67): warning C4189: 't63_call_status': variável local é inicializada mas não referenciada
+spore_00a30e10_prefix.cpp
+spore_00a33600_prefix.cpp
+indexed_memory_store_test.cpp
+spore_00921e00_arm64.cpp
+spore_00921e60_arm64.cpp
+spore_00921f00_arm64.cpp
+Gerando Código...
+C:\Users\wesll\AndroidStudioProjects\SporeAndroid\test-logs\marco7-00921260\generated-constructor-fifth-helper-float-call-v31\spore_00a236d0_prefix.cpp(247) : warning C4702: código inacessível
+C:\Users\wesll\AndroidStudioProjects\SporeAndroid\test-logs\marco7-00921260\generated-constructor-fifth-helper-float-call-v31\spore_00a236d0_prefix.cpp(248) : warning C4702: código inacessível
+C:\Users\wesll\AndroidStudioProjects\SporeAndroid\test-logs\marco7-00921260\generated-constructor-fifth-helper-float-call-v31\spore_00a236d0_prefix.cpp(252) : warning C4702: código inacessível
+C:\Users\wesll\AndroidStudioProjects\SporeAndroid\test-logs\marco7-00921260\generated-constructor-fifth-helper-float-call-v31\spore_00a236d0_prefix.cpp(254) : warning C4702: código inacessível
+C:\Users\wesll\AndroidStudioProjects\SporeAndroid\test-logs\marco7-00921260\generated-constructor-fifth-helper-float-call-v31\spore_00a236d0_prefix.cpp(257) : warning C4702: código inacessível
+C:\Users\wesll\AndroidStudioProjects\SporeAndroid\test-logs\marco7-00921260\generated-constructor-fifth-helper-float-call-v31\spore_00a236d0_prefix.cpp(258) : warning C4702: código inacessível
+C:\Users\wesll\AndroidStudioProjects\SporeAndroid\test-logs\marco7-00921260\generated-constructor-fifth-helper-float-call-v31\spore_00a236d0_prefix.cpp(261) : warning C4702: código inacessível
+C:\Users\wesll\AndroidStudioProjects\SporeAndroid\test-logs\marco7-00921260\generated-constructor-fifth-helper-float-call-v31\spore_00a236d0_prefix.cpp(262) : warning C4702: código inacessível
+C:\Users\wesll\AndroidStudioProjects\SporeAndroid\test-logs\marco7-00921260\generated-constructor-fifth-helper-float-call-v31\spore_00a236d0_prefix.cpp(265) : warning C4702: código inacessível
+C:\Users\wesll\AndroidStudioProjects\SporeAndroid\test-logs\marco7-00921260\generated-constructor-fifth-helper-float-call-v31\spore_00a236d0_prefix.cpp(266) : warning C4702: código inacessível
+C:\Users\wesll\AndroidStudioProjects\SporeAndroid\test-logs\marco7-00921260\generated-constructor-fifth-helper-float-call-v31\spore_00a236d0_prefix.cpp(269) : warning C4702: código inacessível
+C:\Users\wesll\AndroidStudioProjects\SporeAndroid\test-logs\marco7-00921260\generated-constructor-fifth-helper-float-call-v31\spore_00a236d0_prefix.cpp(270) : warning C4702: código inacessível
+C:\Users\wesll\AndroidStudioProjects\SporeAndroid\test-logs\marco7-00921260\generated-constructor-fifth-helper-float-call-v31\spore_00a221b0.cpp(124) : warning C4702: código inacessível
+C:\Users\wesll\AndroidStudioProjects\SporeAndroid\tools\batch_static_lift\constructor_prefix_harness.cpp(61) : warning C4733: asm embutido atribuindo para 'FS:0': manipulador não registrado como manipulador seguro
+C:\Users\wesll\AndroidStudioProjects\SporeAndroid\tools\batch_static_lift\constructor_prefix_harness.cpp(82) : warning C4733: asm embutido atribuindo para 'FS:0': manipulador não registrado como manipulador seguro
+Compilando...
+spore_00922150_arm64.cpp
+spore_009222a0_arm64.cpp
+spore_009225d0_arm64.cpp
+spore_00922620_arm64.cpp
+spore_00922820_arm64.cpp
+spore_00a0fdf0_arm64.cpp
+spore_00a247f0_arm64.cpp
+spore_011e5d80_arm64.cpp
+spore_011e64f0_arm64.cpp
+spore_011e8b20_arm64.cpp
+spore_011ecd90_arm64.cpp
+spore_011ecdd0_arm64.cpp
+spore_011ecde0_arm64.cpp
+Gerando Código...

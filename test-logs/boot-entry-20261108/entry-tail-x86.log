@@ -1,0 +1,3 @@
+PASS entry_tail complete cookie=1 crt=1 stack=restored flags=preserved
+PASS entry_tail corrupt_cookie_return rejected
+PASS entry_tail stop_at_crt eip=0x011e0ee0 stack=preserved

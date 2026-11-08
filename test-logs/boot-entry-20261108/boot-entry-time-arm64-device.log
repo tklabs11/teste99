@@ -1,0 +1,2 @@
+PASS boot_entry_time_prefix boundary=0x011e1585 executed=18 esp_delta=-32 ebp_delta=-4 ebx=0xffff0000 esi=0x66666666 edi=0xbb40e64e filetime=within_host_window data=unchanged
+PASS cookie_prefix alternate_fixture guarded=0x011e1578

@@ -23,6 +23,18 @@ ROOT_THIRD_STOP = 0x00A33865
 ROOT_THIRD_TARGET = 0x00A2A310
 ROOT_FOURTH_STOP = 0x00A3387F
 ROOT_FIFTH_STOP = 0x00A3394F
+ROOT_SIXTH_STOP = 0x00A339A1
+SIXTH_CHILD_ENTRY = 0x00A2A410
+SIXTH_CHILD_STOP = 0x00A2A448
+SIXTH_CHILD_NEXT_STOP = 0x00A2A469
+SIXTH_CHILD_THIRD_STOP = 0x00A2A492
+SIXTH_CHILD_FOURTH_STOP = 0x00A2A4DA
+SIXTH_HELPER_ENTRY = 0x00A23780
+SIXTH_HELPER_STOP = 0x00A237C2
+SIXTH_HELPER_BRANCH_STOP = 0x00A237E8
+SIXTH_HELPER_TAKEN_STOP = 0x00A2380C
+SIXTH_HELPER_RETURN_STOP = 0x00A23828
+SIXTH_HELPER_SECOND_GUARD = 0x00A23817
 FOURTH_CHILD_ENTRY = 0x00A2A310
 FOURTH_CHILD_STOP = 0x00A2A34E
 FOURTH_CHILD_NEXT_STOP = 0x00A2A375
@@ -39,8 +51,17 @@ FIFTH_CHILD_NEXT_STOP = 0x00A30E75
 FIFTH_CHILD_THIRD_STOP = 0x00A30E9E
 FIFTH_CHILD_THIRD_TARGET = 0x00A236D0
 FIFTH_CHILD_FOURTH_STOP = 0x00A30EE6
+FIFTH_CHILD_FLOAT_BRANCH_STOP = 0x00A30EEE
+FIFTH_CHILD_RETURN_STOP = 0x00A30F0D
+FIFTH_CHILD_GUARD_CALL = 0x00A30EF3
 FIFTH_HELPER_ENTRY = 0x00A236D0
 FIFTH_HELPER_STOP = 0x00A23715
+FIFTH_HELPER_BRANCH_STOP = 0x00A2373E
+FIFTH_HELPER_TAKEN_STOP = 0x00A23762
+FIFTH_HELPER_FOLLOWING_STOP = 0x00A2376D
+FIFTH_ALLOCATOR_ENTRY = 0x00A21E40
+FIFTH_ALLOCATOR_FIRST_GUARD = 0x00A21E79
+FIFTH_ALLOCATOR_SECOND_GUARD = 0x00A21E8C
 ROOT_LEAF = 0x00743B50
 NEXT_STOP = 0x00A2A275
 NEXT_TARGET = 0x00921340
@@ -79,7 +100,49 @@ def generate(exe: Path, batches: list[Path], output: Path,
              through_fifth_child_entry: bool = False,
              through_fifth_first_call: bool = False,
              through_fifth_second_call: bool = False,
-             through_fifth_third_entry: bool = False):
+             through_fifth_third_entry: bool = False,
+             through_fifth_third_first_call: bool = False,
+             through_fifth_third_branch: bool = False,
+             through_fifth_helper_float_call: bool = False,
+             through_fifth_allocator_entry: bool = False,
+             through_fifth_allocator_memset: bool = False,
+             through_fifth_float_call: bool = False,
+             through_fifth_child_return: bool = False,
+             through_sixth_child_entry: bool = False,
+             through_sixth_first_call: bool = False,
+             through_sixth_second_call: bool = False,
+             through_sixth_helper_entry: bool = False,
+             through_sixth_helper_first_call: bool = False,
+             through_sixth_helper_branch: bool = False,
+             through_sixth_helper_float_call: bool = False):
+    through_sixth_helper_branch = (
+        through_sixth_helper_branch or through_sixth_helper_float_call)
+    through_sixth_helper_first_call = (
+        through_sixth_helper_first_call or through_sixth_helper_branch)
+    through_sixth_helper_entry = (
+        through_sixth_helper_entry or through_sixth_helper_first_call)
+    through_sixth_second_call = (
+        through_sixth_second_call or through_sixth_helper_entry)
+    through_sixth_first_call = (
+        through_sixth_first_call or through_sixth_second_call)
+    through_sixth_child_entry = (
+        through_sixth_child_entry or through_sixth_first_call)
+    through_fifth_child_return = (
+        through_fifth_child_return or through_sixth_child_entry)
+    through_fifth_float_call = (
+        through_fifth_float_call or through_fifth_child_return)
+    through_fifth_allocator_memset = (
+        through_fifth_allocator_memset or through_fifth_float_call)
+    through_fifth_allocator_entry = (
+        through_fifth_allocator_entry or through_fifth_allocator_memset)
+    through_fifth_helper_float_call = (
+        through_fifth_helper_float_call or through_fifth_allocator_entry)
+    through_fifth_third_branch = (
+        through_fifth_third_branch or through_fifth_helper_float_call)
+    through_fifth_third_first_call = (
+        through_fifth_third_first_call or through_fifth_third_branch)
+    through_fifth_third_entry = (
+        through_fifth_third_entry or through_fifth_third_first_call)
     through_fifth_second_call = (
         through_fifth_second_call or through_fifth_third_entry)
     through_fifth_first_call = (
@@ -128,12 +191,20 @@ def generate(exe: Path, batches: list[Path], output: Path,
         raise ValueError("the fifth child entry is absent")
     if through_fifth_third_entry and FIFTH_HELPER_ENTRY not in exported:
         raise ValueError("the fifth helper entry is absent")
-    root_stop = (ROOT_FIFTH_STOP if through_fifth_child_entry
+    if through_fifth_allocator_entry and FIFTH_ALLOCATOR_ENTRY not in exported:
+        raise ValueError("the fifth allocator entry is absent")
+    if through_sixth_child_entry and SIXTH_CHILD_ENTRY not in exported:
+        raise ValueError("the sixth child entry is absent")
+    if through_sixth_helper_entry and SIXTH_HELPER_ENTRY not in exported:
+        raise ValueError("the sixth helper entry is absent")
+    root_stop = (ROOT_SIXTH_STOP if through_sixth_child_entry
+                 else ROOT_FIFTH_STOP if through_fifth_child_entry
                  else ROOT_FOURTH_STOP if through_fourth_child_entry
                  else ROOT_THIRD_STOP if through_third_child_return
                  else ROOT_SECOND_STOP if through_second_child_return
                  else ROOT_STOP)
-    root_next_target = (0x00A2A410 if through_fifth_child_entry
+    root_next_target = (ENTRY if through_sixth_child_entry
+                        else SIXTH_CHILD_ENTRY if through_fifth_child_entry
                         else FIFTH_CHILD_ENTRY if through_fourth_child_entry
                         else ROOT_THIRD_TARGET if through_third_child_return
                         else ENTRY if through_second_child_return
@@ -228,6 +299,15 @@ def generate(exe: Path, batches: list[Path], output: Path,
     fifth_helper_source = None
     fifth_helper_encoded = b""
     fifth_helper_blocked = None
+    fifth_allocator_source = None
+    fifth_allocator_encoded = b""
+    fifth_allocator_blocked = None
+    sixth_child_source = None
+    sixth_child_encoded = b""
+    sixth_child_blocked = None
+    sixth_helper_source = None
+    sixth_helper_encoded = b""
+    sixth_helper_blocked = None
     scale_bytes = correction_bytes = post_float_bytes = b""
     if through_third_call:
         _, _, scale_bytes = lifter.read_pe_bytes(pe, 0x01470F14, 4)
@@ -384,7 +464,9 @@ def generate(exe: Path, batches: list[Path], output: Path,
                             if through_fourth_third_first_call
                             else FOURTH_HELPER_STOP))
     if through_fifth_child_entry:
-        fifth_stop = (FIFTH_CHILD_FOURTH_STOP if through_fifth_third_entry
+        fifth_stop = (FIFTH_CHILD_RETURN_STOP if through_fifth_child_return
+                      else FIFTH_CHILD_FLOAT_BRANCH_STOP if through_fifth_float_call
+                      else FIFTH_CHILD_FOURTH_STOP if through_fifth_third_entry
                       else FIFTH_CHILD_THIRD_STOP if through_fifth_second_call
                       else FIFTH_CHILD_NEXT_STOP if through_fifth_first_call
                       else FIFTH_CHILD_STOP)
@@ -393,6 +475,8 @@ def generate(exe: Path, batches: list[Path], output: Path,
         fifth_prefix = [item for item in fifth_verified
                         if lifter.parse_address(item["address"]) < fifth_stop]
         expected_fifth_count = (
+            71 if through_fifth_child_return else
+            60 if through_fifth_float_call else
             58 if through_fifth_third_entry else
             42 if through_fifth_second_call else
             26 if through_fifth_first_call else 18)
@@ -402,45 +486,239 @@ def generate(exe: Path, batches: list[Path], output: Path,
             bytes.fromhex(item["bytes"]) for item in fifth_prefix)
         if len(fifth_child_encoded) != fifth_stop - FIFTH_CHILD_ENTRY:
             raise ValueError("unexpected fifth child prefix length")
-        fifth_child_source, fifth_diagnostics = (
-            lifter.translate_function_prefix(
-                exported[FIFTH_CHILD_ENTRY], fifth_stop,
-                set(exported)))
+        if through_fifth_child_return:
+            fifth_child_source, fifth_diagnostics = lifter.translate_function(
+                exported[FIFTH_CHILD_ENTRY], set(exported),
+                stop_call_sites={FIFTH_CHILD_GUARD_CALL})
+        else:
+            fifth_child_source, fifth_diagnostics = (
+                lifter.translate_function_prefix(
+                    exported[FIFTH_CHILD_ENTRY], fifth_stop,
+                    set(exported),
+                    **({"allow_branch_boundary": True}
+                       if through_fifth_float_call else {})))
         fifth_blocks = [item for item in fifth_diagnostics
                         if item["status"] == "blocked"]
         expected_fifth_target = (
+            "0x00a21eb0" if through_fifth_child_return else
             "0x009213c0" if through_fifth_third_entry else
             f"0x{FIFTH_CHILD_THIRD_TARGET:08x}"
             if through_fifth_second_call else
             "0x00921340" if through_fifth_first_call else "0x00921260")
         if len(fifth_blocks) != 1 or (
+                fifth_blocks[0].get("mnemonic") != "JBE"
+                if through_fifth_float_call and not through_fifth_child_return else
                 fifth_blocks[0]["target"] != expected_fifth_target):
             raise ValueError(f"unexpected fifth child boundary: {fifth_blocks}")
         fifth_child_blocked = fifth_blocks[0]
         if through_fifth_third_entry:
+            helper_stop = (FIFTH_HELPER_BRANCH_STOP
+                           if through_fifth_third_first_call
+                           else FIFTH_HELPER_STOP)
             helper_verified = lifter.validate_function_bytes(
                 exported[FIFTH_HELPER_ENTRY], pe)
-            helper_prefix = [item for item in helper_verified
-                             if lifter.parse_address(item["address"])
-                             < FIFTH_HELPER_STOP]
-            if len(helper_prefix) != 24:
+            helper_prefix = (
+                helper_verified if through_fifth_third_branch else
+                [item for item in helper_verified
+                 if lifter.parse_address(item["address"]) < helper_stop])
+            if len(helper_prefix) != (
+                    60 if through_fifth_third_branch else
+                    34 if through_fifth_third_first_call else 24):
                 raise ValueError("unexpected fifth helper prefix count")
             fifth_helper_encoded = b"".join(
                 bytes.fromhex(item["bytes"]) for item in helper_prefix)
             if len(fifth_helper_encoded) != (
-                    FIFTH_HELPER_STOP - FIFTH_HELPER_ENTRY):
+                    174 if through_fifth_third_branch else
+                    helper_stop - FIFTH_HELPER_ENTRY):
                 raise ValueError("unexpected fifth helper prefix length")
-            fifth_helper_source, helper_diagnostics = (
-                lifter.translate_function_prefix(
-                    exported[FIFTH_HELPER_ENTRY], FIFTH_HELPER_STOP,
-                    set(exported)))
+            if through_fifth_third_branch:
+                fifth_helper_source, helper_diagnostics = (
+                    lifter.translate_function(
+                        exported[FIFTH_HELPER_ENTRY], set(exported),
+                        stop_call_sites=(
+                            set() if through_fifth_allocator_entry else
+                            {FIFTH_HELPER_FOLLOWING_STOP}
+                            if through_fifth_helper_float_call else
+                            {FIFTH_HELPER_TAKEN_STOP,
+                             FIFTH_HELPER_FOLLOWING_STOP})))
+            else:
+                fifth_helper_source, helper_diagnostics = (
+                    lifter.translate_function_prefix(
+                    exported[FIFTH_HELPER_ENTRY], helper_stop,
+                    set(exported),
+                    allow_branch_boundary=through_fifth_third_first_call))
             helper_blocks = [item for item in helper_diagnostics
                              if item["status"] == "blocked"]
-            if len(helper_blocks) != 1 or (
-                    helper_blocks[0]["target"] != "0x00921260"):
+            if through_fifth_third_branch:
+                observed = {
+                    lifter.parse_address(item["address"]): item["target"]
+                    for item in helper_blocks}
+                expected = (
+                    {} if through_fifth_allocator_entry else
+                    {FIFTH_HELPER_FOLLOWING_STOP: "0x00a21e40"}
+                    if through_fifth_helper_float_call else
+                    {FIFTH_HELPER_TAKEN_STOP: "0x00921360",
+                     FIFTH_HELPER_FOLLOWING_STOP: "0x00a21e40"})
+                if observed != expected:
+                    raise ValueError(
+                        f"unexpected fifth helper guard set: {helper_blocks}")
+                if not through_fifth_allocator_entry:
+                    fifth_helper_blocked = next(
+                        item for item in helper_blocks
+                        if lifter.parse_address(item["address"])
+                        == (FIFTH_HELPER_FOLLOWING_STOP
+                            if through_fifth_helper_float_call else
+                            FIFTH_HELPER_TAKEN_STOP))
+            else:
+                if len(helper_blocks) != 1 or (
+                        helper_blocks[0]["mnemonic"] != "JNC"
+                        if through_fifth_third_first_call else
+                        helper_blocks[0]["target"] != "0x00921260"):
+                    raise ValueError(
+                        f"unexpected fifth helper boundary: {helper_blocks}")
+                fifth_helper_blocked = helper_blocks[0]
+    if through_fifth_allocator_entry:
+        if through_fifth_allocator_memset:
+            _, _, allocator_call_bytes = lifter.read_pe_bytes(
+                pe, FIFTH_ALLOCATOR_SECOND_GUARD, 5)
+            if (allocator_call_bytes != bytes.fromhex("e8ade87b00") or
+                    lifter.parse_pe_iat_imports(pe).get(MEMSET_IAT)
+                    != "MSVCR90.dll!memset"):
                 raise ValueError(
-                    f"unexpected fifth helper boundary: {helper_blocks}")
-            fifth_helper_blocked = helper_blocks[0]
+                    "fifth allocator memset call or IAT differs from PE")
+        allocator_verified = lifter.validate_function_bytes(
+            exported[FIFTH_ALLOCATOR_ENTRY], pe)
+        if len(allocator_verified) != 37:
+            raise ValueError("unexpected fifth allocator instruction count")
+        fifth_allocator_encoded = b"".join(
+            bytes.fromhex(item["bytes"]) for item in allocator_verified)
+        if len(fifth_allocator_encoded) != 98:
+            raise ValueError("unexpected fifth allocator byte length")
+        fifth_allocator_source, allocator_diagnostics = (
+            lifter.translate_function(
+                exported[FIFTH_ALLOCATOR_ENTRY], set(exported),
+                stop_call_sites=(
+                    {FIFTH_ALLOCATOR_FIRST_GUARD}
+                    if through_fifth_allocator_memset else
+                    {FIFTH_ALLOCATOR_FIRST_GUARD,
+                     FIFTH_ALLOCATOR_SECOND_GUARD}),
+                **({"direct_import_aliases": {
+                    FIFTH_ALLOCATOR_SECOND_GUARD: (
+                        MEMSET_THUNK, "MSVCR90.dll!memset", MEMSET_IAT)}}
+                   if through_fifth_allocator_memset else {})))
+        allocator_blocks = [item for item in allocator_diagnostics
+                            if item["status"] == "blocked"]
+        observed = {
+            lifter.parse_address(item["address"]): item["target"]
+            for item in allocator_blocks}
+        expected = (
+            {FIFTH_ALLOCATOR_FIRST_GUARD: "0x00f473a0"}
+            if through_fifth_allocator_memset else
+            {FIFTH_ALLOCATOR_FIRST_GUARD: "0x00f473a0",
+             FIFTH_ALLOCATOR_SECOND_GUARD: "0x011e073e"})
+        if observed != expected:
+            raise ValueError(
+                f"unexpected fifth allocator guards: {allocator_blocks}")
+        if not through_fifth_allocator_memset:
+            fifth_allocator_blocked = next(
+                item for item in allocator_blocks
+                if lifter.parse_address(item["address"])
+                == FIFTH_ALLOCATOR_SECOND_GUARD)
+    if through_sixth_child_entry:
+        sixth_stop = (SIXTH_CHILD_FOURTH_STOP if through_sixth_helper_entry
+                      else SIXTH_CHILD_THIRD_STOP if through_sixth_second_call
+                      else SIXTH_CHILD_NEXT_STOP if through_sixth_first_call
+                      else SIXTH_CHILD_STOP)
+        sixth_verified = lifter.validate_function_bytes(
+            exported[SIXTH_CHILD_ENTRY], pe)
+        if len(sixth_verified) != 71:
+            raise ValueError("unexpected sixth child instruction count")
+        sixth_prefix = [item for item in sixth_verified
+                        if lifter.parse_address(item["address"]) < sixth_stop]
+        if len(sixth_prefix) != (
+                58 if through_sixth_helper_entry else
+                42 if through_sixth_second_call else
+                26 if through_sixth_first_call else 18):
+            raise ValueError("unexpected sixth child prefix count")
+        sixth_child_encoded = b"".join(
+            bytes.fromhex(item["bytes"]) for item in sixth_prefix)
+        if len(sixth_child_encoded) != sixth_stop - SIXTH_CHILD_ENTRY:
+            raise ValueError("unexpected sixth child prefix length")
+        sixth_child_source, sixth_diagnostics = lifter.translate_function_prefix(
+            exported[SIXTH_CHILD_ENTRY], sixth_stop, set(exported))
+        sixth_blocks = [item for item in sixth_diagnostics
+                        if item["status"] == "blocked"]
+        expected_sixth_target = (
+            "0x009213c0" if through_sixth_helper_entry else
+            "0x00a23780" if through_sixth_second_call else
+            "0x00921340" if through_sixth_first_call else "0x00921260")
+        if (len(sixth_blocks) != 1 or
+                sixth_blocks[0]["target"] != expected_sixth_target):
+            raise ValueError(f"unexpected sixth child boundary: {sixth_blocks}")
+        sixth_child_blocked = sixth_blocks[0]
+    if through_sixth_helper_entry:
+        sixth_helper_stop = (
+            SIXTH_HELPER_RETURN_STOP if through_sixth_helper_branch
+            else SIXTH_HELPER_BRANCH_STOP if through_sixth_helper_first_call
+            else SIXTH_HELPER_STOP)
+        sixth_helper_verified = lifter.validate_function_bytes(
+            exported[SIXTH_HELPER_ENTRY], pe)
+        if len(sixth_helper_verified) != 60:
+            raise ValueError("unexpected sixth helper instruction count")
+        sixth_helper_prefix = [item for item in sixth_helper_verified
+                               if lifter.parse_address(item["address"])
+                               < sixth_helper_stop]
+        if len(sixth_helper_prefix) != (
+                60 if through_sixth_helper_branch else
+                34 if through_sixth_helper_first_call else 24):
+            raise ValueError("unexpected sixth helper prefix count")
+        sixth_helper_encoded = b"".join(
+            bytes.fromhex(item["bytes"]) for item in sixth_helper_prefix)
+        if len(sixth_helper_encoded) != sixth_helper_stop - SIXTH_HELPER_ENTRY:
+            raise ValueError("unexpected sixth helper prefix length")
+        if through_sixth_helper_branch:
+            sixth_helper_source, sixth_helper_diagnostics = (
+                lifter.translate_function(
+                    exported[SIXTH_HELPER_ENTRY], set(exported),
+                    stop_call_sites=(
+                        {SIXTH_HELPER_SECOND_GUARD}
+                        if through_sixth_helper_float_call else
+                        {SIXTH_HELPER_TAKEN_STOP,
+                         SIXTH_HELPER_SECOND_GUARD})))
+        else:
+            sixth_helper_source, sixth_helper_diagnostics = (
+                lifter.translate_function_prefix(
+                    exported[SIXTH_HELPER_ENTRY], sixth_helper_stop,
+                    set(exported),
+                    allow_branch_boundary=through_sixth_helper_first_call))
+        sixth_helper_blocks = [item for item in sixth_helper_diagnostics
+                               if item["status"] == "blocked"]
+        if through_sixth_helper_branch:
+            observed_sixth = {
+                lifter.parse_address(item["address"]): item["target"]
+                for item in sixth_helper_blocks}
+            expected_sixth = (
+                {SIXTH_HELPER_SECOND_GUARD: "0x00a221b0"}
+                if through_sixth_helper_float_call else
+                {SIXTH_HELPER_TAKEN_STOP: "0x00921360",
+                 SIXTH_HELPER_SECOND_GUARD: "0x00a221b0"})
+            if observed_sixth != expected_sixth:
+                raise ValueError(
+                    f"unexpected sixth helper guards: {sixth_helper_blocks}")
+            sixth_helper_blocked = next(
+                item for item in sixth_helper_blocks
+                if lifter.parse_address(item["address"])
+                == (SIXTH_HELPER_SECOND_GUARD
+                    if through_sixth_helper_float_call
+                    else SIXTH_HELPER_TAKEN_STOP))
+        elif (len(sixth_helper_blocks) != 1 or
+              (sixth_helper_blocks[0]["mnemonic"] != "JNC"
+               if through_sixth_helper_first_call else
+               sixth_helper_blocks[0]["target"] != "0x00921260")):
+            raise ValueError(
+                f"unexpected sixth helper boundary: {sixth_helper_blocks}")
+        else:
+            sixth_helper_blocked = sixth_helper_blocks[0]
     root_source, root_diagnostics = lifter.translate_function_prefix(
         exported[ROOT_ENTRY], root_stop, set(exported)
     )
@@ -464,7 +742,8 @@ def generate(exe: Path, batches: list[Path], output: Path,
         _, _, root_tail = lifter.read_pe_bytes(
             pe, ROOT_CALL, root_stop - ROOT_CALL)
         expected_tail_length = (
-            0x138 if through_fifth_child_entry
+            0x18a if through_sixth_child_entry
+            else 0x138 if through_fifth_child_entry
             else 0x68 if through_fourth_child_entry
             else 0x4e if through_third_child_return
             else 0x34 if through_second_child_return else 0x1a)
@@ -510,6 +789,15 @@ def generate(exe: Path, batches: list[Path], output: Path,
     if fifth_helper_source is not None:
         (output / f"spore_{FIFTH_HELPER_ENTRY:08x}_prefix.cpp").write_text(
             fifth_helper_source + "\n", encoding="utf-8")
+    if fifth_allocator_source is not None:
+        (output / f"spore_{FIFTH_ALLOCATOR_ENTRY:08x}_prefix.cpp").write_text(
+            fifth_allocator_source + "\n", encoding="utf-8")
+    if sixth_child_source is not None:
+        (output / f"spore_{SIXTH_CHILD_ENTRY:08x}_prefix.cpp").write_text(
+            sixth_child_source + "\n", encoding="utf-8")
+    if sixth_helper_source is not None:
+        (output / f"spore_{SIXTH_HELPER_ENTRY:08x}_prefix.cpp").write_text(
+            sixth_helper_source + "\n", encoding="utf-8")
     byte_values = ", ".join(f"0x{byte:02x}u" for byte in encoded)
     target_values = ", ".join(f"0x{byte:02x}u" for byte in target_encoded)
     third_array_names = {
@@ -560,6 +848,19 @@ def generate(exe: Path, batches: list[Path], output: Path,
            + "{" + ", ".join(
                f"0x{byte:02x}u" for byte in fifth_helper_encoded)
            + "};\n" if through_fifth_third_entry else "")
+        + (f"inline constexpr std::array<std::uint8_t, "
+           f"{len(fifth_allocator_encoded)}> kM7FifthAllocatorBytes = "
+           + "{" + ", ".join(
+               f"0x{byte:02x}u" for byte in fifth_allocator_encoded)
+           + "};\n" if through_fifth_allocator_entry else "")
+        + (f"inline constexpr std::array<std::uint8_t, "
+           f"{len(sixth_child_encoded)}> kM7SixthEntryBytes = "
+           + "{" + ", ".join(f"0x{byte:02x}u" for byte in sixth_child_encoded)
+           + "};\n" if through_sixth_child_entry else "")
+        + (f"inline constexpr std::array<std::uint8_t, "
+           f"{len(sixth_helper_encoded)}> kM7SixthHelperBytes = "
+           + "{" + ", ".join(f"0x{byte:02x}u" for byte in sixth_helper_encoded)
+           + "};\n" if through_sixth_helper_entry else "")
         + (f"inline constexpr std::array<std::uint8_t, {len(target_encoded)}> "
            f"kM7TargetBytes = {{{target_values}}};\n"
            if through_first_call else "")
@@ -586,7 +887,12 @@ def generate(exe: Path, batches: list[Path], output: Path,
         "source_sha256": digest,
         "entry": f"0x{ENTRY:08x}",
         "boundary": (
-            fifth_helper_blocked if through_fifth_third_entry
+            sixth_helper_blocked if through_sixth_helper_entry
+            else sixth_child_blocked if through_sixth_child_entry
+            else root_blocked[0] if through_fifth_child_return
+            else fifth_child_blocked if through_fifth_allocator_memset
+            else fifth_allocator_blocked if through_fifth_allocator_entry
+            else fifth_helper_blocked if through_fifth_third_entry
             else fifth_child_blocked if through_fifth_child_entry
             else root_blocked[0] if through_fourth_child_return
             else fourth_child_blocked if through_fourth_helper_allocator_call
@@ -619,9 +925,38 @@ def generate(exe: Path, batches: list[Path], output: Path,
         "fifth_first_call_in_prefix": through_fifth_first_call,
         "fifth_second_call_in_prefix": through_fifth_second_call,
         "fifth_third_call_in_prefix": through_fifth_third_entry,
+        "fifth_helper_first_call_in_prefix": through_fifth_third_first_call,
+        "fifth_helper_taken_branch_in_prefix": through_fifth_third_branch,
+        "fifth_helper_float_call_in_prefix": through_fifth_helper_float_call,
+        "fifth_allocator_entry_in_prefix": through_fifth_allocator_entry,
+        "fifth_allocator_memset_alias": through_fifth_allocator_memset,
+        "fifth_float_call_in_prefix": through_fifth_float_call,
+        "fifth_child_return_path_enabled": through_fifth_child_return,
+        "sixth_child_entry_path_enabled": through_sixth_child_entry,
+        "sixth_first_call_in_prefix": through_sixth_first_call,
+        "sixth_second_call_in_prefix": through_sixth_second_call,
+        "sixth_helper_entry_in_prefix": through_sixth_helper_entry,
+        "sixth_helper_first_call_in_prefix": through_sixth_helper_first_call,
+        "sixth_helper_taken_branch_in_prefix": through_sixth_helper_branch,
+        "sixth_helper_float_call_in_prefix": through_sixth_helper_float_call,
+        "sixth_helper_prefix_instruction_count": (
+            60 if through_sixth_helper_branch else
+            34 if through_sixth_helper_first_call else
+            24 if through_sixth_helper_entry else 0),
+        "sixth_child_prefix_instruction_count": (
+            58 if through_sixth_helper_entry else
+            42 if through_sixth_second_call else
+            26 if through_sixth_first_call else
+            18 if through_sixth_child_entry else 0),
+        "fifth_child_guarded_call": (
+            fifth_child_blocked if through_fifth_child_return else None),
         "fifth_helper_prefix_instruction_count": (
+            60 if through_fifth_third_branch else
+            34 if through_fifth_third_first_call else
             24 if through_fifth_third_entry else 0),
         "fifth_child_prefix_instruction_count": (
+            71 if through_fifth_child_return else
+            60 if through_fifth_float_call else
             58 if through_fifth_third_entry else
             42 if through_fifth_second_call else
             26 if through_fifth_first_call else
@@ -658,7 +993,37 @@ def generate(exe: Path, batches: list[Path], output: Path,
         "constructor_generated_stop_reachable_in_fixture": (
             None if through_child_return else False),
         "last_executed_byte_if_reached": (
-            f"0x{FIFTH_HELPER_STOP - 1:08x}"
+            f"0x{SIXTH_HELPER_SECOND_GUARD - 1:08x}"
+            if through_sixth_helper_float_call
+            else f"0x{SIXTH_HELPER_TAKEN_STOP - 1:08x}"
+            if through_sixth_helper_branch
+            else f"0x{SIXTH_HELPER_BRANCH_STOP - 1:08x}"
+            if through_sixth_helper_first_call
+            else f"0x{SIXTH_HELPER_STOP - 1:08x}"
+            if through_sixth_helper_entry
+            else f"0x{SIXTH_CHILD_THIRD_STOP - 1:08x}"
+            if through_sixth_second_call
+            else f"0x{SIXTH_CHILD_NEXT_STOP - 1:08x}"
+            if through_sixth_first_call
+            else f"0x{SIXTH_CHILD_STOP - 1:08x}"
+            if through_sixth_child_entry
+            else f"0x{ROOT_FIFTH_STOP - 1:08x}"
+            if through_fifth_child_return
+            else
+            f"0x{FIFTH_CHILD_FLOAT_BRANCH_STOP - 1:08x}"
+            if through_fifth_float_call
+            else
+            f"0x{FIFTH_CHILD_FOURTH_STOP - 1:08x}"
+            if through_fifth_allocator_memset
+            else f"0x{FIFTH_ALLOCATOR_SECOND_GUARD - 1:08x}"
+            if through_fifth_allocator_entry
+            else f"0x{FIFTH_HELPER_FOLLOWING_STOP - 1:08x}"
+            if through_fifth_helper_float_call
+            else f"0x{FIFTH_HELPER_TAKEN_STOP - 1:08x}"
+            if through_fifth_third_branch
+            else f"0x{FIFTH_HELPER_BRANCH_STOP - 1:08x}"
+            if through_fifth_third_first_call
+            else f"0x{FIFTH_HELPER_STOP - 1:08x}"
             if through_fifth_third_entry
             else f"0x{FIFTH_CHILD_THIRD_STOP - 1:08x}"
             if through_fifth_second_call
@@ -690,7 +1055,35 @@ def generate(exe: Path, batches: list[Path], output: Path,
     )
     print(f"Generated {len(prefix)} PE-verified instructions from "
           f"0x{ENTRY:08x}; boundary "
-          + (f"0x{FIFTH_HELPER_STOP:08x} -> 0x00921260"
+          + (f"0x{SIXTH_HELPER_SECOND_GUARD:08x} -> 0x00a221b0"
+             if through_sixth_helper_float_call else
+             f"0x{SIXTH_HELPER_TAKEN_STOP:08x} -> 0x00921360"
+             if through_sixth_helper_branch else
+             f"0x{SIXTH_HELPER_BRANCH_STOP:08x} conditional branch"
+             if through_sixth_helper_first_call else
+             f"0x{SIXTH_HELPER_STOP:08x} -> 0x00921260"
+             if through_sixth_helper_entry else
+             f"0x{SIXTH_CHILD_THIRD_STOP:08x} -> 0x00a23780"
+             if through_sixth_second_call else
+             f"0x{SIXTH_CHILD_NEXT_STOP:08x} -> 0x00921340"
+             if through_sixth_first_call else
+             f"0x{SIXTH_CHILD_STOP:08x} -> 0x00921260"
+             if through_sixth_child_entry else
+             f"0x{ROOT_FIFTH_STOP:08x} -> 0x00a2a410"
+             if through_fifth_child_return else
+             f"0x{FIFTH_CHILD_FLOAT_BRANCH_STOP:08x} conditional branch"
+             if through_fifth_float_call else
+             f"0x{FIFTH_CHILD_FOURTH_STOP:08x} -> 0x009213c0"
+             if through_fifth_allocator_memset else
+             f"0x{FIFTH_ALLOCATOR_SECOND_GUARD:08x} -> 0x011e073e"
+             if through_fifth_allocator_entry else
+             f"0x{FIFTH_HELPER_FOLLOWING_STOP:08x} -> 0x00a21e40"
+             if through_fifth_helper_float_call else
+             f"0x{FIFTH_HELPER_TAKEN_STOP:08x} -> 0x00921360"
+             if through_fifth_third_branch else
+             f"0x{FIFTH_HELPER_BRANCH_STOP:08x} conditional branch"
+             if through_fifth_third_first_call else
+             f"0x{FIFTH_HELPER_STOP:08x} -> 0x00921260"
              if through_fifth_third_entry else
              f"0x{FIFTH_CHILD_THIRD_STOP:08x} -> "
              f"0x{FIFTH_CHILD_THIRD_TARGET:08x}"
@@ -748,6 +1141,20 @@ if __name__ == "__main__":
     parser.add_argument("--through-fifth-first-call", action="store_true")
     parser.add_argument("--through-fifth-second-call", action="store_true")
     parser.add_argument("--through-fifth-third-entry", action="store_true")
+    parser.add_argument("--through-fifth-third-first-call", action="store_true")
+    parser.add_argument("--through-fifth-third-branch", action="store_true")
+    parser.add_argument("--through-fifth-helper-float-call", action="store_true")
+    parser.add_argument("--through-fifth-allocator-entry", action="store_true")
+    parser.add_argument("--through-fifth-allocator-memset", action="store_true")
+    parser.add_argument("--through-fifth-float-call", action="store_true")
+    parser.add_argument("--through-fifth-child-return", action="store_true")
+    parser.add_argument("--through-sixth-child-entry", action="store_true")
+    parser.add_argument("--through-sixth-first-call", action="store_true")
+    parser.add_argument("--through-sixth-second-call", action="store_true")
+    parser.add_argument("--through-sixth-helper-entry", action="store_true")
+    parser.add_argument("--through-sixth-helper-first-call", action="store_true")
+    parser.add_argument("--through-sixth-helper-branch", action="store_true")
+    parser.add_argument("--through-sixth-helper-float-call", action="store_true")
     args = parser.parse_args()
     generate(args.exe, args.batch, args.output, args.through_first_call,
              args.through_second_call, args.through_third_call,
@@ -765,4 +1172,18 @@ if __name__ == "__main__":
              args.through_fifth_child_entry,
              args.through_fifth_first_call,
              args.through_fifth_second_call,
-             args.through_fifth_third_entry)
+             args.through_fifth_third_entry,
+             args.through_fifth_third_first_call,
+             args.through_fifth_third_branch,
+             args.through_fifth_helper_float_call,
+             args.through_fifth_allocator_entry,
+             args.through_fifth_allocator_memset,
+             args.through_fifth_float_call,
+             args.through_fifth_child_return,
+             args.through_sixth_child_entry,
+             args.through_sixth_first_call,
+             args.through_sixth_second_call,
+             args.through_sixth_helper_entry,
+             args.through_sixth_helper_first_call,
+             args.through_sixth_helper_branch,
+             args.through_sixth_helper_float_call)

@@ -37,6 +37,38 @@ def function(instructions):
 
 
 class StaticBatchLiftTests(unittest.TestCase):
+    def test_call_terminator_jump_is_tail_transfer_not_indirect_call(self):
+        jump = instruction(
+            0x401005, "e9f60f0000", "JMP", ("0x00402000",),
+            flow="CALL_TERMINATOR", flows_to=("0x00402000",),
+            references=({"to": "0x00402000", "is_call": True},),
+        )
+        self.assertFalse(diagnostic._is_call(jump))
+        self.assertEqual(lifter.direct_tail_jump_target(jump), 0x402000)
+        altered = {**jump, "flows_to": ["0x00403000"]}
+        with self.assertRaisesRegex(ValueError, "flow differs"):
+            lifter.direct_tail_jump_target(altered)
+
+    def test_direct_tail_jump_dispatch_preserves_guest_return_stack(self):
+        caller = function([
+            instruction(0x401000, "e9fb0f0000", "JMP", ("0x00402000",),
+                        flow="CALL_TERMINATOR", flows_to=("0x00402000",),
+                        references=({"to": "0x00402000", "is_call": True},)),
+        ])
+        callee = function([
+            instruction(0x402000, "c3", "RET", flow="TERMINAL"),
+        ])
+        translated = lifter.translate_function_set([caller, callee])
+        source = translated[0x401000]["source"]
+        self.assertIsNotNone(source)
+        self.assertIn("state.eip = 0x00402000u;", source)
+        self.assertIn("return spore_lift_00402000(memory, state);", source)
+        self.assertNotIn("batch_guest_call32", source)
+        self.assertEqual(lifter.function_call_targets(caller), [0x402000])
+        with self.assertRaises(lifter.LiftRejected) as raised:
+            lifter.translate_function(caller, set())
+        self.assertIn("tail jump target", raised.exception.reasons[0])
+
     def test_verified_direct_call_alias_uses_guest_import_and_checks_target(self):
         body = function([
             instruction(0x401000, "e8fb0f0000", "CALL", ("0x00402000",),

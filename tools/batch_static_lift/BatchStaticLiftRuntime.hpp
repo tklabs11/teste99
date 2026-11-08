@@ -1,6 +1,7 @@
 #pragma once
 
 #include <array>
+#include <chrono>
 #include <cstddef>
 #include <cstdint>
 #include <condition_variable>
@@ -703,6 +704,9 @@ public:
             complete_import_call(state, return_address, 0u);
             return BatchLiftStatus::returned;
         }
+        if (call.symbol == "KERNEL32.dll!GetSystemTimeAsFileTime") {
+            return get_system_time_as_file_time(memory, state, call);
+        }
         if (call.symbol == "KERNEL32.dll!InitializeCriticalSection") {
             return initialize_critical_section(memory, state, call);
         }
@@ -792,6 +796,7 @@ private:
     };
 
     static std::uint32_t import_argument_count(const std::string& symbol) {
+        if (symbol == "KERNEL32.dll!GetSystemTimeAsFileTime") return 1u;
         if (symbol == "KERNEL32.dll!InitializeCriticalSection"
             || symbol == "KERNEL32.dll!EnterCriticalSection"
             || symbol == "KERNEL32.dll!LeaveCriticalSection"
@@ -868,6 +873,45 @@ private:
         call.result = result;
         call.last_error = state.last_error;
         complete_import_call(state, return_address, argument_bytes);
+    }
+
+    BatchLiftStatus get_system_time_as_file_time(
+        BatchLiftMemory& memory,
+        BatchLiftState& state,
+        const BatchGuestImportCall& call) {
+        const std::uint32_t destination = call.arguments[0];
+        if (!memory.is_writable(destination, 8u)) {
+            last_error_ = "GetSystemTimeAsFileTime destination is outside writable guest memory";
+            return BatchLiftStatus::invalid_memory;
+        }
+        std::uint64_t ticks{};
+#if defined(_WIN32)
+        FILETIME now{};
+        GetSystemTimeAsFileTime(&now);
+        ticks = static_cast<std::uint64_t>(now.dwLowDateTime) |
+            (static_cast<std::uint64_t>(now.dwHighDateTime) << 32u);
+#else
+        const auto now = std::chrono::system_clock::now().time_since_epoch();
+        const auto seconds = std::chrono::duration_cast<std::chrono::seconds>(now);
+        const auto remainder = std::chrono::duration_cast<std::chrono::nanoseconds>(
+            now - seconds);
+        constexpr std::int64_t kUnixToFileTimeSeconds = 11644473600ll;
+        const std::int64_t filetime_seconds =
+            seconds.count() + kUnixToFileTimeSeconds;
+        if (filetime_seconds < 0) {
+            last_error_ = "GetSystemTimeAsFileTime host clock predates FILETIME epoch";
+            return BatchLiftStatus::invalid_control_flow;
+        }
+        ticks = static_cast<std::uint64_t>(filetime_seconds) * 10000000ull +
+            static_cast<std::uint64_t>(remainder.count() / 100);
+#endif
+        if (!memory.store64(destination, ticks)) {
+            last_error_ = "GetSystemTimeAsFileTime destination changed after validation";
+            return BatchLiftStatus::invalid_memory;
+        }
+        // The API returns void. EAX and flags have no defined result here.
+        complete_import_call(state, call.return_address, 4u);
+        return BatchLiftStatus::returned;
     }
 
     BatchLiftStatus memset_guest(

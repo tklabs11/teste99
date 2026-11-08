@@ -1,0 +1,57 @@
+PE SHA-256: 6aec99cb2dc7fd08851a1718e92a60f359fb3fccca3b244a890ae07e93cbe59b
+Batch: spore_batch_all_0041.json; bytes checked by generator against PE.
+CFG reconstruction from PE bytes and boundary snapshots, not per-instruction instrumentation.
+The preceding selected path is in m7-v33-path-instructions.txt (58 records of FUN_00a30e10 plus its reached helpers).
+At 0x00a30eee: EAX=2, EFLAGS=0x81 (CF=1, ZF=0); JBE taken to 0x00a30ef8.
+FUN_00a30e10 tail: 13 exported records, 10 selected on fixture path.
+SELECTED 0x00a30ee6 e8d504efff       CALL     0x009213c0
+SELECTED 0x00a30eeb 3b4608           CMP      EAX, dword ptr [ESI + 0x8]
+SELECTED 0x00a30eee 7608             JBE      0x00a30ef8
+SKIPPED  0x00a30ef0 50               PUSH     EAX
+SKIPPED  0x00a30ef1 8bce             MOV      ECX, ESI
+SKIPPED  0x00a30ef3 e8b80fffff       CALL     0x00a21eb0
+SELECTED 0x00a30ef8 8b4c2430         MOV      ECX, dword ptr [ESP + 0x30]
+SELECTED 0x00a30efc 5f               POP      EDI
+SELECTED 0x00a30efd 8bc6             MOV      EAX, ESI
+SELECTED 0x00a30eff 5e               POP      ESI
+SELECTED 0x00a30f00 64890d00000000   MOV      dword ptr FS:[0x0], ECX
+SELECTED 0x00a30f07 83c434           ADD      ESP, 0x34
+SELECTED 0x00a30f0a c20800           RET      0x8
+Root FUN_00a33600 after fifth return: 36 consecutive selected records.
+SELECTED 0x00a33884 f30f100518574801 MOVSS    XMM0, dword ptr [0x01485718]
+SELECTED 0x00a3388c f30f100d140f4701 MOVSS    XMM1, dword ptr [0x01470f14]
+SELECTED 0x00a33894 f30f11860c8a1100 MOVSS    dword ptr [ESI + 0x118a0c], XMM0
+SELECTED 0x00a3389c f30f118e108a1100 MOVSS    dword ptr [ESI + 0x118a10], XMM1
+SELECTED 0x00a338a4 bd28df5401       MOV      EBP, 0x154df28
+SELECTED 0x00a338a9 89be048a1100     MOV      dword ptr [ESI + 0x118a04], EDI
+SELECTED 0x00a338af 89ae008a1100     MOV      dword ptr [ESI + 0x118a00], EBP
+SELECTED 0x00a338b5 899e088a1100     MOV      dword ptr [ESI + 0x118a08], EBX
+SELECTED 0x00a338bb 899e148a1100     MOV      dword ptr [ESI + 0x118a14], EBX
+SELECTED 0x00a338c1 f30f11862c8a1100 MOVSS    dword ptr [ESI + 0x118a2c], XMM0
+SELECTED 0x00a338c9 f30f118e308a1100 MOVSS    dword ptr [ESI + 0x118a30], XMM1
+SELECTED 0x00a338d1 89be248a1100     MOV      dword ptr [ESI + 0x118a24], EDI
+SELECTED 0x00a338d7 89ae208a1100     MOV      dword ptr [ESI + 0x118a20], EBP
+SELECTED 0x00a338dd 899e288a1100     MOV      dword ptr [ESI + 0x118a28], EBX
+SELECTED 0x00a338e3 899e348a1100     MOV      dword ptr [ESI + 0x118a34], EBX
+SELECTED 0x00a338e9 f30f11864c8a1100 MOVSS    dword ptr [ESI + 0x118a4c], XMM0
+SELECTED 0x00a338f1 f30f118e508a1100 MOVSS    dword ptr [ESI + 0x118a50], XMM1
+SELECTED 0x00a338f9 89be448a1100     MOV      dword ptr [ESI + 0x118a44], EDI
+SELECTED 0x00a338ff 89ae408a1100     MOV      dword ptr [ESI + 0x118a40], EBP
+SELECTED 0x00a33905 899e488a1100     MOV      dword ptr [ESI + 0x118a48], EBX
+SELECTED 0x00a3390b 899e548a1100     MOV      dword ptr [ESI + 0x118a54], EBX
+SELECTED 0x00a33911 8d86608a1100     LEA      EAX, [ESI + 0x118a60]
+SELECTED 0x00a33917 895804           MOV      dword ptr [EAX + 0x4], EBX
+SELECTED 0x00a3391a 895808           MOV      dword ptr [EAX + 0x8], EBX
+SELECTED 0x00a3391d 89580c           MOV      dword ptr [EAX + 0xc], EBX
+SELECTED 0x00a33920 8900             MOV      dword ptr [EAX], EAX
+SELECTED 0x00a33922 8986648a1100     MOV      dword ptr [ESI + 0x118a64], EAX
+SELECTED 0x00a33928 899e688a1100     MOV      dword ptr [ESI + 0x118a68], EBX
+SELECTED 0x00a3392e 889e6c8a1100     MOV      byte ptr [ESI + 0x118a6c], BL
+SELECTED 0x00a33934 899e708a1100     MOV      dword ptr [ESI + 0x118a70], EBX
+SELECTED 0x00a3393a 8d4c241d         LEA      ECX, [ESP + 0x1d]
+SELECTED 0x00a3393e 51               PUSH     ECX
+SELECTED 0x00a3393f 8d54242f         LEA      EDX, [ESP + 0x2f]
+SELECTED 0x00a33943 52               PUSH     EDX
+SELECTED 0x00a33944 8d8e788a1100     LEA      ECX, [ESI + 0x118a78]
+SELECTED 0x00a3394a c644244c18       MOV      byte ptr [ESP + 0x4c], 0x18
+BOUNDARY 0x00a3394f e8bc6affff CALL 0x00a2a410; last executed byte 0x00a3394e.

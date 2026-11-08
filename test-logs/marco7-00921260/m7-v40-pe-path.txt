@@ -1,0 +1,86 @@
+PE SHA-256: 6aec99cb2dc7fd08851a1718e92a60f359fb3fccca3b244a890ae07e93cbe59b
+Batch: spore_batch_all_0041.json; generator verified all bytes against the PE.
+This is a PE CFG reconstruction using boundary snapshots, not per-instruction instrumentation.
+Previous path up to root 0x00a3394f is in m7-v35-pe-path.txt.
+Root CALL 0x00a3394f -> FUN_00a2a410 was executed.
+FUN_00a2a410 selected records through CALL 0x00a2a492: 43
+0x00a2a410 6aff             PUSH     -0x1
+0x00a2a412 6858822101       PUSH     0x1218258
+0x00a2a417 64a100000000     MOV      EAX, FS:[0x0]
+0x00a2a41d 50               PUSH     EAX
+0x00a2a41e 64892500000000   MOV      dword ptr FS:[0x0], ESP
+0x00a2a425 83ec28           SUB      ESP, 0x28
+0x00a2a428 56               PUSH     ESI
+0x00a2a429 57               PUSH     EDI
+0x00a2a42a 6a00             PUSH     0x0
+0x00a2a42c 6a04             PUSH     0x4
+0x00a2a42e 8bf1             MOV      ESI, ECX
+0x00a2a430 6a0c             PUSH     0xc
+0x00a2a432 6a78             PUSH     0x78
+0x00a2a434 8d7e64           LEA      EDI, [ESI + 0x64]
+0x00a2a437 57               PUSH     EDI
+0x00a2a438 8d4c242c         LEA      ECX, [ESP + 0x2c]
+0x00a2a43c 8974241c         MOV      dword ptr [ESP + 0x1c], ESI
+0x00a2a440 c744242c00000000 MOV      dword ptr [ESP + 0x2c], 0x0
+0x00a2a448 e8136eefff       CALL     0x00921260
+0x00a2a44d 897c2420         MOV      dword ptr [ESP + 0x20], EDI
+0x00a2a451 8d4634           LEA      EAX, [ESI + 0x34]
+0x00a2a454 83c778           ADD      EDI, 0x78
+0x00a2a457 6a0b             PUSH     0xb
+0x00a2a459 897c2428         MOV      dword ptr [ESP + 0x28], EDI
+0x00a2a45d c744242c0c000000 MOV      dword ptr [ESP + 0x2c], 0xc
+0x00a2a465 89442430         MOV      dword ptr [ESP + 0x30], EAX
+0x00a2a469 e8d26eefff       CALL     0x00921340
+0x00a2a46e 83c404           ADD      ESP, 0x4
+0x00a2a471 8d4c2418         LEA      ECX, [ESP + 0x18]
+0x00a2a475 51               PUSH     ECX
+0x00a2a476 8b4c2448         MOV      ECX, dword ptr [ESP + 0x48]
+0x00a2a47a 8d542448         LEA      EDX, [ESP + 0x48]
+0x00a2a47e 52               PUSH     EDX
+0x00a2a47f 51               PUSH     ECX
+0x00a2a480 8d542450         LEA      EDX, [ESP + 0x50]
+0x00a2a484 52               PUSH     EDX
+0x00a2a485 8b542450         MOV      EDX, dword ptr [ESP + 0x50]
+0x00a2a489 8d4c2454         LEA      ECX, [ESP + 0x54]
+0x00a2a48d 51               PUSH     ECX
+0x00a2a48e 52               PUSH     EDX
+0x00a2a48f 50               PUSH     EAX
+0x00a2a490 8bce             MOV      ECX, ESI
+0x00a2a492 e8e992ffff       CALL     0x00a23780
+FUN_00a23780 selected records before JNC 0x00a237e8: 34
+0x00a23780 f30f100518574801 MOVSS    XMM0, dword ptr [0x01485718]
+0x00a23788 53               PUSH     EBX
+0x00a23789 55               PUSH     EBP
+0x00a2378a 56               PUSH     ESI
+0x00a2378b 57               PUSH     EDI
+0x00a2378c 8bf1             MOV      ESI, ECX
+0x00a2378e 8b4c242c         MOV      ECX, dword ptr [ESP + 0x2c]
+0x00a23792 33c0             XOR      EAX, EAX
+0x00a23794 50               PUSH     EAX
+0x00a23795 894608           MOV      dword ptr [ESI + 0x8], EAX
+0x00a23798 89460c           MOV      dword ptr [ESI + 0xc], EAX
+0x00a2379b 8d5e10           LEA      EBX, [ESI + 0x10]
+0x00a2379e 6a04             PUSH     0x4
+0x00a237a0 f30f1103         MOVSS    dword ptr [EBX], XMM0
+0x00a237a4 f30f1005140f4701 MOVSS    XMM0, dword ptr [0x01470f14]
+0x00a237ac 6a0c             PUSH     0xc
+0x00a237ae f30f114304       MOVSS    dword ptr [EBX + 0x4], XMM0
+0x00a237b3 894308           MOV      dword ptr [EBX + 0x8], EAX
+0x00a237b6 8b29             MOV      EBP, dword ptr [ECX]
+0x00a237b8 8d7e1c           LEA      EDI, [ESI + 0x1c]
+0x00a237bb 6a78             PUSH     0x78
+0x00a237bd 55               PUSH     EBP
+0x00a237be 8bcf             MOV      ECX, EDI
+0x00a237c0 8907             MOV      dword ptr [EDI], EAX
+0x00a237c2 e899daefff       CALL     0x00921260
+0x00a237c7 8b54242c         MOV      EDX, dword ptr [ESP + 0x2c]
+0x00a237cb 896f08           MOV      dword ptr [EDI + 0x8], EBP
+0x00a237ce 83c578           ADD      EBP, 0x78
+0x00a237d1 896f0c           MOV      dword ptr [EDI + 0xc], EBP
+0x00a237d4 c747100c000000   MOV      dword ptr [EDI + 0x10], 0xc
+0x00a237db 8b4214           MOV      EAX, dword ptr [EDX + 0x14]
+0x00a237de 894714           MOV      dword ptr [EDI + 0x14], EAX
+0x00a237e1 8b442414         MOV      EAX, dword ptr [ESP + 0x14]
+0x00a237e5 83f802           CMP      EAX, 0x2
+At boundary 0x00a237e8, EAX=0x0b and EFLAGS=0x04 (CF=0, ZF=0); JNC target 0x00a23809 is predicted but not executed in v40.
+Last executed byte: 0x00a237e7. Next direct call along predicted branch: 0x00a2380c -> FUN_00921360.

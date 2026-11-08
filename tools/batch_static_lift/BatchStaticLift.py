@@ -452,6 +452,30 @@ def direct_call_target(instruction):
     return target
 
 
+def direct_tail_jump_target(instruction):
+    if (str(instruction.get("mnemonic", "")).upper() != "JMP"
+            or str(instruction.get("flow", "")).upper() != "CALL_TERMINATOR"):
+        raise ValueError("not a direct tail jump")
+    operands = instruction.get("operands", [])
+    flows = instruction.get("flows_to", [])
+    if len(operands) != 1 or len(flows) != 1:
+        raise ValueError("tail jump requires one operand and one flow target")
+    operand = str(operands[0]).strip()
+    if not ADDRESS.fullmatch(operand):
+        raise ValueError("tail jump target is not an immediate address")
+    target = parse_address(operand)
+    if parse_address(flows[0]) != target:
+        raise ValueError("tail jump flow differs from its immediate operand")
+    references = [
+        parse_address(reference["to"])
+        for reference in instruction.get("references", [])
+        if reference.get("is_call") and reference.get("to")
+    ]
+    if len(references) != 1 or references[0] != target:
+        raise ValueError("tail jump reference differs from its immediate operand")
+    return target
+
+
 def indirect_iat_import(instruction, iat_imports):
     if not iat_imports:
         return None
@@ -476,7 +500,12 @@ def function_call_targets(function, iat_imports=None):
     for instruction in function.get("instructions", []):
         mnemonic = str(instruction.get("mnemonic", "")).upper()
         flow = str(instruction.get("flow", "")).upper()
-        if mnemonic in {"CALL", "CALLF"} or "CALL" in flow:
+        if mnemonic == "JMP" and flow == "CALL_TERMINATOR":
+            targets.append(direct_tail_jump_target(instruction))
+            continue
+        if mnemonic in {"CALL", "CALLF"} or flow in {
+            "UNCONDITIONAL_CALL", "CONDITIONAL_CALL", "COMPUTED_CALL"
+        }:
             try:
                 targets.append(direct_call_target(instruction))
             except ValueError:
@@ -493,7 +522,9 @@ def translate_instruction(
     operands_text = instruction.get("operands", [])
     flow = str(instruction.get("flow", "")).upper()
 
-    if "CALL" in flow or mnemonic in {"CALL", "CALLF"}:
+    if mnemonic in {"CALL", "CALLF"} or flow in {
+        "UNCONDITIONAL_CALL", "CONDITIONAL_CALL", "COMPUTED_CALL"
+    }:
         if next_address is None or next_address not in addresses:
             raise ValueError("CALL return address is not an exported instruction")
         alias = (direct_import_aliases or {}).get(
@@ -966,8 +997,20 @@ def translate_instruction(
         require(1)
         if operands[0][0] != "immediate":
             raise ValueError("indirect JMP is not supported")
-        target = branch_target(instruction, addresses)
-        lines.append(f"goto L_{target:08x};")
+        if flow == "CALL_TERMINATOR":
+            target = direct_tail_jump_target(instruction)
+            if (exported_function_entries is None
+                    or target not in exported_function_entries):
+                raise ValueError(
+                    f"tail jump target 0x{target:08x} is not in the exported function set"
+                )
+            lines += [
+                f"state.eip = 0x{target:08x}u;",
+                f"return spore_lift_{target:08x}(memory, state);",
+            ]
+        else:
+            target = branch_target(instruction, addresses)
+            lines.append(f"goto L_{target:08x};")
     elif mnemonic in SUPPORTED_CONDITIONS:
         require(1)
         if operands[0][0] != "immediate":

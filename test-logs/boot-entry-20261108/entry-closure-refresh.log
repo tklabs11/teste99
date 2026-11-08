@@ -1,0 +1,3 @@
+Diagnosed 606 exported function(s); no code emitted.
+Findings: {"import_thunk_call_sites": 84, "indirect_calls": 501, "indirect_calls_without_candidates": 323, "indirect_iat_import_call_sites": 162, "invalid_functions": 2, "missing_internal_functions": 2, "tail_jump_sites": 13, "unresolved_calls": 0, "unsupported_instructions": 564}
+Report: test-logs\boot-entry-20261108\entry-closure.json

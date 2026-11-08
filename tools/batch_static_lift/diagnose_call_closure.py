@@ -91,7 +91,9 @@ def load_selected_functions(batch_path, source_hash, selected_entries):
 def _is_call(instruction):
     mnemonic = str(instruction.get("mnemonic", "")).upper()
     flow = str(instruction.get("flow", "")).upper()
-    return mnemonic in {"CALL", "CALLF"} or "CALL" in flow
+    return mnemonic in {"CALL", "CALLF"} or flow in {
+        "UNCONDITIONAL_CALL", "CONDITIONAL_CALL", "COMPUTED_CALL"
+    }
 
 
 def _call_references(instruction):
@@ -226,6 +228,7 @@ def diagnose_call_closure(executable, batch_paths, root_entries):
                         ).items()
                     )),
                     "direct_calls": [],
+                    "tail_jumps": [],
                 }
                 for diagnostic in translation["diagnostics"]:
                     if diagnostic.get("status") == "translated":
@@ -257,7 +260,11 @@ def diagnose_call_closure(executable, batch_paths, root_entries):
                     })
 
                 for instruction in function.get("instructions", []):
-                    if not _is_call(instruction):
+                    is_tail_jump = (
+                        str(instruction.get("mnemonic", "")).upper() == "JMP"
+                        and str(instruction.get("flow", "")).upper() == "CALL_TERMINATOR"
+                    )
+                    if not _is_call(instruction) and not is_tail_jump:
                         continue
                     instruction_address = instruction.get("address")
                     call_record = {
@@ -268,8 +275,18 @@ def diagnose_call_closure(executable, batch_paths, root_entries):
                         "operand": instruction.get("operands", []),
                     }
                     try:
-                        target = lifter.direct_call_target(instruction)
+                        target = (lifter.direct_tail_jump_target(instruction)
+                                  if is_tail_jump else
+                                  lifter.direct_call_target(instruction))
                     except (KeyError, TypeError, ValueError) as error:
+                        if is_tail_jump:
+                            unresolved_calls.append({
+                                "function": f"0x{entry:08x}",
+                                **call_record,
+                                "reason": str(error),
+                                "kind": "tail_jump",
+                            })
+                            continue
                         iat_import = _indirect_iat_symbol(instruction, iat_slots)
                         candidates = [
                             _target_record(candidate, export_index, import_stubs, pe)
@@ -305,12 +322,14 @@ def diagnose_call_closure(executable, batch_paths, root_entries):
                         target, export_index, import_stubs, pe
                     )
                     call_record["target"] = target_record
-                    function_report["direct_calls"].append(call_record)
+                    function_report[
+                        "tail_jumps" if is_tail_jump else "direct_calls"
+                    ].append(call_record)
                     if target_record["classification"] == "exported_function":
                         edges.append({
                             "from": f"0x{entry:08x}",
                             "to": target_record["address"],
-                            "kind": "direct",
+                            "kind": "tail_jump" if is_tail_jump else "direct",
                             "site": instruction_address,
                         })
                         if target not in report_functions:
@@ -409,6 +428,9 @@ def diagnose_call_closure(executable, batch_paths, root_entries):
                 call["target"]["classification"] == "import_thunk"
                 for function in function_list
                 for call in function["direct_calls"]
+            ),
+            "tail_jump_sites": sum(
+                len(function["tail_jumps"]) for function in function_list
             ),
             "indirect_calls": len(indirect_calls),
             "indirect_iat_import_call_sites": sum(
