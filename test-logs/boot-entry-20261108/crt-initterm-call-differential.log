@@ -1,0 +1,1 @@
+PASS original_x86_real_win32_vs_lift_x86 PASS crt_initterm_call stop=0x011e0f6f executed=97 esp_delta=-132 ebp=entry-4 ebx=0 esi=1 edi=lock_reg cookie=consistent imports=7 icc=acquired owner=stack_base lock=owner state=1 try_level=1 table=0x13eb09c..0x13eb0ac startupinfo=cb,ptrs_valid,reserved_null

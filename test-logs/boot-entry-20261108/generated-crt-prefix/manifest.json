@@ -1,0 +1,13 @@
+{
+  "reference_sha256": "6aec99cb2dc7fd08851a1718e92a60f359fb3fccca3b244a890ae07e93cbe59b",
+  "candidate_sha256": "6aec99cb2dc7fd08851a1718e92a60f359fb3fccca3b244a890ae07e93cbe59b",
+  "crt_entry": "0x011e0ee0",
+  "boundary": "0x011e0ee7",
+  "boundary_target": "0x011e11d4",
+  "boundary_symbol": "___tmainCRTStartup",
+  "executed_prefix_instructions": 2,
+  "verified_function_instructions": 136,
+  "prefix_bytes_including_boundary": 12,
+  "imports": [],
+  "scope": "___tmainCRTStartup entry instructions behind the terminal entry JMP; stops before the __SEH_prolog4 call"
+}

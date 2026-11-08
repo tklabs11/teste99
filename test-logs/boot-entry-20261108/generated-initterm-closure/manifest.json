@@ -1,0 +1,88 @@
+{
+  "reference_sha256": "6aec99cb2dc7fd08851a1718e92a60f359fb3fccca3b244a890ae07e93cbe59b",
+  "candidate_sha256": "6aec99cb2dc7fd08851a1718e92a60f359fb3fccca3b244a890ae07e93cbe59b",
+  "initializers": [
+    "0x011e10bf",
+    "0x011e1304",
+    "0x011e135a"
+  ],
+  "functions": [
+    {
+      "entry": "0x011e10bf",
+      "source": "spore_011e10bf.cpp",
+      "instructions": 58,
+      "translated": 58
+    },
+    {
+      "entry": "0x011e11d4",
+      "source": "spore_011e11d4.cpp",
+      "instructions": 21,
+      "translated": 21
+    },
+    {
+      "entry": "0x011e1219",
+      "source": "spore_011e1219.cpp",
+      "instructions": 11,
+      "translated": 11
+    },
+    {
+      "entry": "0x011e1252",
+      "source": "spore_011e1252.cpp",
+      "instructions": 11,
+      "translated": 11
+    },
+    {
+      "entry": "0x011e12a2",
+      "source": "spore_011e12a2.cpp",
+      "instructions": 45,
+      "translated": 45
+    },
+    {
+      "entry": "0x011e1304",
+      "source": "spore_011e1304.cpp",
+      "instructions": 4,
+      "translated": 4
+    },
+    {
+      "entry": "0x011e135a",
+      "source": "spore_011e135a.cpp",
+      "instructions": 4,
+      "translated": 4
+    },
+    {
+      "entry": "0x011e136e",
+      "source": "spore_011e136e.cpp",
+      "instructions": 18,
+      "translated": 18
+    },
+    {
+      "entry": "0x011e151a",
+      "source": "spore_011e151a.cpp",
+      "instructions": 19,
+      "translated": 19
+    },
+    {
+      "entry": "0x011e1545",
+      "source": "spore_011e1545.cpp",
+      "instructions": 2,
+      "translated": 2
+    }
+  ],
+  "instruction_total": 193,
+  "import_aliases": [
+    "0x011e152a->MSVCR90.dll!_controlfp_s",
+    "0x011e153b->MSVCR90.dll!_invoke_watson"
+  ],
+  "imports": [
+    "KERNEL32.dll!SetUnhandledExceptionFilter",
+    "MSVCR90.dll!__p__commode",
+    "MSVCR90.dll!__p__fmode",
+    "MSVCR90.dll!__set_app_type",
+    "MSVCR90.dll!__setusermatherr",
+    "MSVCR90.dll!_adjust_fdiv",
+    "MSVCR90.dll!_configthreadlocale",
+    "MSVCR90.dll!_controlfp_s",
+    "MSVCR90.dll!_encode_pointer",
+    "MSVCR90.dll!_invoke_watson"
+  ]
+}

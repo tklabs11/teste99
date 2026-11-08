@@ -1,0 +1,36 @@
+{
+  "initializers": [
+    "0x011e0e95",
+    "0x013000d0",
+    "0x013000f0",
+    "0x013b64c0",
+    "0x013b64e0"
+  ],
+  "bodies": [
+    "0x011e074a",
+    "0x011e07e0",
+    "0x011e07e6",
+    "0x011e07ef",
+    "0x011e0e95",
+    "0x011e11d4",
+    "0x011e1219",
+    "0x013000d0",
+    "0x013000f0",
+    "0x013b64c0",
+    "0x013b64e0"
+  ],
+  "instructions": 139,
+  "imports": [
+    "KERNEL32.dll!InitializeCriticalSection",
+    "KERNEL32.dll!TlsAlloc",
+    "MSVCR90.dll!__dllonexit",
+    "MSVCR90.dll!__getmainargs",
+    "MSVCR90.dll!_amsg_exit",
+    "MSVCR90.dll!_lock",
+    "MSVCR90.dll!_onexit",
+    "MSVCR90.dll!_unlock"
+  ],
+  "next_initializer": "0x013002d0",
+  "engine_blockers": [],
+  "missing_bodies": []
+}

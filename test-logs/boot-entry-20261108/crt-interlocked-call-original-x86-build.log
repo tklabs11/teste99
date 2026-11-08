@@ -1,0 +1,2 @@
+boot_entry_crt_original_x86.cpp
+C:\Users\wesll\AndroidStudioProjects\SporeAndroid\tools\batch_static_lift\boot_entry_crt_original_x86.cpp(83) : warning C4733: asm embutido atribuindo para 'FS:0': manipulador não registrado como manipulador seguro

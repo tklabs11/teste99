@@ -1,0 +1,11 @@
+﻿python : ..................................................................................
+No linha:2 caractere:520
++ ... tatic_lift; python -m unittest test_static_batch_lift test_m7_effecti ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (.................................:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+----------------------------------------------------------------------
+Ran 82 tests in 0.572s
+
+OK

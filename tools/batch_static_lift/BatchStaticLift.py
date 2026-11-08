@@ -521,6 +521,11 @@ def translate_instruction(
     mnemonic = instruction["mnemonic"].upper()
     operands_text = instruction.get("operands", [])
     flow = str(instruction.get("flow", "")).upper()
+    # Ghidra renders "LOCK XADD" as XADD.LOCK. The guest runs one thread, so the
+    # lock prefix is a no-op for atomicity and the base instruction carries the
+    # behaviour.
+    if mnemonic.endswith(".LOCK"):
+        mnemonic = mnemonic[: -len(".LOCK")]
 
     if mnemonic in {"CALL", "CALLF"} or flow in {
         "UNCONDITIONAL_CALL", "CONDITIONAL_CALL", "COMPUTED_CALL"
@@ -550,6 +555,42 @@ def translate_instruction(
         except ValueError as direct_error:
             imported = indirect_iat_import(instruction, iat_imports)
             if imported is None:
+                computed = None
+                if len(operands_text) == 1:
+                    try:
+                        computed = parse_operand(
+                            operands_text[0], infer_memory_width=32)
+                    except ValueError:
+                        computed = None
+                if (computed is not None and computed[0] == "register"
+                        and computed[2] == 32):
+                    # CALL r32: the callee is only known at runtime, so the
+                    # dispatcher resolves it against the lifted bodies.
+                    return [
+                        f"t{index}_call_status = state.imports == nullptr "
+                        "? BatchLiftStatus::unsupported_import "
+                        ": state.imports->invoke_guest_call(memory, state, "
+                        f"state.regs[{computed[1]}], 0x{next_address:08x}u);",
+                        f"if (t{index}_call_status != BatchLiftStatus::returned) "
+                        f"return t{index}_call_status;",
+                    ]
+                if (computed is not None
+                        and computed[0] in {
+                            "memory", "indexed_memory", "absolute_memory",
+                        } and operand_width(computed) == 32):
+                    # CALL [mem]: a function pointer read at runtime. The
+                    # pointer itself is loaded from guest memory and the
+                    # dispatcher still requires a lifted body for the target.
+                    return [
+                        f"if (!memory.load32({memory_address(computed)}, "
+                        f"t{index}t)) return BatchLiftStatus::invalid_memory;",
+                        f"t{index}_call_status = state.imports == nullptr "
+                        "? BatchLiftStatus::unsupported_import "
+                        ": state.imports->invoke_guest_call(memory, state, "
+                        f"t{index}t, 0x{next_address:08x}u);",
+                        f"if (t{index}_call_status != BatchLiftStatus::returned) "
+                        f"return t{index}_call_status;",
+                    ]
                 raise direct_error
             return [
                 f"t{index}_call_status = batch_guest_import_call32("
@@ -613,6 +654,41 @@ def translate_instruction(
         raise ValueError(
             "MOVSS destination must be an XMM register or 32-bit memory operand"
         )
+    if mnemonic == "MOVAPD":
+        if len(operands_text) != 2:
+            raise ValueError(
+                f"MOVAPD expects 2 operands; found {len(operands_text)}"
+            )
+        destination = XMM_REGISTER.fullmatch(operands_text[0].strip())
+        source = XMM_REGISTER.fullmatch(operands_text[1].strip())
+        if destination is None or source is None:
+            raise ValueError(
+                "MOVAPD currently requires two XMM register operands")
+        return [
+            "if (!batch_guest_movapd("
+            f"state, {int(destination.group(1))}u, "
+            f"{int(source.group(1))}u)) "
+            "return BatchLiftStatus::invalid_control_flow;"
+        ]
+    if mnemonic in {"PUSHFD", "POPFD"}:
+        if operands_text:
+            raise ValueError(
+                f"{mnemonic} expects no operands; found {len(operands_text)}")
+        helper = ("batch_guest_pushfd" if mnemonic == "PUSHFD"
+                  else "batch_guest_popfd")
+        return [
+            f"if (!{helper}(memory, state)) "
+            "return BatchLiftStatus::invalid_memory;"
+        ]
+    if mnemonic == "CPUID":
+        if operands_text:
+            raise ValueError(
+                f"CPUID expects no operands; found {len(operands_text)}")
+        return [
+            f"t{index}_cpuid_status = batch_guest_cpuid(state);",
+            f"if (t{index}_cpuid_status != BatchLiftStatus::returned) "
+            f"return t{index}_cpuid_status;",
+        ]
     if mnemonic == "XORPS":
         if len(operands_text) != 2:
             raise ValueError(
@@ -758,7 +834,7 @@ def translate_instruction(
             infer_untyped_memory=mnemonic not in {"MOVZX", "MOVSX"},
         )
     )
-    if mnemonic not in {"MOV", "LEA", "CMP"} and any(
+    if mnemonic not in {"MOV", "LEA", "CMP", "OR", "TEST"} and any(
         operand[0] == "indexed_memory" for operand in operands
     ):
         raise ValueError("indexed memory operands currently support MOV only")
@@ -771,6 +847,27 @@ def translate_instruction(
 
     if mnemonic == "NOP":
         require(0)
+    elif mnemonic == "INT3":
+        require(0)
+        # The guest has no debugger to receive the break, so it stops here.
+        lines.append("return BatchLiftStatus::debug_trap;")
+    elif mnemonic == "XADD":
+        require(2)
+        if operands[1][0] != "register" or operand_width(operands[1]) != 32:
+            raise ValueError("XADD requires a 32-bit register source")
+        if operands[0][0] not in {
+            "register", "memory", "indexed_memory", "absolute_memory",
+        } or operand_width(operands[0]) != 32:
+            raise ValueError("XADD requires a 32-bit register or memory target")
+        lines += emit_load(operands[0], f"{temp}a")
+        lines += emit_load(operands[1], f"{temp}b")
+        lines += [
+            f"{temp}r = static_cast<std::uint32_t>({temp}a + {temp}b) "
+            "& 0xffffffffu;",
+            f"batch_set_add_flags(state, {temp}a, {temp}b, {temp}r, 32u);",
+        ]
+        lines += emit_store(operands[0], f"{temp}r")
+        lines += emit_store(operands[1], f"{temp}a")
     elif mnemonic == "CMOVC":
         require(2)
         if any(operand[0] != "register" or operand_width(operand) != 32
@@ -871,20 +968,47 @@ def translate_instruction(
             "if (product < -2147483648ll || product > 2147483647ll) state.eflags |= 0x801u;",
             "}",
         ]
-    elif mnemonic == "SHL":
+    elif mnemonic in {"SHL", "SHR", "SAR"}:
         require(2)
         if operands[0][0] != "register" or operand_width(operands[0]) != 32:
-            raise ValueError("SHL currently requires a 32-bit register destination")
-        if operands[1][0] != "immediate" or not 0 <= operands[1][1] <= 31:
-            raise ValueError("SHL currently supports immediate counts 0 through 31")
-        count = operands[1][1]
-        lines += emit_load(operands[0], f"{temp}a")
-        lines += [
-            f"{temp}r = static_cast<std::uint32_t>({temp}a << {count}u) "
-            "& 0xffffffffu;",
-            f"batch_set_shl_flags(state, {temp}a, {count}u, {temp}r, 32u);",
-        ]
-        lines += emit_store(operands[0], f"{temp}r")
+            raise ValueError(
+                f"{mnemonic} currently requires a 32-bit register destination")
+        if operands[1][0] == "immediate" and 0 <= operands[1][1] <= 31:
+            count_expression = f"{operands[1][1]}u"
+            constant_count = operands[1][1]
+        elif operands[1][0] == "register" and operands[1][1] == 1:
+            # CL carries the count and x86 masks it to five bits.
+            count_expression = "(state.regs[1] & 0x1fu)"
+            constant_count = None
+        else:
+            raise ValueError(
+                f"{mnemonic} requires an immediate count 0 through 31 or CL")
+        # A zero immediate count changes neither the destination nor the flags.
+        if constant_count != 0:
+            lines += emit_load(operands[0], f"{temp}a")
+            lines += [f"{temp}c = {count_expression};", f"if ({temp}c != 0u) {{"]
+            if mnemonic == "SHL":
+                lines += [
+                    f"{temp}r = static_cast<std::uint32_t>({temp}a << {temp}c) "
+                    "& 0xffffffffu;",
+                    f"batch_set_shl_flags(state, {temp}a, {temp}c, {temp}r, 32u);",
+                ]
+            elif mnemonic == "SHR":
+                lines += [
+                    f"{temp}r = static_cast<std::uint32_t>({temp}a >> {temp}c);",
+                    f"batch_set_shr_flags(state, {temp}a, {temp}c, {temp}r, 32u);",
+                ]
+            else:
+                lines += [
+                    f"{temp}r = ({temp}a >> {temp}c) | "
+                    f"(({temp}a & 0x80000000u) ? "
+                    f"(0xffffffffu << (32u - {temp}c)) : 0u);",
+                    f"batch_set_sar_flags(state, {temp}a, {temp}c, {temp}r, 32u);",
+                ]
+            lines += [
+                f"    {line}" for line in emit_store(operands[0], f"{temp}r")
+            ]
+            lines.append("}")
     elif mnemonic == "LEAVE":
         require(0)
         lines += [
@@ -894,21 +1018,6 @@ def translate_instruction(
             f"state.regs[5] = {temp};",
             "state.regs[4] = static_cast<std::uint32_t>(state.regs[4] + 4u);",
         ]
-    elif mnemonic == "SAR":
-        require(2)
-        if operands[0][0] != "register" or operand_width(operands[0]) != 32:
-            raise ValueError("SAR currently requires a 32-bit register destination")
-        if operands[1][0] != "immediate" or operands[1][1] not in {1, 2}:
-            raise ValueError("SAR currently supports immediate counts 1 and 2")
-        count = operands[1][1]
-        lines += emit_load(operands[0], f"{temp}a")
-        lines += [
-            f"{temp}r = ({temp}a >> {count}u) | "
-            f"(({temp}a & 0x80000000u) ? (0xffffffffu << {32 - count}u) : 0u);",
-            f"batch_set_logic_flags(state, {temp}r, 32u);",
-            f"if (({temp}a & {1 << (count - 1)}u) != 0u) state.eflags |= 0x001u;",
-        ]
-        lines += emit_store(operands[0], f"{temp}r")
     elif mnemonic in {"ADD", "SUB", "SBB", "CMP", "TEST", "AND", "OR", "XOR", "INC", "DEC", "NEG"}:
         if mnemonic in {"INC", "DEC", "NEG"}:
             require(1)
@@ -1066,7 +1175,8 @@ def translate_instruction(
     return lines
 
 
-def static_source(function, translated, call_targets, terminal_status=None):
+def static_source(function, translated, call_targets, terminal_status=None,
+                  exit_targets=()):
     entry = parse_address(function["entry"])
     symbol = f"spore_lift_{entry:08x}"
     declarations = [
@@ -1098,6 +1208,11 @@ def static_source(function, translated, call_targets, terminal_status=None):
                 f"BatchLiftStatus t{index}_call_status = "
                 "BatchLiftStatus::invalid_control_flow;"
             )
+        if instruction["mnemonic"].upper() == "CPUID":
+            body_lines.append(
+                f"BatchLiftStatus t{index}_cpuid_status = "
+                "BatchLiftStatus::invalid_control_flow;"
+            )
     body_lines.append("")
     for instruction, instruction_body in translated:
         address = parse_address(instruction["address"])
@@ -1112,9 +1227,21 @@ def static_source(function, translated, call_targets, terminal_status=None):
         body_lines.extend(f"    {line}" for line in instruction_body)
     if terminal_status is not None:
         terminal_address, status = terminal_status
+        if terminal_address in branch_targets:
+            # A branch onto the boundary leaves the prefix with the same
+            # terminal status as falling through to it.
+            body_lines.append(f"L_{terminal_address:08x}:")
         body_lines += [
             f"state.eip = 0x{terminal_address:08x}u;",
             f"return BatchLiftStatus::{status};",
+        ]
+    # A branch that leaves the verified prefix forward reports its own exit
+    # address instead of pretending the prefix covers it.
+    for target in sorted(exit_targets):
+        body_lines += [
+            f"L_{target:08x}:",
+            f"state.eip = 0x{target:08x}u;",
+            "return BatchLiftStatus::unsupported_dependency;",
         ]
     return "\n".join([
         '#include "BatchStaticLiftRuntime.hpp"',
@@ -1258,13 +1385,19 @@ def translate_function(
             ["function has no recognized terminal return or unconditional transfer"],
             diagnostics,
         )
-    call_targets = [
-        target
-        for instruction in instructions
-        if parse_address(instruction["address"]) not in stops
-        and parse_address(instruction["address"]) not in (direct_import_aliases or {})
-        for target in function_call_targets({"instructions": [instruction]}, iat_imports)
-    ]
+    call_targets = []
+    for instruction in instructions:
+        address = parse_address(instruction["address"])
+        if address in stops or address in (direct_import_aliases or {}):
+            continue
+        try:
+            targets = function_call_targets(
+                {"instructions": [instruction]}, iat_imports)
+        except ValueError:
+            # Indirect calls dispatch through the runtime, so they need no
+            # spore_lift_* declaration here.
+            continue
+        call_targets.extend(targets)
     return static_source(function, translated, call_targets), diagnostics
 
 

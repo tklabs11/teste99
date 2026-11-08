@@ -1,0 +1,30 @@
+{
+  "table": "0x013cc80c..0x013eb098",
+  "table_bytes": 125068,
+  "slots": 31267,
+  "null_slots": 1,
+  "targets": 31266,
+  "distinct_targets": 31266,
+  "target_min": "0x011e0e95",
+  "target_max": "0x013bc960",
+  "all_inside_text": true,
+  "already_lifted_batch": 0,
+  "already_lifted_closure": 0,
+  "first_targets": [
+    "0x011e0e95",
+    "0x013000d0",
+    "0x013000f0",
+    "0x013b64c0",
+    "0x013b64e0",
+    "0x013002d0",
+    "0x0138e640",
+    "0x01300210"
+  ],
+  "last_targets": [
+    "0x013bc900",
+    "0x013bc920",
+    "0x013bc940",
+    "0x013bc960"
+  ],
+  "text_range": "0x00401000..0x013cbf2a"
+}

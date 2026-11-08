@@ -34,10 +34,17 @@ enum class BatchLiftStatus {
     invalid_x87_state,
     divide_error,
     unsupported_dependency,
+    debug_trap,
 };
 
 class BatchLiftMemory;
 struct BatchLiftState;
+
+inline bool batch_guest_call32(
+    BatchLiftMemory& memory,
+    BatchLiftState& state,
+    std::uint32_t target,
+    std::uint32_t return_address);
 
 class BatchGuestImportDispatcher {
 public:
@@ -48,6 +55,12 @@ public:
         const char* symbol,
         std::uint32_t iat_address) = 0;
     virtual const std::string& last_error() const = 0;
+    // Indirect CALL r32: the target is only known at runtime, so the dispatcher
+    // owns the lookup. Implementations that cannot resolve it must fail closed.
+    virtual BatchLiftStatus invoke_guest_call(
+        BatchLiftMemory&, BatchLiftState&, std::uint32_t, std::uint32_t) {
+        return BatchLiftStatus::unsupported_dependency;
+    }
 };
 
 struct BatchLiftState {
@@ -56,6 +69,15 @@ struct BatchLiftState {
     std::uint64_t x87_stack[8]{};
     std::uint8_t x87_depth = 0;
     std::uint32_t eflags = 0;
+    // x87 control word as MSVC initializes it. _controlfp_s reads and writes it.
+    std::uint32_t x87_control_word = 0x027fu;
+    // CRT shim state that has no guest address of its own.
+    std::uint32_t app_type = 0u;
+    std::uint32_t unhandled_filter = 0u;
+    std::uint32_t user_matherr = 0u;
+    std::uint32_t thread_locale = 0u;
+    // The guest CRT records the last registered exit handler.
+    std::uint32_t exit_handler = 0u;
     std::uint32_t eip = 0;
     std::uint32_t fs_base = 0;
     BatchGuestImportDispatcher* imports = nullptr;
@@ -411,7 +433,9 @@ private:
         return nullptr;
     }
 
-    std::array<Region, 16> regions_{};
+    // The guest map grows with the number of windows the image exposes: the
+    // stack plus one region per window, the TEB and the probe table.
+    std::array<Region, 32> regions_{};
     std::array<std::uint8_t, kStackBytes> stack_{};
     std::size_t region_count_ = 0;
     mutable std::mutex memory_mutex_;
@@ -474,6 +498,69 @@ inline bool batch_guest_xorps(
     return true;
 }
 
+// MOVAPD copies a full 16 byte SIMD register. Register-to-register only: the
+// memory forms are not needed by the recovered CRT closure.
+inline bool batch_guest_movapd(
+    BatchLiftState& state,
+    std::uint32_t destination,
+    std::uint32_t source) {
+    if (destination >= 8u || source >= 8u) return false;
+    for (unsigned lane = 0; lane < 4u; ++lane) {
+        state.xmm[destination][lane] = state.xmm[source][lane];
+    }
+    return true;
+}
+
+inline bool batch_guest_pushfd(BatchLiftMemory& memory, BatchLiftState& state) {
+    const std::uint32_t value = state.eflags | 0x00000002u;
+    const std::uint32_t next = static_cast<std::uint32_t>(state.regs[4] - 4u);
+    if (!memory.store32(next, value)) return false;
+    state.regs[4] = next;
+    return true;
+}
+
+inline bool batch_guest_popfd(
+    const BatchLiftMemory& memory, BatchLiftState& state) {
+    std::uint32_t value{};
+    if (!memory.load32(state.regs[4], value)) return false;
+    state.eflags = value | 0x00000002u;
+    state.regs[4] = static_cast<std::uint32_t>(state.regs[4] + 4u);
+    return true;
+}
+
+// The guest CPU is a fixed, documented x86-32 model: the CPUID identification
+// bit is writable and basic leaf 1 reports SSE2. Host CPU features are never
+// propagated, so every host and ARM64 device answers identically.
+inline constexpr std::uint32_t kGuestCpuidMaxBasicLeaf = 1u;
+inline constexpr std::uint32_t kGuestCpuidLeaf1Eax = 0x00000600u;
+inline constexpr std::uint32_t kGuestCpuidLeaf1Ebx = 0x00000000u;
+inline constexpr std::uint32_t kGuestCpuidLeaf1Ecx = 0x00000000u;
+inline constexpr std::uint32_t kGuestCpuidLeaf1Edx = 0x04000000u;
+
+inline BatchLiftStatus batch_guest_cpuid(BatchLiftState& state) {
+    // regs follows the x86 ModRM order, so EBX is regs[3], not regs[1].
+    constexpr std::size_t kEax = 0;
+    constexpr std::size_t kEcx = 1;
+    constexpr std::size_t kEdx = 2;
+    constexpr std::size_t kEbx = 3;
+    const std::uint32_t leaf = state.regs[kEax];
+    if (leaf == 0u) {
+        state.regs[kEax] = kGuestCpuidMaxBasicLeaf;
+        state.regs[kEbx] = 0x756e6547u;  // "Genu"
+        state.regs[kEdx] = 0x6c65746eu;  // "ntel"
+        state.regs[kEcx] = 0x49656e69u;  // "ineI"
+        return BatchLiftStatus::returned;
+    }
+    if (leaf == 1u) {
+        state.regs[kEax] = kGuestCpuidLeaf1Eax;
+        state.regs[kEbx] = kGuestCpuidLeaf1Ebx;
+        state.regs[kEcx] = kGuestCpuidLeaf1Ecx;
+        state.regs[kEdx] = kGuestCpuidLeaf1Edx;
+        return BatchLiftStatus::returned;
+    }
+    return BatchLiftStatus::unsupported_dependency;
+}
+
 inline bool batch_guest_fld64(
     const BatchLiftMemory& memory,
     BatchLiftState& state,
@@ -494,6 +581,43 @@ inline bool batch_guest_fstp64(
     if (!memory.store64(address, value)) return false;
     state.x87_stack[--state.x87_depth] = 0u;
     return true;
+}
+
+// SHR and SAR keep CF as the last bit shifted out; ZF/SF/PF follow the
+// result, and both clear OF for single-bit counts.
+inline void batch_set_shr_flags(
+    BatchLiftState& state,
+    std::uint32_t value,
+    unsigned count,
+    std::uint32_t result,
+    unsigned width) {
+    if (count == 0u) return;
+    const std::uint32_t mask = batch_mask(width);
+    value &= mask;
+    result &= mask;
+    state.eflags &= ~0x8c5u;
+    const unsigned bit = count <= width ? count - 1u : width - 1u;
+    if ((value & (std::uint32_t{1} << bit)) != 0u) {
+        state.eflags |= 0x001u;
+    }
+    if (batch_even_parity(static_cast<std::uint8_t>(result))) {
+        state.eflags |= 0x004u;
+    }
+    if (result == 0u) state.eflags |= 0x040u;
+    if ((result & (std::uint32_t{1} << (width - 1u))) != 0u) {
+        state.eflags |= 0x080u;
+    }
+}
+
+inline void batch_set_sar_flags(
+    BatchLiftState& state,
+    std::uint32_t value,
+    unsigned count,
+    std::uint32_t result,
+    unsigned width) {
+    batch_set_shr_flags(state, value, count, result, width);
+    // SAR clears OF for every count.
+    state.eflags &= ~0x800u;
 }
 
 // This bounded path was differential-tested with x87 CW=0x027f (53-bit,
@@ -660,6 +784,46 @@ static_assert(offsetof(GuestCriticalSection32, spin_count) == 0x14u);
 // across hosts can require the original number. It stays fixed and nonzero.
 inline constexpr std::uint32_t kBatchGuestProcessId = 0x1234u;
 
+// Return address installed while the CRT initializer table runs a guest
+// routine. It is not code: reaching it back means the initializer returned.
+inline constexpr std::uint32_t kBatchGuestInitializerReturn = 0xfffff000u;
+
+// MSVCR90 keeps _fmode and _commode inside itself, so the guest stands in with
+// two writable guest ints. Callers only ever reach them through __p__fmode and
+// __p__commode, and __cinit copies the loader-zeroed defaults into them.
+inline constexpr std::uint32_t kGuestFmodeAddress = 0x015cff00u;
+inline constexpr std::uint32_t kGuestCommodeAddress = 0x015cff04u;
+// _security_cookie global that __security_init_cookie fills in.
+inline constexpr std::uint32_t kGuestSecurityCookieAddress = 0x015cfe70u;
+
+// The guest has no process command line of its own, so __getmainargs reports a
+// single argument with the program name and an empty environment. Both arrays
+// and the string live in one writable guest window.
+inline constexpr std::uint32_t kGuestArgvArray = 0x015cff40u;
+inline constexpr std::uint32_t kGuestEnvpArray = 0x015cff48u;
+inline constexpr std::uint32_t kGuestProgramName = 0x015cff50u;
+inline constexpr char kGuestProgramNameText[] = "SporeApp.exe";
+inline constexpr std::uint32_t kGuestArgumentCount = 1u;
+
+// The MSVCRT imports in this closure are __cdecl: the guest code adjusts the
+// stack itself (POP ECX, POP ECX or ADD ESP,0xc), so the shim leaves the
+// argument bytes in place. Only the WINAPI imports pop their own arguments.
+inline constexpr std::uint32_t kGuestCdeclCleanup = 0u;
+
+// The Windows loader rewrites every import slot with the resolved address of
+// the imported routine before the first instruction runs, so a slot read as
+// data is a callable pointer. The guest image keeps the file's pre-fixup
+// hint/name RVAs, so the same fixup is applied here: each mapped slot receives
+// a guest trampoline address that dispatches its symbol. The addresses are
+// labels, not code; the dispatcher resolves them before anything executes.
+inline constexpr std::uint32_t kGuestImportTrampolineBase = 0x5f000000u;
+inline constexpr std::uint32_t kGuestImportTrampolineStride = 0x10u;
+
+struct BatchImportSlot {
+    std::uint32_t address;
+    const char* symbol;
+};
+
 struct BatchGuestImportCall {
     std::string symbol;
     std::uint32_t iat_address;
@@ -672,6 +836,76 @@ struct BatchGuestImportCall {
 
 class BatchGuestRuntime final : public BatchGuestImportDispatcher {
 public:
+    using GuestFunction =
+        BatchLiftStatus (*)(BatchLiftMemory&, BatchLiftState&);
+
+    // The CRT initializer table calls guest routines by address. Only compiled
+    // bodies may be registered; anything else fails closed with its address.
+    void register_guest_function(std::uint32_t address, GuestFunction body) {
+        guest_functions_[address] = body;
+    }
+
+    // Reset the guest TLS index counter so one run always hands out the same
+    // indices.
+    void reset_tls_indexes() { tls_indexes_ = 0u; }
+
+    // Apply the loader's import-address fixup to the mapped import slots: each
+    // slot keeps the address of a guest trampoline that resolves to its symbol,
+    // so reading a slot as data yields something that can be called.
+    bool install_import_trampolines(
+        BatchLiftMemory& memory,
+        const BatchImportSlot* slots,
+        std::size_t count) {
+        for (std::size_t index = 0; index < count; ++index) {
+            const std::uint32_t address = kGuestImportTrampolineBase
+                + kGuestImportTrampolineStride
+                    * static_cast<std::uint32_t>(index);
+            if (!memory.store32(slots[index].address, address)) {
+                last_error_ = std::string("import slot 0x")
+                    + hex32(slots[index].address)
+                    + " is not mapped writable for the loader fixup";
+                return false;
+            }
+            import_trampolines_[address] = slots[index].symbol;
+        }
+        return true;
+    }
+
+    BatchLiftStatus invoke_guest_call(
+        BatchLiftMemory& memory,
+        BatchLiftState& state,
+        std::uint32_t target,
+        std::uint32_t return_address) override {
+        const auto trampoline = import_trampolines_.find(target);
+        if (trampoline != import_trampolines_.end()) {
+            if (!batch_guest_call32(memory, state, target, return_address)) {
+                return BatchLiftStatus::invalid_memory;
+            }
+            const BatchLiftStatus status = invoke_import(
+                memory, state, trampoline->second.c_str(), target);
+            if (status != BatchLiftStatus::returned) return status;
+            if (state.eip != return_address) {
+                return BatchLiftStatus::invalid_control_flow;
+            }
+            return BatchLiftStatus::returned;
+        }
+        const auto body = guest_functions_.find(target);
+        if (body == guest_functions_.end()) {
+            last_error_ =
+                "no lifted body for indirect call target 0x" + hex32(target);
+            return BatchLiftStatus::unsupported_dependency;
+        }
+        if (!batch_guest_call32(memory, state, target, return_address)) {
+            return BatchLiftStatus::invalid_memory;
+        }
+        const BatchLiftStatus status = body->second(memory, state);
+        if (status != BatchLiftStatus::returned) return status;
+        if (state.eip != return_address) {
+            return BatchLiftStatus::invalid_control_flow;
+        }
+        return BatchLiftStatus::returned;
+    }
+
     ~BatchGuestRuntime() override {
 #if defined(_WIN32)
         for (HANDLE handle : native_handles_) {
@@ -747,6 +981,77 @@ public:
         }
         if (call.symbol == "KERNEL32.dll!GetCurrentThreadId") {
             return get_current_thread_id(state, calls_.back());
+        }
+        if (call.symbol == "KERNEL32.dll!GetStartupInfoA") {
+            return get_startup_info(memory, state, calls_.back());
+        }
+        if (call.symbol == "KERNEL32.dll!InterlockedCompareExchange") {
+            return interlocked_compare_exchange(memory, state, calls_.back());
+        }
+        if (call.symbol == "MSVCR90.dll!_initterm_e") {
+            return initterm_e(memory, state, calls_.back());
+        }
+        if (call.symbol == "MSVCR90.dll!_initterm") {
+            return initterm(memory, state, calls_.back());
+        }
+        if (call.symbol == "MSVCR90.dll!_amsg_exit") {
+            return amsg_exit(calls_.back());
+        }
+        if (call.symbol == "MSVCR90.dll!__set_app_type") {
+            return set_app_type(state, calls_.back());
+        }
+        if (call.symbol == "MSVCR90.dll!__getmainargs") {
+            return get_main_args(memory, state, calls_.back());
+        }
+        if (call.symbol == "KERNEL32.dll!InitializeCriticalSection") {
+            return initialize_critical_section(memory, state, calls_.back());
+        }
+        if (call.symbol == "KERNEL32.dll!TlsAlloc") {
+            return tls_alloc(state, calls_.back());
+        }
+        if (call.symbol == "KERNEL32.dll!TlsFree") {
+            return tls_free(state, calls_.back());
+        }
+        if (call.symbol == "MSVCR90.dll!_lock"
+                || call.symbol == "MSVCR90.dll!_unlock") {
+            return lock_table(state, calls_.back());
+        }
+        if (call.symbol == "MSVCR90.dll!_onexit"
+                || call.symbol == "MSVCR90.dll!__dllonexit") {
+            return onexit_registration(state, calls_.back());
+        }
+        if (call.symbol == "MSVCR90.dll!__p__fmode") {
+            return p_fmode(memory, state, calls_.back());
+        }
+        if (call.symbol == "MSVCR90.dll!__p__commode") {
+            return p_commode(memory, state, calls_.back());
+        }
+        if (call.symbol == "MSVCR90.dll!_adjust_fdiv") {
+            return adjust_fdiv(state, calls_.back());
+        }
+        if (call.symbol == "MSVCR90.dll!__setusermatherr") {
+            return set_user_matherr(state, calls_.back());
+        }
+        if (call.symbol == "MSVCR90.dll!_configthreadlocale") {
+            return config_thread_locale(state, calls_.back());
+        }
+        if (call.symbol == "MSVCR90.dll!_encode_pointer") {
+            return encode_pointer(memory, state, calls_.back());
+        }
+        if (call.symbol == "MSVCR90.dll!_decode_pointer") {
+            return decode_pointer(memory, state, calls_.back());
+        }
+        if (call.symbol == "KERNEL32.dll!SetUnhandledExceptionFilter") {
+            return set_unhandled_exception_filter(state, calls_.back());
+        }
+        if (call.symbol == "MSVCR90.dll!_controlfp_s") {
+            return controlfp_s(memory, state, calls_.back());
+        }
+        if (call.symbol == "MSVCR90.dll!_invoke_watson") {
+            return invoke_watson(calls_.back());
+        }
+        if (call.symbol == "MSVCR90.dll!?terminate@@YAXXZ") {
+            return terminate(calls_.back());
         }
         if (call.symbol == "KERNEL32.dll!GetTickCount") {
             return get_tick_count(state, calls_.back());
@@ -846,6 +1151,31 @@ private:
         if (symbol == "KERNEL32.dll!GetSystemTimeAsFileTime") return 1u;
         if (symbol == "KERNEL32.dll!GetCurrentProcessId") return 0u;
         if (symbol == "KERNEL32.dll!GetCurrentThreadId") return 0u;
+        if (symbol == "KERNEL32.dll!GetStartupInfoA") return 1u;
+        if (symbol == "KERNEL32.dll!InterlockedCompareExchange") return 3u;
+        if (symbol == "MSVCR90.dll!_initterm_e") return 2u;
+        if (symbol == "MSVCR90.dll!_initterm") return 2u;
+        if (symbol == "MSVCR90.dll!_amsg_exit") return 1u;
+        if (symbol == "MSVCR90.dll!__set_app_type") return 1u;
+        if (symbol == "MSVCR90.dll!__getmainargs") return 5u;
+        if (symbol == "KERNEL32.dll!InitializeCriticalSection") return 1u;
+        if (symbol == "KERNEL32.dll!TlsAlloc") return 0u;
+        if (symbol == "KERNEL32.dll!TlsFree") return 1u;
+        if (symbol == "MSVCR90.dll!_lock") return 1u;
+        if (symbol == "MSVCR90.dll!_unlock") return 1u;
+        if (symbol == "MSVCR90.dll!_onexit") return 1u;
+        if (symbol == "MSVCR90.dll!__dllonexit") return 1u;
+        if (symbol == "MSVCR90.dll!__p__fmode") return 0u;
+        if (symbol == "MSVCR90.dll!__p__commode") return 0u;
+        if (symbol == "MSVCR90.dll!_adjust_fdiv") return 0u;
+        if (symbol == "MSVCR90.dll!__setusermatherr") return 1u;
+        if (symbol == "MSVCR90.dll!_configthreadlocale") return 1u;
+        if (symbol == "MSVCR90.dll!_encode_pointer") return 1u;
+        if (symbol == "MSVCR90.dll!_decode_pointer") return 1u;
+        if (symbol == "KERNEL32.dll!SetUnhandledExceptionFilter") return 1u;
+        if (symbol == "MSVCR90.dll!_controlfp_s") return 3u;
+        if (symbol == "MSVCR90.dll!_invoke_watson") return 5u;
+        if (symbol == "MSVCR90.dll!?terminate@@YAXXZ") return 0u;
         if (symbol == "KERNEL32.dll!GetTickCount") return 0u;
         if (symbol == "KERNEL32.dll!QueryPerformanceCounter") return 1u;
         if (symbol == "KERNEL32.dll!InitializeCriticalSection"
@@ -983,6 +1313,66 @@ private:
         return BatchLiftStatus::returned;
     }
 
+    // Guest-side STARTUPINFOA. The layout matches the 32-bit Win32 structure;
+    // no host pointer or handle is ever copied into guest memory.
+    struct GuestStartupInfoA {
+        std::uint32_t cb;
+        std::uint32_t reserved;
+        std::uint32_t desktop;
+        std::uint32_t title;
+        std::uint32_t x;
+        std::uint32_t y;
+        std::uint32_t x_size;
+        std::uint32_t y_size;
+        std::uint32_t x_count_chars;
+        std::uint32_t y_count_chars;
+        std::uint32_t fill_attribute;
+        std::uint32_t flags;
+        std::uint16_t show_window;
+        std::uint16_t reserved2_size;
+        std::uint32_t reserved2;
+        std::uint32_t std_input;
+        std::uint32_t std_output;
+        std::uint32_t std_error;
+    };
+
+    static_assert(sizeof(GuestStartupInfoA) == 0x44u);
+
+    BatchLiftStatus get_startup_info(
+        BatchLiftMemory& memory,
+        BatchLiftState& state,
+        BatchGuestImportCall& call) {
+        const std::uint32_t address = call.arguments[0];
+        if (!memory.is_writable(address, sizeof(GuestStartupInfoA))) {
+            last_error_ =
+                "GetStartupInfoA structure is outside writable guest memory";
+            return BatchLiftStatus::invalid_memory;
+        }
+        // The caller owns cb; the API reports into the rest of the structure.
+        // This guest has no console, desktop, window or inherited handles, so
+        // every pointer and handle stays null and every geometry value zero.
+        std::uint32_t cb = 0;
+        if (!memory.load32(address, cb)) {
+            last_error_ = "GetStartupInfoA could not read cb";
+            return BatchLiftStatus::invalid_memory;
+        }
+        for (std::uint32_t offset = 4u; offset < sizeof(GuestStartupInfoA);
+             offset += 4u) {
+            if (!memory.store32(address + offset, 0u)) {
+                last_error_ =
+                    "GetStartupInfoA structure changed after validation";
+                return BatchLiftStatus::invalid_memory;
+            }
+        }
+        if (!memory.store32(address, cb)) {
+            last_error_ = "GetStartupInfoA could not restore cb";
+            return BatchLiftStatus::invalid_memory;
+        }
+        // The API returns void: only the four argument bytes leave the stack.
+        complete_import_call(state, call.return_address, 4u);
+        return BatchLiftStatus::returned;
+    }
+
     BatchLiftStatus get_tick_count(
         BatchLiftState& state,
         BatchGuestImportCall& call) {
@@ -1025,6 +1415,429 @@ private:
             return BatchLiftStatus::invalid_memory;
         }
         complete_api_call(state, call, call.return_address, 4u, 1u);
+        return BatchLiftStatus::returned;
+    }
+
+    // void __set_app_type(int): MSVCR90 records whether the image is a console
+    // or windowed application. Nothing else in this closure observes it.
+    BatchLiftStatus set_app_type(
+        BatchLiftState& state, BatchGuestImportCall& call) {
+        state.app_type = call.arguments[0];
+        complete_api_call(state, call, call.return_address,
+                          kGuestCdeclCleanup, 0u);
+        return BatchLiftStatus::returned;
+    }
+
+    // int* __p__fmode(void) / int* __p__commode(void)
+    BatchLiftStatus p_fmode(
+        BatchLiftMemory& memory, BatchLiftState& state,
+        BatchGuestImportCall& call) {
+        if (!memory.is_writable(kGuestFmodeAddress, 4u)
+                || !memory.is_writable(kGuestCommodeAddress, 4u)) {
+            last_error_ =
+                "the guest CRT _fmode/_commode ints are not mapped writable";
+            return BatchLiftStatus::invalid_memory;
+        }
+        complete_api_call(
+            state, call, call.return_address, 0u, kGuestFmodeAddress);
+        return BatchLiftStatus::returned;
+    }
+
+    BatchLiftStatus p_commode(
+        BatchLiftMemory& memory, BatchLiftState& state,
+        BatchGuestImportCall& call) {
+        if (!memory.is_writable(kGuestFmodeAddress, 4u)
+                || !memory.is_writable(kGuestCommodeAddress, 4u)) {
+            last_error_ =
+                "the guest CRT _fmode/_commode ints are not mapped writable";
+            return BatchLiftStatus::invalid_memory;
+        }
+        complete_api_call(
+            state, call, call.return_address, 0u, kGuestCommodeAddress);
+        return BatchLiftStatus::returned;
+    }
+
+    // int __getmainargs(int* argc, char*** argv, char*** envp, int newmode,
+    //                   void* startupinfo): the guest reports its own program
+    // name as the single argument and an empty environment.
+    BatchLiftStatus get_main_args(
+        BatchLiftMemory& memory, BatchLiftState& state,
+        BatchGuestImportCall& call) {
+        const std::uint32_t argc_pointer = call.arguments[0];
+        const std::uint32_t argv_pointer = call.arguments[1];
+        const std::uint32_t envp_pointer = call.arguments[2];
+        const bool writable =
+            memory.is_writable(kGuestArgvArray, 12u)
+            && memory.is_writable(kGuestEnvpArray, 4u)
+            && memory.is_writable(
+                kGuestProgramName, sizeof(kGuestProgramNameText))
+            && memory.is_writable(argc_pointer, 4u)
+            && memory.is_writable(argv_pointer, 4u)
+            && memory.is_writable(envp_pointer, 4u);
+        if (!writable) {
+            last_error_ =
+                "__getmainargs pointers are outside writable guest memory";
+            return BatchLiftStatus::invalid_memory;
+        }
+        for (std::size_t index = 0; index < sizeof(kGuestProgramNameText);
+                ++index) {
+            if (!memory.store8(
+                    kGuestProgramName + static_cast<std::uint32_t>(index),
+                    static_cast<std::uint8_t>(kGuestProgramNameText[index]))) {
+                return BatchLiftStatus::invalid_memory;
+            }
+        }
+        const bool stored =
+            memory.store32(argc_pointer, kGuestArgumentCount)
+            && memory.store32(argv_pointer, kGuestArgvArray)
+            && memory.store32(envp_pointer, kGuestEnvpArray)
+            && memory.store32(kGuestArgvArray, kGuestProgramName)
+            && memory.store32(kGuestArgvArray + 4u, 0u)
+            && memory.store32(kGuestEnvpArray, 0u);
+        if (!stored) {
+            last_error_ = "__getmainargs could not build the guest argv/envp";
+            return BatchLiftStatus::invalid_memory;
+        }
+        // __getmainargs is __cdecl here: the guest adds 0x14 to ESP itself right
+        // after the call, so the shim must leave the arguments in place.
+        complete_api_call(state, call, call.return_address,
+                          kGuestCdeclCleanup, 0u);
+        return BatchLiftStatus::returned;
+    }
+
+    // void InitializeCriticalSection(LPCRITICAL_SECTION): the guest documents
+    // a single thread, so the section only records its initial counters.
+    BatchLiftStatus initialize_critical_section(
+        BatchLiftMemory& memory, BatchLiftState& state,
+        BatchGuestImportCall& call) {
+        if (!memory.is_writable(call.arguments[0],
+                                sizeof(GuestCriticalSection32))) {
+            last_error_ = "InitializeCriticalSection target is not writable";
+            return BatchLiftStatus::invalid_memory;
+        }
+        const GuestCriticalSection32 section{0u, -1, 0, 0u, 0u, 0u};
+        std::uint32_t address = call.arguments[0];
+        const auto* bytes =
+            reinterpret_cast<const std::uint8_t*>(&section);
+        for (std::size_t index = 0; index < sizeof(section); ++index) {
+            if (!memory.store8(
+                    address + static_cast<std::uint32_t>(index),
+                    bytes[index])) {
+                return BatchLiftStatus::invalid_memory;
+            }
+        }
+        complete_api_call(state, call, call.return_address, 4u, 0u);
+        return BatchLiftStatus::returned;
+    }
+
+    // ulong_ptr TlsAlloc(void): the guest hands out indices from zero upward.
+    BatchLiftStatus tls_alloc(BatchLiftState& state,
+                              BatchGuestImportCall& call) {
+        const std::uint32_t index = tls_indexes_++;
+        complete_api_call(state, call, call.return_address, 0u, index);
+        return BatchLiftStatus::returned;
+    }
+
+    BatchLiftStatus tls_free(BatchLiftState& state,
+                             BatchGuestImportCall& call) {
+        complete_api_call(state, call, call.return_address, 4u, 1u);
+        return BatchLiftStatus::returned;
+    }
+
+    // void _lock(int) / void _unlock(int): the CRT protects its own tables.
+    // One guest thread means no contention, and both are recorded as calls.
+    BatchLiftStatus lock_table(BatchLiftState& state,
+                               BatchGuestImportCall& call) {
+        complete_api_call(state, call, call.return_address, 4u, 0u);
+        return BatchLiftStatus::returned;
+    }
+
+    // _onexit_t _onexit(_onexit_t) / __dllonexit: the guest CRT keeps no exit
+    // table, so a registration is accepted and the previous head is returned.
+    BatchLiftStatus onexit_registration(BatchLiftState& state,
+                                        BatchGuestImportCall& call) {
+        state.exit_handler = call.arguments[0];
+        complete_api_call(state, call, call.return_address, 4u,
+                          call.arguments[0]);
+        return BatchLiftStatus::returned;
+    }
+
+    // void _adjust_fdiv(void): the routine only refreshes an internal float
+    // adjustment hook that this build never calls.
+    BatchLiftStatus adjust_fdiv(BatchLiftState& state,
+                                BatchGuestImportCall& call) {
+        complete_api_call(state, call, call.return_address, 0u, 0u);
+        return BatchLiftStatus::returned;
+    }
+
+    // int __setusermatherr(_UserMathErrorFunctionPointer)
+    BatchLiftStatus set_user_matherr(
+        BatchLiftState& state, BatchGuestImportCall& call) {
+        state.user_matherr = call.arguments[0];
+        complete_api_call(state, call, call.return_address,
+                          kGuestCdeclCleanup, 0u);
+        return BatchLiftStatus::returned;
+    }
+
+    // int _configthreadlocale(int): -1 queries, otherwise sets; returns the
+    // previous configuration.
+    BatchLiftStatus config_thread_locale(
+        BatchLiftState& state, BatchGuestImportCall& call) {
+        const std::uint32_t requested = call.arguments[0];
+        const std::uint32_t previous = state.thread_locale;
+        if (requested != 0xffffffffu) {
+            state.thread_locale = requested;
+        }
+        complete_api_call(state, call, call.return_address,
+                          kGuestCdeclCleanup, previous);
+        return BatchLiftStatus::returned;
+    }
+
+    // void* _encode_pointer(void*): MSVCR90 XORs the pointer with the security
+    // cookie and rotates left by the cookie's low five bits.
+    BatchLiftStatus encode_pointer(
+        BatchLiftMemory& memory, BatchLiftState& state,
+        BatchGuestImportCall& call) {
+        const std::uint32_t pointer = call.arguments[0];
+        std::uint32_t cookie{};
+        if (!memory.load32(kGuestSecurityCookieAddress, cookie)) {
+            last_error_ =
+                "the guest security cookie is not mapped for _encode_pointer";
+            return BatchLiftStatus::invalid_memory;
+        }
+        std::uint32_t encoded = 0u;
+        if (pointer != 0u) {
+            const std::uint32_t shift = cookie & 0x1fu;
+            const std::uint32_t mixed = pointer ^ cookie;
+            encoded = shift == 0u
+                ? mixed
+                : static_cast<std::uint32_t>(
+                      (mixed << shift) | (mixed >> (32u - shift)));
+        }
+        complete_api_call(state, call, call.return_address,
+                          kGuestCdeclCleanup, encoded);
+        return BatchLiftStatus::returned;
+    }
+
+    // void* _decode_pointer(void*): the exact inverse of _encode_pointer, so an
+    // encoded pointer round-trips through both. A null pointer stays null.
+    BatchLiftStatus decode_pointer(
+        BatchLiftMemory& memory, BatchLiftState& state,
+        BatchGuestImportCall& call) {
+        const std::uint32_t pointer = call.arguments[0];
+        std::uint32_t cookie{};
+        if (!memory.load32(kGuestSecurityCookieAddress, cookie)) {
+            last_error_ =
+                "the guest security cookie is not mapped for _decode_pointer";
+            return BatchLiftStatus::invalid_memory;
+        }
+        std::uint32_t decoded = 0u;
+        if (pointer != 0u) {
+            const std::uint32_t shift = cookie & 0x1fu;
+            const std::uint32_t rotated = shift == 0u
+                ? pointer
+                : static_cast<std::uint32_t>(
+                      (pointer >> shift) | (pointer << (32u - shift)));
+            decoded = rotated ^ cookie;
+        }
+        complete_api_call(state, call, call.return_address,
+                          kGuestCdeclCleanup, decoded);
+        return BatchLiftStatus::returned;
+    }
+
+    // LPTOP_LEVEL_EXCEPTION_FILTER SetUnhandledExceptionFilter(filter)
+    BatchLiftStatus set_unhandled_exception_filter(
+        BatchLiftState& state, BatchGuestImportCall& call) {
+        const std::uint32_t previous = state.unhandled_filter;
+        state.unhandled_filter = call.arguments[0];
+        complete_api_call(state, call, call.return_address, 4u, previous);
+        return BatchLiftStatus::returned;
+    }
+
+    // errno_t _controlfp_s(unsigned* current, unsigned new_control,
+    //                      unsigned mask)
+    BatchLiftStatus controlfp_s(
+        BatchLiftMemory& memory, BatchLiftState& state,
+        BatchGuestImportCall& call) {
+        const std::uint32_t current_pointer = call.arguments[0];
+        const std::uint32_t requested = call.arguments[1];
+        const std::uint32_t mask = call.arguments[2];
+        if (current_pointer != 0u) {
+            if (!memory.is_writable(current_pointer, 4u)
+                    || !memory.store32(current_pointer,
+                                       state.x87_control_word)) {
+                last_error_ =
+                    "_controlfp_s current pointer is outside writable guest "
+                    "memory";
+                return BatchLiftStatus::invalid_memory;
+            }
+        }
+        if (current_pointer == 0u && mask == 0u) {
+            // Query only.
+            complete_api_call(state, call, call.return_address,
+                              kGuestCdeclCleanup, state.x87_control_word);
+            return BatchLiftStatus::returned;
+        }
+        state.x87_control_word =
+            (state.x87_control_word & ~mask) | (requested & mask);
+        complete_api_call(state, call, call.return_address,
+                          kGuestCdeclCleanup, 0u);
+        return BatchLiftStatus::returned;
+    }
+
+    // void _invoke_watson(...): terminates the process after reporting. The
+    // guest has no process to end, so it fails closed.
+    BatchLiftStatus invoke_watson(BatchGuestImportCall& call) {
+        last_error_ = "_invoke_watson is fatal in the guest";
+        (void)call;
+        return BatchLiftStatus::unsupported_dependency;
+    }
+
+    // void terminate(void): the CRT calls std::terminate on unhandled paths.
+    BatchLiftStatus terminate(BatchGuestImportCall& call) {
+        last_error_ = "std::terminate is fatal in the guest";
+        (void)call;
+        return BatchLiftStatus::unsupported_dependency;
+    }
+
+    // int _initterm_e(_PIFV* begin, _PIFV* end): walk the guest table, skip null
+    // entries and stop at the first initializer that returns nonzero.
+    BatchLiftStatus initterm_e(
+        BatchLiftMemory& memory,
+        BatchLiftState& state,
+        BatchGuestImportCall& call) {
+        const std::uint32_t begin = call.arguments[0];
+        const std::uint32_t end = call.arguments[1];
+        if (end < begin || ((end - begin) % 4u) != 0u
+                || !memory.is_readable(begin, end - begin)) {
+            last_error_ =
+                "_initterm_e table bounds are outside readable guest memory";
+            return BatchLiftStatus::invalid_memory;
+        }
+        std::uint32_t result = 0;
+        for (std::uint32_t slot = begin; slot < end; slot += 4u) {
+            std::uint32_t target{};
+            if (!memory.load32(slot, target)) {
+                last_error_ = "_initterm_e table changed after validation";
+                return BatchLiftStatus::invalid_memory;
+            }
+            if (target == 0u) continue;
+            const auto body = guest_functions_.find(target);
+            if (body == guest_functions_.end()) {
+                last_error_ = "_initterm_e needs a lifted body for 0x"
+                    + hex32(target);
+                return BatchLiftStatus::unsupported_dependency;
+            }
+            const std::uint32_t entry_esp = state.regs[4];
+            if (!batch_guest_call32(
+                    memory, state, target, kBatchGuestInitializerReturn)) {
+                return BatchLiftStatus::invalid_memory;
+            }
+            const BatchLiftStatus status = body->second(memory, state);
+            if (status != BatchLiftStatus::returned) return status;
+            if (state.eip != kBatchGuestInitializerReturn
+                    || state.regs[4] != entry_esp) {
+                return BatchLiftStatus::invalid_control_flow;
+            }
+            result = state.regs[0];
+            if (result != 0u) break;
+        }
+        // The guest pops both table arguments itself right after the call.
+        complete_api_call(state, call, call.return_address,
+                          kGuestCdeclCleanup, result);
+        return BatchLiftStatus::returned;
+    }
+
+    // void _initterm(_PVFV* begin, _PVFV* end): walk the guest table, skip null
+    // entries and call every initializer. It returns void and never stops on a
+    // result. An address without a compiled body fails closed and names itself,
+    // so the walk can never pretend a constructor ran.
+    BatchLiftStatus initterm(
+        BatchLiftMemory& memory,
+        BatchLiftState& state,
+        BatchGuestImportCall& call) {
+        const std::uint32_t begin = call.arguments[0];
+        const std::uint32_t end = call.arguments[1];
+        // The table spans 124 KiB of real PE data but the guest image maps only
+        // the slots a batch can reach, so readability is checked per slot.
+        if (end < begin || ((end - begin) % 4u) != 0u) {
+            last_error_ = "_initterm table bounds are not a pointer array";
+            return BatchLiftStatus::invalid_memory;
+        }
+        for (std::uint32_t slot = begin; slot < end; slot += 4u) {
+            std::uint32_t target{};
+            if (!memory.load32(slot, target)) {
+                last_error_ = "_initterm table slot 0x" + hex32(slot)
+                    + " is outside mapped guest memory";
+                return BatchLiftStatus::invalid_memory;
+            }
+            if (target == 0u) continue;
+            const auto body = guest_functions_.find(target);
+            if (body == guest_functions_.end()) {
+                last_error_ =
+                    "_initterm needs a lifted body for 0x" + hex32(target);
+                return BatchLiftStatus::unsupported_dependency;
+            }
+            const std::uint32_t entry_esp = state.regs[4];
+            if (!batch_guest_call32(
+                    memory, state, target, kBatchGuestInitializerReturn)) {
+                return BatchLiftStatus::invalid_memory;
+            }
+            const BatchLiftStatus status = body->second(memory, state);
+            if (status != BatchLiftStatus::returned) return status;
+            if (state.eip != kBatchGuestInitializerReturn
+                    || state.regs[4] != entry_esp) {
+                return BatchLiftStatus::invalid_control_flow;
+            }
+        }
+        complete_api_call(state, call, call.return_address,
+                          kGuestCdeclCleanup, 0u);
+        return BatchLiftStatus::returned;
+    }
+
+    // void _amsg_exit(int errnum): the real routine prints the CRT message and
+    // terminates the process. The guest has no process to end, so it fails
+    // closed instead of pretending to continue.
+    BatchLiftStatus amsg_exit(BatchGuestImportCall& call) {
+        last_error_ = "_amsg_exit is fatal in the guest for error type 0x"
+            + hex32(call.arguments[0]);
+        return BatchLiftStatus::unsupported_dependency;
+    }
+
+    static std::string hex32(std::uint32_t value) {
+        static const char digits[] = "0123456789abcdef";
+        std::string text(8, '0');
+        for (int index = 7; index >= 0; --index) {
+            text[static_cast<std::size_t>(index)] = digits[value & 0xfu];
+            value >>= 4u;
+        }
+        return text;
+    }
+
+    BatchLiftStatus interlocked_compare_exchange(        BatchLiftMemory& memory,
+        BatchLiftState& state,
+        BatchGuestImportCall& call) {
+        const std::uint32_t destination = call.arguments[0];
+        const std::uint32_t exchange = call.arguments[1];
+        const std::uint32_t comparand = call.arguments[2];
+        std::uint32_t previous{};
+        if (!memory.is_writable(destination, 4u)
+                || !memory.load32(destination, previous)) {
+            last_error_ =
+                "InterlockedCompareExchange destination is outside writable "
+                "guest memory";
+            return BatchLiftStatus::invalid_memory;
+        }
+        // The guest executes a single thread, so the compare-exchange is
+        // atomic by construction and needs no host side lock.
+        if (previous == comparand
+                && !memory.store32(destination, exchange)) {
+            last_error_ =
+                "InterlockedCompareExchange destination changed after "
+                "validation";
+            return BatchLiftStatus::invalid_memory;
+        }
+        complete_api_call(state, call, call.return_address, 12u, previous);
         return BatchLiftStatus::returned;
     }
 
@@ -1582,6 +2395,12 @@ private:
     std::uint32_t next_guest_thread_id_ = 1u;
     std::vector<BatchGuestImportCall> calls_;
     std::string last_error_;
+    std::unordered_map<std::uint32_t, GuestFunction> guest_functions_;
+    // Loader-fixup labels written into the mapped import slots, keyed by the
+    // trampoline address the slot now holds.
+    std::unordered_map<std::uint32_t, std::string> import_trampolines_;
+    // The guest TLS allocator hands out indices from zero upward.
+    std::uint32_t tls_indexes_{};
     std::uint32_t last_error_code_{};
     mutable std::unordered_map<std::string, std::weak_ptr<KernelObject>>
         named_objects_;

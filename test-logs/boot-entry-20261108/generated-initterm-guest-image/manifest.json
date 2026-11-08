@@ -1,0 +1,249 @@
+{
+  "reference_sha256": "6aec99cb2dc7fd08851a1718e92a60f359fb3fccca3b244a890ae07e93cbe59b",
+  "candidate_sha256": "6aec99cb2dc7fd08851a1718e92a60f359fb3fccca3b244a890ae07e93cbe59b",
+  "image_bytes": 2476,
+  "regions": [
+    {
+      "address": 4194304,
+      "offset": 0,
+      "size": 1024,
+      "name": "pe_headers",
+      "writable": false,
+      "source": "raw",
+      "reason": "the __cinit application-type probe reads the DOS and NT headers"
+    },
+    {
+      "address": 17870748,
+      "offset": 1024,
+      "size": 4,
+      "name": "adjust_fdiv_cell",
+      "writable": false,
+      "source": "raw",
+      "reason": "the _adjust_fdiv import is read through its IAT pointer"
+    },
+    {
+      "address": 20759296,
+      "offset": 1028,
+      "size": 96,
+      "name": "import_cells",
+      "writable": true,
+      "source": "raw",
+      "reason": "the CRT import slots, which the loader rewrites with resolved addresses"
+    },
+    {
+      "address": 20760588,
+      "offset": 1124,
+      "size": 1024,
+      "name": "cpp_initializer_head",
+      "writable": false,
+      "source": "raw",
+      "reason": "the first 256 slots of the C++ initializer table _initterm walks"
+    },
+    {
+      "address": 20885648,
+      "offset": 2148,
+      "size": 32,
+      "name": "initializer_table",
+      "writable": false,
+      "source": "raw",
+      "reason": "the table _initterm_e walks"
+    },
+    {
+      "address": 22871664,
+      "offset": 2180,
+      "size": 24,
+      "name": "security_cookie",
+      "writable": true,
+      "source": "raw",
+      "reason": "the security cookie and the two CRT initializer guards"
+    },
+    {
+      "address": 22871808,
+      "offset": 2204,
+      "size": 8,
+      "name": "fmode_commode",
+      "writable": true,
+      "source": "raw",
+      "reason": "guest stand-in for the MSVCR90 _fmode and _commode ints"
+    },
+    {
+      "address": 22871872,
+      "offset": 2212,
+      "size": 64,
+      "name": "argv_envp",
+      "writable": true,
+      "source": "raw",
+      "reason": "guest argv/envp arrays and the program name string __getmainargs builds"
+    },
+    {
+      "address": 22339384,
+      "offset": 2276,
+      "size": 4,
+      "name": "initializer_flag",
+      "writable": true,
+      "source": "raw",
+      "reason": "the CRT flag the second C++ initializer toggles"
+    },
+    {
+      "address": 22873744,
+      "offset": 2280,
+      "size": 4,
+      "name": "initializer_state",
+      "writable": true,
+      "source": "raw",
+      "reason": "the CRT state word the fifth C++ initializer toggles"
+    },
+    {
+      "address": 23493632,
+      "offset": 2284,
+      "size": 24,
+      "name": "initializer_critical_section",
+      "writable": true,
+      "source": "bss",
+      "reason": "the loader-zeroed critical section the first initializer initializes"
+    },
+    {
+      "address": 24071832,
+      "offset": 2308,
+      "size": 24,
+      "name": "initializer_critical_section_2",
+      "writable": true,
+      "source": "bss",
+      "reason": "the loader-zeroed critical section the fourth initializer initializes"
+    },
+    {
+      "address": 24061440,
+      "offset": 2332,
+      "size": 96,
+      "name": "crt_globals",
+      "writable": true,
+      "source": "bss",
+      "reason": "_fmode/_commode defaults, the app-type flag and the app-type address"
+    },
+    {
+      "address": 24241984,
+      "offset": 2428,
+      "size": 48,
+      "name": "startup_state",
+      "writable": true,
+      "source": "bss",
+      "reason": "startup lock, startup state and the encoded null pointers"
+    }
+  ],
+  "closure_addresses": [
+    "0x00400000",
+    "0x0040003c",
+    "0x013cc310",
+    "0x015cfe70",
+    "0x015cfe80",
+    "0x015cfe84",
+    "0x016f2628",
+    "0x016f2648",
+    "0x016f264c",
+    "0x0171e748",
+    "0x0171e754",
+    "0x0171e75c",
+    "0x0171e760"
+  ],
+  "pushed_addresses": [
+    "0x011e122d",
+    "0x011e1318",
+    "0x011e1545",
+    "0x01508cd0"
+  ],
+  "app_type_probe_flag": 0,
+  "import_slots": [
+    {
+      "address": "0x013cc300",
+      "symbol": "MSVCR90.dll!_time32"
+    },
+    {
+      "address": "0x013cc304",
+      "symbol": "MSVCR90.dll!__set_app_type"
+    },
+    {
+      "address": "0x013cc308",
+      "symbol": "MSVCR90.dll!__p__fmode"
+    },
+    {
+      "address": "0x013cc30c",
+      "symbol": "MSVCR90.dll!__p__commode"
+    },
+    {
+      "address": "0x013cc314",
+      "symbol": "MSVCR90.dll!__setusermatherr"
+    },
+    {
+      "address": "0x013cc318",
+      "symbol": "MSVCR90.dll!_configthreadlocale"
+    },
+    {
+      "address": "0x013cc31c",
+      "symbol": "MSVCR90.dll!_initterm_e"
+    },
+    {
+      "address": "0x013cc320",
+      "symbol": "MSVCR90.dll!_initterm"
+    },
+    {
+      "address": "0x013cc324",
+      "symbol": "MSVCR90.dll!_acmdln"
+    },
+    {
+      "address": "0x013cc328",
+      "symbol": "MSVCR90.dll!_ismbblead"
+    },
+    {
+      "address": "0x013cc32c",
+      "symbol": "MSVCR90.dll!_XcptFilter"
+    },
+    {
+      "address": "0x013cc330",
+      "symbol": "MSVCR90.dll!_exit"
+    },
+    {
+      "address": "0x013cc334",
+      "symbol": "MSVCR90.dll!_cexit"
+    },
+    {
+      "address": "0x013cc338",
+      "symbol": "MSVCR90.dll!__getmainargs"
+    },
+    {
+      "address": "0x013cc33c",
+      "symbol": "MSVCR90.dll!_amsg_exit"
+    },
+    {
+      "address": "0x013cc340",
+      "symbol": "MSVCR90.dll!?terminate@@YAXXZ"
+    },
+    {
+      "address": "0x013cc344",
+      "symbol": "MSVCR90.dll!_decode_pointer"
+    },
+    {
+      "address": "0x013cc348",
+      "symbol": "MSVCR90.dll!_onexit"
+    },
+    {
+      "address": "0x013cc34c",
+      "symbol": "MSVCR90.dll!_lock"
+    },
+    {
+      "address": "0x013cc350",
+      "symbol": "MSVCR90.dll!_encode_pointer"
+    },
+    {
+      "address": "0x013cc354",
+      "symbol": "MSVCR90.dll!__dllonexit"
+    },
+    {
+      "address": "0x013cc358",
+      "symbol": "MSVCR90.dll!_unlock"
+    },
+    {
+      "address": "0x013cc35c",
+      "symbol": "MSVCR90.dll!_getch"
+    }
+  ]
+}

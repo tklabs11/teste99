@@ -1,0 +1,11 @@
+﻿python : .................................................................................
+No linha:2 caractere:91
++ ... _static_lift'; python -m unittest test_static_batch_lift 2>&1 | Out-F ...
++                    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (.................................:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+----------------------------------------------------------------------
+Ran 81 tests in 0.069s
+
+OK

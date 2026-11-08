@@ -1,0 +1,22 @@
+boot_entry_crt_harness.cpp
+spore_011e11a0.cpp
+spore_011e1548_prefix.cpp
+C:\Users\wesll\AndroidStudioProjects\SporeAndroid\test-logs\boot-entry-20261108\generated-cookie-cookie-prefix\spore_011e1548_prefix.cpp(250): warning C4102: 'L_011e15da': rótulo não referenciado
+spore_011e0ee0.cpp
+C:\Users\wesll\AndroidStudioProjects\SporeAndroid\test-logs\boot-entry-20261108\generated-crt-initterm-executed\spore_011e0ee0.cpp(248): warning C4102: 'L_011e11d4': rótulo não referenciado
+C:\Users\wesll\AndroidStudioProjects\SporeAndroid\test-logs\boot-entry-20261108\generated-crt-initterm-executed\spore_011e0ee0.cpp(251): warning C4102: 'L_011e1368': rótulo não referenciado
+C:\Users\wesll\AndroidStudioProjects\SporeAndroid\test-logs\boot-entry-20261108\generated-crt-initterm-executed\spore_011e0ee0.cpp(254): warning C4102: 'L_011e1514': rótulo não referenciado
+spore_011e10bf.cpp
+spore_011e11d4.cpp
+spore_011e1219.cpp
+spore_011e1252.cpp
+spore_011e12a2.cpp
+spore_011e1304.cpp
+spore_011e135a.cpp
+spore_011e136e.cpp
+spore_011e151a.cpp
+spore_011e1545.cpp
+Gerando Código...
+C:\Users\wesll\AndroidStudioProjects\SporeAndroid\test-logs\boot-entry-20261108\generated-crt-initterm-executed\spore_011e0ee0.cpp(249) : warning C4702: código inacessível
+C:\Users\wesll\AndroidStudioProjects\SporeAndroid\test-logs\boot-entry-20261108\generated-crt-initterm-executed\spore_011e0ee0.cpp(252) : warning C4702: código inacessível
+C:\Users\wesll\AndroidStudioProjects\SporeAndroid\test-logs\boot-entry-20261108\generated-crt-initterm-executed\spore_011e0ee0.cpp(255) : warning C4702: código inacessível

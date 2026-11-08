@@ -8,6 +8,7 @@ from pathlib import Path
 
 import BatchStaticLift as lifter
 import diagnose_call_closure as diagnostic
+import generate_boot_crt_prefix as boot_crt
 import generate_boot_pid_prefix as boot_pid
 import generate_function_prefix as prefix_generator
 
@@ -455,10 +456,13 @@ class StaticBatchLiftTests(unittest.TestCase):
             instruction(0x401006, "c3", "RET", flow="TERMINAL"),
         ])
 
-        with self.assertRaises(lifter.LiftRejected) as raised:
-            lifter.translate_function(body, {0x401000}, {})
-
-        self.assertIn("indirect or unresolved call", raised.exception.reasons[0])
+        source, diagnostics = lifter.translate_function(body, {0x401000}, {})
+        # No IAT symbol is invented: the slot is read as an ordinary data
+        # pointer and the dispatcher still refuses an unknown target at runtime.
+        self.assertIn("memory.load32(0x00402050u", source)
+        self.assertIn("invoke_guest_call", source)
+        self.assertEqual([item["status"] for item in diagnostics],
+                         ["translated"] * 2)
 
     def test_movss_transfers_and_absolute_memory_are_translated(self):
         body = function([
@@ -851,8 +855,8 @@ class StaticBatchLiftTests(unittest.TestCase):
             instruction(0x401006, "c3", "RET", flow="TERMINAL"),
         ])
         source, diagnostics = lifter.translate_function(body)
-        self.assertIn("0xffffffffu << 30u", source)
-        self.assertIn("state.eflags |= 0x001u", source)
+        self.assertIn("(0xffffffffu << (32u - t0c))", source)
+        self.assertIn("batch_set_sar_flags(state, t0a, t0c, t0r, 32u)", source)
         self.assertIn("memory.load32(static_cast<std::uint32_t>(state.regs[0] + state.regs[1] * 4u", source)
         self.assertEqual([item["status"] for item in diagnostics], ["translated"] * 3)
 
@@ -958,7 +962,7 @@ class StaticBatchLiftTests(unittest.TestCase):
         self.assertEqual(rejected[0]["mnemonic"], "LZCNT")
         self.assertIn("unsupported instruction", rejected[0]["reason"])
 
-    def test_indirect_call_is_reported_as_a_blocker(self):
+    def test_indirect_register_call_dispatches_through_the_runtime(self):
         body = function([
             instruction(
                 0x401000, "ffd0", "CALL", ("EAX",),
@@ -967,10 +971,13 @@ class StaticBatchLiftTests(unittest.TestCase):
             instruction(0x401002, "c3", "RET", flow="TERMINAL"),
         ])
 
-        with self.assertRaises(lifter.LiftRejected) as raised:
-            lifter.translate_function(body)
+        source, diagnostics = lifter.translate_function(
+            body, exported_function_entries=set())
 
-        self.assertIn("indirect or unresolved call", raised.exception.reasons[0])
+        self.assertIn("invoke_guest_call", source)
+        self.assertIn("state.regs[0]", source)
+        self.assertEqual(
+            [item["status"] for item in diagnostics], ["translated"] * 2)
 
     def test_direct_call_to_unexported_target_is_rejected(self):
         body = function([
@@ -1544,8 +1551,9 @@ class StaticBatchLiftTests(unittest.TestCase):
             shl, 0, {0x011E15C6, 0x011E15C9}, 0x011E15C9
         )
         joined = "\n".join(source)
-        self.assertIn("batch_set_shl_flags(state, t0a, 16u, t0r, 32u);", joined)
-        self.assertIn("t0r = static_cast<std::uint32_t>(t0a << 16u)", joined)
+        self.assertIn("batch_set_shl_flags(state, t0a, t0c, t0r, 32u);", joined)
+        self.assertIn("t0c = 16u;", joined)
+        self.assertIn("if (t0c != 0u) {", joined)
 
         leave = instruction(0x011E15DC, "c9", "LEAVE")
         leave_source = lifter.translate_instruction(
@@ -1555,11 +1563,331 @@ class StaticBatchLiftTests(unittest.TestCase):
         self.assertIn("state.regs[4] = state.regs[5];", leave_joined)
         self.assertIn("state.regs[5] = t0;", leave_joined)
 
-        with self.assertRaisesRegex(ValueError, "immediate counts 0 through 31"):
+        with self.assertRaisesRegex(ValueError, "0 through 31 or CL"):
             lifter.translate_instruction(
                 instruction(0x011E15C6, "c1e020", "SHL", ("EAX", "0x20")),
                 0, {0x011E15C6, 0x011E15C9}, 0x011E15C9,
             )
+
+    def test_shift_right_arithmetic_and_variable_counts(self):
+        shr = lifter.translate_instruction(
+            instruction(0x00928000, "c1ea03", "SHR", ("EDX", "0x3")),
+            0, {0x00928000, 0x00928003}, 0x00928003,
+        )
+        joined = "\n".join(shr)
+        self.assertIn("t0c = 3u;", joined)
+        self.assertIn("batch_set_shr_flags(state, t0a, t0c, t0r, 32u);", joined)
+        self.assertIn("t0r = static_cast<std::uint32_t>(t0a >> t0c);", joined)
+
+        sar = lifter.translate_instruction(
+            instruction(0x00927E3F, "c1fb05", "SAR", ("EBX", "0x5")),
+            0, {0x00927E3F, 0x00927E42}, 0x00927E42,
+        )
+        self.assertIn("batch_set_sar_flags(state, t0a, t0c, t0r, 32u);",
+                      "\n".join(sar))
+
+        variable = lifter.translate_instruction(
+            instruction(0x00926010, "d3e0", "SHL", ("EAX", "CL")),
+            0, {0x00926010, 0x00926012}, 0x00926012,
+        )
+        joined = "\n".join(variable)
+        self.assertIn("t0c = (state.regs[1] & 0x1fu);", joined)
+        self.assertIn("if (t0c != 0u) {", joined)
+
+        # A zero count is a no-op: nothing is emitted for it.
+        self.assertEqual(
+            lifter.translate_instruction(
+                instruction(0x00926020, "c1e000", "SHL", ("EAX", "0x0")),
+                0, {0x00926020, 0x00926022}, 0x00926022,
+            ), [])
+
+        with self.assertRaisesRegex(ValueError, "0 through 31 or CL"):
+            lifter.translate_instruction(
+                instruction(0x00926030, "c1e020", "SHR", ("EAX", "0x20")),
+                0, {0x00926030, 0x00926033}, 0x00926033,
+            )
+
+    def test_xadd_and_debug_trap_are_translated(self):
+        xadd = lifter.translate_instruction(
+            instruction(0x004023ED, "f00fc108", "XADD.LOCK",
+                        ("dword ptr [EAX]", "ECX")),
+            0, {0x004023ED, 0x004023F1}, 0x004023F1,
+        )
+        joined = "\n".join(xadd)
+        self.assertIn("batch_set_add_flags(state, t0a, t0b, t0r, 32u);", joined)
+        # The target receives the sum and the source receives the old value.
+        self.assertIn(
+            "t0r = static_cast<std::uint32_t>(t0a + t0b) & 0xffffffffu;",
+            joined)
+        self.assertIn("state.regs[1] = t0a;", joined)
+
+        trap = lifter.translate_instruction(
+            instruction(0x0040192F, "cc", "INT3"),
+            0, {0x0040192F, 0x00401930}, 0x00401930,
+        )
+        self.assertIn("return BatchLiftStatus::debug_trap;", "\n".join(trap))
+
+    def test_indexed_memory_operands_reach_or_and_test(self):
+        indexed_or = lifter.translate_instruction(
+            instruction(0x009269F4, "0904bb", "OR",
+                        ("dword ptr [EBX + EDI*0x4 + 0x430]", "EAX")),
+            0, {0x009269F4, 0x009269F8}, 0x009269F8,
+        )
+        joined = "\n".join(indexed_or)
+        self.assertIn("state.regs[3] + state.regs[7] * 4u + 0x00000430u",
+                      joined)
+        with self.assertRaisesRegex(ValueError, "indexed memory operands"):
+            lifter.translate_instruction(
+                instruction(0x009269F8, "0904bb", "ADC",
+                            ("dword ptr [EBX + EDI*0x4 + 0x430]", "EAX")),
+                0, {0x009269F8, 0x009269FC}, 0x009269FC,
+            )
+
+    def test_computed_call_through_memory_uses_the_dispatcher(self):
+        source = lifter.translate_instruction(
+            instruction(0x00401941, "ff5514", "CALL",
+                        ("dword ptr [EBP + 0x14]",), flow="COMPUTED_CALL"),
+            0, {0x00401941, 0x00401944}, 0x00401944,
+        )
+        joined = "\n".join(source)
+        self.assertIn(
+            "memory.load32(static_cast<std::uint32_t>(state.regs[5] + "
+            "0x00000014u), t0t)", joined)
+        self.assertIn("invoke_guest_call(memory, state, t0t, 0x00401944u)",
+                      joined)
+
+    def test_boot_crt_entry_constants_match_the_verified_boundaries(self):
+        self.assertEqual(boot_crt.CRT_ENTRY, 0x011E0EE0)
+        self.assertEqual(boot_crt.SEH_PROLOG, 0x011E11D4)
+        self.assertEqual(boot_crt.SEH_CALL, 0x011E0EE7)
+        self.assertEqual(boot_crt.SEH_CALL_BYTES, "e8e8020000")
+        self.assertEqual(boot_crt.STARTUPINFO_CALL, 0x011E0EF8)
+        self.assertEqual(boot_crt.STARTUPINFO_CALL_BYTES, "ff159cc23c01")
+        self.assertEqual(boot_crt.STARTUPINFO_IAT, 0x013CC29C)
+        self.assertEqual(
+            boot_crt.STARTUPINFO_SYMBOL, "KERNEL32.dll!GetStartupInfoA")
+        self.assertEqual(boot_crt.AFTER_STARTUPINFO, 0x011E0EFE)
+
+    def test_pushfd_popfd_cpuid_movapd_and_computed_call_are_translated(self):
+        addresses = {0x00001000, 0x00001001, 0x00001002, 0x00001003,
+                     0x00001007, 0x00001009}
+        pushfd = lifter.translate_instruction(
+            instruction(0x00001000, "9c", "PUSHFD"), 0, addresses, 0x00001001)
+        self.assertIn("batch_guest_pushfd(memory, state)", "\n".join(pushfd))
+        popfd = lifter.translate_instruction(
+            instruction(0x00001001, "9d", "POPFD"), 1, addresses, 0x00001002)
+        self.assertIn("batch_guest_popfd(memory, state)", "\n".join(popfd))
+        cpuid = lifter.translate_instruction(
+            instruction(0x00001002, "0fa2", "CPUID"), 2, addresses, 0x00001003)
+        self.assertIn("t2_cpuid_status = batch_guest_cpuid(state)",
+                      "\n".join(cpuid))
+        movapd = lifter.translate_instruction(
+            instruction(0x00001003, "660f28c1", "MOVAPD",
+                        ("XMM0", "XMM1")),
+            3, addresses, 0x00001007)
+        self.assertIn("batch_guest_movapd(state, 0u, 1u)", "\n".join(movapd))
+        computed = lifter.translate_instruction(
+            instruction(0x00001007, "ffd0", "CALL", ("EAX",),
+                        flow="COMPUTED_CALL"),
+            4, addresses, 0x00001009)
+        joined = "\n".join(computed)
+        self.assertIn("invoke_guest_call", joined)
+        self.assertIn("state.regs[0]", joined)
+        self.assertIn("0x00001009u", joined)
+
+    def test_indirect_call_through_memory_uses_the_dispatcher(self):
+        # A 32-bit callee pointer is loaded from guest memory and resolved at
+        # runtime; an unregistered target still fails closed there.
+        source = lifter.translate_instruction(
+            instruction(0x00001000, "ff10", "CALL",
+                        ("dword ptr [EAX]",), flow="COMPUTED_CALL"),
+            0, {0x00001000, 0x00001002}, 0x00001002)
+        joined = "\n".join(source)
+        self.assertIn("memory.load32(static_cast<std::uint32_t>(state.regs[0]",
+                      joined)
+        self.assertIn("invoke_guest_call(memory, state, t0t, 0x00001002u)",
+                      joined)
+
+    def test_static_source_labels_a_branch_onto_the_terminal_boundary(self):
+        body = function([
+            instruction(0x011E0F31, "eb10", "JMP",
+                        ("0x011e0f43",), flow="UNCONDITIONAL_JUMP",
+                        flows_to=("0x011e0f43",)),
+        ])
+        translated = [
+            (body["instructions"][0], ["goto L_011e0f43;"]),
+        ]
+        source = lifter.static_source(
+            body, translated, [],
+            terminal_status=(0x011E0F43, "unsupported_dependency"),
+        )
+        self.assertIn("L_011e0f43:", source)
+        self.assertIn("state.eip = 0x011e0f43u;", source)
+        unlabeled = lifter.static_source(
+            body, translated, [], terminal_status=None,
+        )
+        self.assertNotIn("L_011e0f43:", unlabeled)
+
+    def test_boot_crt_stages_advance_from_the_seh_call_to_startupinfo(self):
+        self.assertEqual(
+            sorted(boot_crt.STAGES),
+            ["cpp-walk-initializers", "initterm-call", "initterm-executed",
+             "interlocked-call", "seh-call-boundary", "startup-lock",
+             "startup-state-initializing", "startupinfo-call"])
+        boundary_stage = boot_crt.STAGES["seh-call-boundary"]
+        self.assertEqual(boundary_stage["boundary"], 0x011E0EE7)
+        self.assertEqual(boundary_stage["include"], set())
+        self.assertFalse(boundary_stage["emit_prolog"])
+        startupinfo_stage = boot_crt.STAGES["startupinfo-call"]
+        self.assertEqual(startupinfo_stage["boundary"], 0x011E0EFE)
+        self.assertEqual(startupinfo_stage["include"], {0x011E11D4})
+        self.assertTrue(startupinfo_stage["emit_prolog"])
+        interlocked_stage = boot_crt.STAGES["interlocked-call"]
+        self.assertEqual(interlocked_stage["boundary"], 0x011E0F24)
+        self.assertEqual(interlocked_stage["executed"], 18)
+        lock_stage = boot_crt.STAGES["startup-lock"]
+        self.assertEqual(lock_stage["boundary"], 0x011E0F43)
+        # Only the taken path counts: the nine instruction _amsg_exit block is
+        # emitted but never executed.
+        self.assertEqual(lock_stage["executed"], 13)
+        initterm_stage = boot_crt.STAGES["initterm-call"]
+        self.assertEqual(initterm_stage["boundary"], 0x011E0F6F)
+        self.assertEqual(initterm_stage["executed"], 22)
+        executed_stage = boot_crt.STAGES["initterm-executed"]
+        self.assertEqual(executed_stage["boundary"], 0x011E0F85)
+        # The 22 above plus the call, its two POPs, the TEST and the JZ.
+        self.assertEqual(executed_stage["executed"], 27)
+        # The closure build supplies __SEH_prolog4, so this stage declares it
+        # without emitting a second definition.
+        self.assertEqual(executed_stage["include"], {0x011E11D4})
+        self.assertFalse(executed_stage["emit_prolog"])
+        self.assertTrue(executed_stage["prolog_counted"])
+        walk_stage = boot_crt.STAGES["startup-state-initializing"]
+        self.assertEqual(walk_stage["boundary"], 0x011E0F98)
+        # The 27 above plus the state read, the compare, the JNZ and two PUSHes.
+        self.assertEqual(walk_stage["executed"], 32)
+        self.assertFalse(walk_stage["emit_prolog"])
+        self.assertTrue(walk_stage["prolog_counted"])
+        # The batch stage shares the boundary and the prefix, and only the
+        # harness changes: it drives the _initterm call itself.
+        batch_stage = boot_crt.STAGES["cpp-walk-initializers"]
+        self.assertEqual(batch_stage["boundary"], 0x011E0F98)
+        self.assertEqual(batch_stage["executed"], 32)
+        self.assertTrue(batch_stage["cpp_walk"])
+        self.assertFalse(batch_stage.get("emit_prolog"))
+        # The call site is a JMP thunk onto MSVCR90!_initterm.
+        self.assertEqual(boot_crt.INITTERM_WALK_THUNK, 0x011E150E)
+        self.assertEqual(boot_crt.INITTERM_WALK_IAT, 0x013CC320)
+        self.assertEqual(boot_crt.INITTERM_WALK_SYMBOL,
+                         "MSVCR90.dll!_initterm")
+        self.assertEqual(boot_crt.CPP_INIT_TABLE, 0x013CC80C)
+        self.assertEqual(boot_crt.CPP_INIT_TABLE_END, 0x013EB098)
+
+    def test_boot_crt_call_aliases_match_the_import_thunks(self):
+        self.assertEqual(boot_crt.AMSG_EXIT_THUNK, 0x011E1368)
+        self.assertEqual(boot_crt.AMSG_EXIT_CALL, 0x011E0F4E)
+        self.assertEqual(boot_crt.AMSG_EXIT_IAT, 0x013CC33C)
+        self.assertEqual(
+            boot_crt.AMSG_EXIT_SYMBOL, "MSVCR90.dll!_amsg_exit")
+        self.assertEqual(boot_crt.INITTERM_THUNK, 0x011E1514)
+        self.assertEqual(boot_crt.INITTERM_CALL, 0x011E0F6F)
+        self.assertEqual(boot_crt.INITTERM_CALL_BYTES, "e8a0050000")
+        self.assertEqual(boot_crt.INITTERM_IAT, 0x013CC31C)
+        self.assertEqual(
+            boot_crt.INITTERM_SYMBOL, "MSVCR90.dll!_initterm_e")
+        self.assertEqual(boot_crt.INITTERM_TABLE, 0x013EB09C)
+        self.assertEqual(boot_crt.INITTERM_TABLE_END, 0x013EB0AC)
+        self.assertEqual(
+            boot_crt.ALIASES,
+            {
+                0x011E0F4E: (0x011E1368, "MSVCR90.dll!_amsg_exit",
+                             0x013CC33C),
+                0x011E0F6F: (0x011E1514, "MSVCR90.dll!_initterm_e",
+                             0x013CC31C),
+                0x011E0F98: (0x011E150E, "MSVCR90.dll!_initterm",
+                             0x013CC320),
+            })
+
+    def test_static_source_labels_forward_exits_outside_the_prefix(self):
+        body = function([
+            instruction(0x011E0F5D, "7520", "JNZ",
+                        ("0x011e0f7f",), flow="CONDITIONAL_JUMP",
+                        flows_to=("0x011e0f7f",)),
+        ])
+        translated = [
+            (body["instructions"][0], ["if (cond) goto L_011e0f7f;"]),
+        ]
+        source = lifter.static_source(
+            body, translated, [],
+            terminal_status=(0x011E0F6F, "unsupported_dependency"),
+            exit_targets={0x011E0F7F, 0x011E0F85},
+        )
+        self.assertIn("L_011e0f7f:", source)
+        self.assertIn("L_011e0f85:", source)
+        self.assertIn("state.eip = 0x011e0f6fu;", source)
+        self.assertLess(source.index("state.eip = 0x011e0f6fu;"),
+                        source.index("L_011e0f7f:"))
+
+    def test_boot_crt_lock_constants_match_the_verified_globals(self):
+        self.assertEqual(boot_crt.INTERLOCKED_CALL, 0x011E0F1E)
+        self.assertEqual(boot_crt.INTERLOCKED_CALL_BYTES, "ff1594c13c01")
+        self.assertEqual(boot_crt.INTERLOCKED_IAT, 0x013CC194)
+        self.assertEqual(
+            boot_crt.INTERLOCKED_SYMBOL,
+            "KERNEL32.dll!InterlockedCompareExchange")
+        self.assertEqual(boot_crt.AFTER_INTERLOCKED, 0x011E0F24)
+        self.assertEqual(boot_crt.STARTUP_STATE_AFTER_LOCK, 0x011E0F43)
+        self.assertEqual(boot_crt.STARTUP_LOCK_REGION, 0x0171E740)
+        self.assertEqual(boot_crt.STARTUP_LOCK_REGION_BYTES, 0x20)
+        self.assertEqual(boot_crt.STARTUP_STATE, 0x0171E74C)
+        self.assertEqual(boot_crt.STARTUP_LOCK, 0x0171E750)
+
+    def test_boot_crt_region_is_bss_requires_loader_zero_fill(self):
+        sections = [
+            (".data", 0x0110C000, 0x00212764, 0x000C0000, 0x000C4C00),
+        ]
+        pe = (b"", 0x00400000, sections)
+        # 0x015cfe70 is inside the raw .data bytes.
+        self.assertFalse(boot_crt.region_is_bss(pe, 0x015CFE70, 0x20))
+        # 0x0171e740 is past SizeOfRawData but inside VirtualSize.
+        self.assertTrue(boot_crt.region_is_bss(pe, 0x0171E740, 0x20))
+        # Past VirtualSize is not part of the section at all.
+        self.assertFalse(boot_crt.region_is_bss(pe, 0x0171E740, 0x4000))
+
+    def test_boot_crt_contiguous_rejects_a_gap_and_a_bad_end(self):
+        gapped = {
+            0x011E0EE0: {"address": "0x011e0ee0", "length": 3, "bytes": "6a5890"},
+            0x011E0EE5: {"address": "0x011e0ee5", "length": 3, "bytes": "6a5890"},
+        }
+        with self.assertRaisesRegex(ValueError, "gap in CRT prefix"):
+            boot_crt.contiguous(gapped, 0x011E0EE0, 0x011E0EE8)
+        single = {
+            0x011E0EE0: {"address": "0x011e0ee0", "length": 3, "bytes": "6a5890"},
+        }
+        with self.assertRaisesRegex(ValueError, "CRT prefix ends at"):
+            boot_crt.contiguous(single, 0x011E0EE0, 0x011E0EE9)
+        with self.assertRaisesRegex(ValueError, "precedes the CRT entry"):
+            boot_crt.contiguous(single, 0x011E0EE9, 0x011E0EE8)
+
+    def test_boot_crt_prefix_rejects_a_non_call_boundary(self):
+        by_address = {
+            0x011E0EE0: instruction(0x011E0EE0, "6a58", "PUSH", ("0x58",)),
+            0x011E0EE2: instruction(0x011E0EE2, "90", "NOP"),
+        }
+        body = {
+            "entry": "0x011e0ee0",
+            "name": "___tmainCRTStartup",
+            "body_address_count": 5,
+            "instructions": list(by_address.values()),
+            "instruction_count_exported": 2,
+            "instructions_truncated": False,
+            "references_truncated": False,
+        }
+        with self.assertRaises(lifter.LiftRejected) as raised:
+            lifter.translate_function_prefix(body, 0x011E0EE2)
+        self.assertIn(
+            "direct call instruction", raised.exception.reasons[0]
+        )
 
     def test_boot_pid_reference_header_emits_boundary_and_imports(self):
         header = boot_pid.reference_header(

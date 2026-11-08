@@ -1,0 +1,19 @@
+DETAIL crt_cpp_walk_calls count=26
+DETAIL crt_cpp_walk_call 10 MSVCR90.dll!__p__fmode arg0=0x00000000 result=0x015cff00
+DETAIL crt_cpp_walk_call 11 MSVCR90.dll!__p__commode arg0=0x00000000 result=0x015cff04
+DETAIL crt_cpp_walk_call 12 MSVCR90.dll!_controlfp_s arg0=0x00000000 result=0x00000000
+DETAIL crt_cpp_walk_call 13 KERNEL32.dll!SetUnhandledExceptionFilter arg0=0x011e1318 result=0x00000000
+DETAIL crt_cpp_walk_call 14 MSVCR90.dll!_initterm arg0=0x013cc80c result=0x00000000
+DETAIL crt_cpp_walk_call 15 MSVCR90.dll!_decode_pointer arg0=0x3068e3b0 result=0xffffffff
+DETAIL crt_cpp_walk_call 16 MSVCR90.dll!_onexit arg0=0x011e1394 result=0x011e1394
+DETAIL crt_cpp_walk_call 17 MSVCR90.dll!__getmainargs arg0=0x016f261c result=0x00000000
+DETAIL crt_cpp_walk_call 18 KERNEL32.dll!InitializeCriticalSection arg0=0x01667c00 result=0x00000000
+DETAIL crt_cpp_walk_call 19 MSVCR90.dll!_decode_pointer arg0=0x3068e3b0 result=0xffffffff
+DETAIL crt_cpp_walk_call 20 MSVCR90.dll!_onexit arg0=0x013c0d40 result=0x013c0d40
+DETAIL crt_cpp_walk_call 21 KERNEL32.dll!TlsAlloc arg0=0x00000000 result=0x00000000
+DETAIL crt_cpp_walk_call 22 KERNEL32.dll!InitializeCriticalSection arg0=0x016f4e98 result=0x00000000
+DETAIL crt_cpp_walk_call 23 MSVCR90.dll!_decode_pointer arg0=0x3068e3b0 result=0xffffffff
+DETAIL crt_cpp_walk_call 24 MSVCR90.dll!_onexit arg0=0x013cb620 result=0x013cb620
+DETAIL crt_cpp_walk_call 25 KERNEL32.dll!TlsAlloc arg0=0x00000000 result=0x00000001
+PASS crt_cpp_walk stop=0x011e0f98 executed=107 esp_delta=-136 ebp=entry-4 cookie=consistent imports=26 initializers=5 walk=stopped_at_0x013002d0 args=argc1,argv_guest,envp_empty sections=2 tls=2
+DETAIL crt_cpp_walk cookie=0xfcf971c4 complement=0x03068e3b lock=0x70000400 state=0x00000001 argv=0x015cff40 envp=0x015cff48 name=0x015cff50

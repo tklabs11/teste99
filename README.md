@@ -4035,3 +4035,689 @@ gravado. A [comparação x86 versus ARM64](./test-logs/boot-entry-20261108/cooki
 com o `JMP` terminal para `0x011e0ee0`, o CRT. Esse destino continua sem corpo
 executado e é o próximo limite real do boot. O APK ainda não chama a entrada do
 PE; não há boot, menu ou renderização.
+
+### Fronteira do CRT cruzada — 2026-11-08
+
+O `JMP` terminal da entrada (`0x011e11a5 → 0x011e0ee0`) deixou de ser um stub.
+O prefixo composto agora atravessa a fronteira e executa as primeiras
+instruções de `___tmainCRTStartup`, parando no primeiro blocker real.
+
+**Listagem inicial do CRT** (bytes verificados nos dois PEs; Ghidra confirma
+`___tmainCRTStartup` em `0x011e0ee0` com 136 instruções e 14 callees):
+
+| Endereço | Bytes | Instrução | Observação |
+| --- | --- | --- | --- |
+| `0x011e0ee0` | `6a58` | `PUSH 0x58` | tamanho do frame SEH |
+| `0x011e0ee2` | `68a88c5001` | `PUSH 0x1508ca8` | handler do escopo |
+| `0x011e0ee7` | `e8e8020000` | `CALL 0x011e11d4` | **primeiro blocker**: `__SEH_prolog4` |
+| `0x011e0eec` | `33db` | `XOR EBX,EBX` | |
+| `0x011e0ef8` | `ff159cc23c01` | `CALL [0x013cc29c]` | primeira API da IAT: `KERNEL32.dll!GetStartupInfoA` |
+| `0x011e0efe` | `c745fcfeffffff` | `MOV [EBP-0x4],0xfffffffe` | estado do `__try` |
+| `0x011e0f0c` | `64a118000000` | `MOV EAX,FS:[0x18]` | PEB |
+
+O primeiro blocker **não** é uma API: é o `CALL` local para `__SEH_prolog4` em
+`0x011e11d4`, que monta o frame de exceção e usa o cookie em `0x015cfe70`. A
+primeira API da IAT só aparece em `0x011e0ef8`, com `GetStartupInfoA`. As
+outras APIs imediatamente visíveis são `InterlockedCompareExchange`
+(`0x011e0f1e`) e `Sleep` (`0x011e0f38`), usadas no laço de espera.
+
+`__SEH_prolog4` traduz inteiro (21 instruções) e será o próximo alvo; ainda não
+foi executado nesta cadeia.
+
+O [gerador](../../tools/batch_static_lift/generate_boot_crt_prefix.py) confere
+os bytes nos dois PEs, exige que `0x011e0ee7` seja o `CALL` esperado para
+`0x011e11d4` e emite o prefixo até essa chamada.
+[Manifesto](./test-logs/boot-entry-20261108/generated-crt-prefix/manifest.json).
+
+O [harness composto](../../tools/batch_static_lift/boot_entry_crt_harness.cpp)
+executa entrada → cookie completo → `JMP` → prefixo do CRT, sem empilhar novo
+endereço de retorno no salto. O [harness x86 original](../../tools/batch_static_lift/boot_entry_crt_original_x86.cpp)
+faz o mesmo com os bytes do PE, APIs reais do Windows por thunks de registro e
+`INT3` no limite.
+
+Resultado comparado nos três lados:
+
+```
+PASS crt_entry stop=0x011e0ee7 executed=56 esp_delta=-8
+     stack=0x58,0x1508ca8 callee_saved=restored cookie=consistent imports=5
+```
+
+- [comparação x86 original versus lift](./test-logs/boot-entry-20261108/crt-entry-differential.log)
+- [execução no aparelho `PJMZAEJRX4YLFIDI`](./test-logs/boot-entry-20261108/crt-entry-arm64.log)
+- [75 testes Python](./test-logs/boot-entry-20261108/crt-entry-python-tests.log)
+
+**Novo limite:** `0x011e0ee7 → __SEH_prolog4 (0x011e11d4)`. O APK continua sem
+chamar a entrada do PE; não há boot, menu ou renderização.
+
+### `__SEH_prolog4` executado e `GetStartupInfoA` implementado — 2026-11-08
+
+O `CALL 0x011e11d4` deixou de ser bloqueio. O prefixo composto executa a
+`__SEH_prolog4` inteira (21 instruções), retorna para `0x011e0eec`, atravessa o
+`XOR`/`MOV`/`MOV`/`LEA`/`PUSH` e executa `KERNEL32.dll!GetStartupInfoA` em
+`0x011e0ef8`. Novo limite: `0x011e0efe` (último byte do `CALL` = `0x011e0efd`).
+
+**Instruções novas executadas** (bytes idênticos nos dois PEs):
+
+| Endereço | Bytes | Instrução |
+| --- | --- | --- |
+| `0x011e0ee7` | `e8e8020000` | `CALL 0x011e11d4` (`__SEH_prolog4`) |
+| `0x011e11d4`–`0x011e1218` | 21 instruções | frame `__try` + cookie em `0x015cfe70` + `FS:[0]` |
+| `0x011e0eec` | `33db` | `XOR EBX,EBX` |
+| `0x011e0eee` | `895de4` | `MOV [EBP-0x1c],EBX` |
+| `0x011e0ef1` | `895dfc` | `MOV [EBP-0x4],EBX` |
+| `0x011e0ef4` | `8d4598` | `LEA EAX,[EBP-0x68]` |
+| `0x011e0ef7` | `50` | `PUSH EAX` |
+| `0x011e0ef8` | `ff159cc23c01` | `CALL [0x013cc29c]` = `GetStartupInfoA` |
+
+**Shim de `GetStartupInfoA`** (`BatchStaticLiftRuntime.hpp`): recebe
+`[ESP+4]`, exige `is_writable(ptr, 0x44)`, preserva o `cb` gravado pelo
+chamador, zera os 16 dwords restantes (ponteiros `NULL`, flags `0`, handles `0`)
+e limpa 4 bytes de argumento no retorno (`stdcall`, a API retorna `void`).
+Destino fora da memória guest → `invalid_memory`, sem consumir o argumento.
+Um probe negativo no harness x86 exige exatamente esse comportamento.
+
+**Divergência observada, não mascarada.** O `GetStartupInfoA` real do Windows
+devolve o que o processo herdou: `lpReserved`, `lpDesktop` e `lpTitle`
+apontando para strings do heap de parâmetros, `dwFlags = 0x100`
+(`STARTF_USESTDHANDLES`) e handles de console herdados. O estado veio do
+próprio harness (stdout redirecionado pelo PowerShell), não do Spore. O guest
+não tem desktop, título nem handles herdados, então reporta `NULL`/`0`.
+
+O contrato comparado nos três lados é o que o chamador realmente usa: `cb`
+preservado, `cbReserved2 = 0`, `lpReserved2 = NULL` e `lpReserved`,
+`lpDesktop`, `lpTitle` **nulos ou legíveis** (validados com `VirtualQuery` +
+string NUL-terminada no lado Windows). Os valores observados saem em `DETAIL`.
+
+**Aritmética de pilha medida** (entry `ESP = 0x70000200`): dois pushes do CRT,
+sete pushes e `0x58` bytes de frame da `__SEH_prolog4`, `RET`, push do argumento
+e limpeza `stdcall` deixam `ESP = entry - 0x7c` e `EBP = entry - 4`. Foram 84
+instruções executadas (`1` entrada + `53` cookie + `9` prefixo + `21` prolog).
+
+O harness x86 original precisou de um stub no limite: a `__SEH_prolog4` instala
+um registro de exceção do guest em `FS:[0]`, então o `INT3` no limite dispararia
+com a cadeia corrompida. O limite agora é um `JMP rel32` para um stub `naked`
+que captura os registradores, restaura o `FS:[0]` real e só então executa
+`INT3`.
+
+```
+PASS crt_startupinfo stop=0x011e0efe executed=84 esp_delta=-124 ebp=entry-4
+     ebx=0 callee_saved=restored cookie=consistent imports=6
+     startupinfo=cb,ptrs_valid,reserved_null
+```
+
+- [comparação x86 original versus lift x86](./test-logs/boot-entry-20261108/crt-startupinfo-call-differential.log)
+- [execução no aparelho `PJMZAEJRX4YLFIDI`](./test-logs/boot-entry-20261108/crt-startupinfo-call-arm64.log)
+- [stress 20/20 no aparelho](./test-logs/boot-entry-20261108/crt-startupinfo-call-arm64-stress.log)
+- [77 testes Python](./test-logs/boot-entry-20261108/crt-startupinfo-python-tests.log)
+- [regressão do cookie/pid preservada](./test-logs/boot-entry-20261108/crt-startupinfo-cookie-regression.log)
+
+O gerador ganhou dois estágios (`seh-call-boundary` e `startupinfo-call`) e
+emite também o corpo de `__SEH_prolog4`.
+[Manifesto](./test-logs/boot-entry-20261108/generated-crt-startupinfo-call/manifest.json).
+
+**Próximo blocker real:** `0x011e0f1e` `CALL [0x013cc194]`
+(`KERNEL32.dll!InterlockedCompareExchange`), precedido por
+`MOV EAX,FS:[0x18]` / `MOV ESI,[EAX+4]` em `0x011e0f0c`–`0x011e0f12` — exige PEB
+de guest e uma global de lock em `0x0171e750`. Depois dele vêm `Sleep` em
+`0x011e0f38` e o laço de espera. Nada disso foi implementado.
+
+O APK continua sem chamar a entrada do PE; não há boot, menu ou renderização.
+
+### Lock de inicialização do CRT atravessado — 2026-11-08
+
+O `CALL [0x013cc194]` em `0x011e0f1e` deixou de ser bloqueio. O prefixo executa
+`KERNEL32.dll!InterlockedCompareExchange` e segue pelo caminho do `JZ` até
+`0x011e0f43`. Dois estágios novos, ambos com `__SEH_prolog4` e
+`GetStartupInfoA` já dentro.
+
+| Endereço | Bytes | Instrução | Observação |
+| --- | --- | --- | --- |
+| `0x011e0efe` | `c745fcfeffffff` | `MOV [EBP-0x4],0xfffffffe` | estado do `__try` |
+| `0x011e0f05` | `c745fc01000000` | `MOV [EBP-0x4],1` | try level 1 |
+| `0x011e0f0c` | `64a118000000` | `MOV EAX,FS:[0x18]` | TEB, não PEB |
+| `0x011e0f12` | `8b7004` | `MOV ESI,[EAX+0x4]` | `TEB->StackBase` = id do dono |
+| `0x011e0f15` | `bf50e77101` | `MOV EDI,0x171e750` | `__native_startup_lock` |
+| `0x011e0f1e` | `ff1594c13c01` | `CALL [0x013cc194]` | **blocker anterior** |
+| `0x011e0f26` | `7418` | `JZ 0x011e0f40` | tomado: lock estava livre |
+| `0x011e0f43` | `a14ce77101` | `MOV EAX,[0x0171e74c]` | `__native_startup_state` |
+
+`FS:[0x18]` é o **TEB** (o PEB fica em `TEB+0x30`), e `[TEB+4]` é o
+`StackBase` — o CRT usa o topo da pilha da thread como identidade do dono do
+lock. O guest passou a modelar isso em vez de inventar um id: TEB de guest com
+`+0x00 = 0xffffffff` (fim da cadeia SEH), `+0x04 = 0x70000400` (topo da pilha
+mapeada) e `+0x18` apontando para si mesmo, para que a indireção real seja
+seguida de ponta a ponta.
+
+**Shim de `InterlockedCompareExchange`**: três argumentos `stdcall`
+(`destination`, `exchange`, `comparand`), exige `is_writable(dest,4)`, faz
+comparação/troca e devolve o valor anterior em `EAX`. O guest roda uma thread,
+então a atomicidade é estrutural — não há lock de host. Destino fora da memória
+guest → `invalid_memory` sem consumir argumentos (probe negativo no harness,
+nos dois lados).
+
+**Globais do lock.** `0x0171e74c` (`__native_startup_state`) e `0x0171e750`
+(`__native_startup_lock`) estão em `.data` **depois de `SizeOfRawData`**, então
+o loader preenche com zero. O gerador valida essa condição
+(`region_is_bss`) e falha se um build futuro tiver conteúdo real ali; o harness
+mapeia `0x0171e740`+`0x20` zerado. O harness x86 original realoca os três
+operandos absolutos (`0x011e0f16`, `0x011e0f44`, `0x011e0f61`) para o seu
+próprio bloco.
+
+**Prefixos validados nos três lados:**
+
+```
+PASS crt_interlocked stop=0x011e0f24 executed=93 esp_delta=-124 ebp=entry-4
+     ebx=0 edi=lock_reg cookie=consistent imports=7 icc=acquired previous=0
+     owner=stack_base lock=owner try_level=1
+     startupinfo=cb,ptrs_valid,reserved_null
+
+PASS crt_startup_lock stop=0x011e0f43 executed=97 esp_delta=-124 ebp=entry-4
+     ebx=0 esi=1 edi=lock_reg cookie=consistent imports=7 icc=acquired
+     owner=stack_base lock=owner state=0 try_level=1
+     startupinfo=cb,ptrs_valid,reserved_null
+```
+
+`executed` é a contagem estática do estágio (entrada + cookie + prefixo + prolog);
+o que prova a execução são os registradores, a pilha, o valor do lock e o try
+level, todos lidos nos dois lados.
+
+- [comparação x86 original versus lift x86 (interlocked)](./test-logs/boot-entry-20261108/crt-interlocked-call-differential.log)
+- [comparação x86 original versus lift x86 (startup-lock)](./test-logs/boot-entry-20261108/crt-startup-lock-differential.log)
+- [execução no aparelho `PJMZAEJRX4YLFIDI`](./test-logs/boot-entry-20261108/crt-startup-lock-arm64.log)
+- [stress 20/20 interlocked](./test-logs/boot-entry-20261108/crt-interlocked-call-arm64-stress.log) e [20/20 startup-lock](./test-logs/boot-entry-20261108/crt-startup-lock-arm64-stress.log)
+- [80 testes Python](./test-logs/boot-entry-20261108/startup-lock-python-tests.log)
+- [regressão cookie/pid](./test-logs/boot-entry-20261108/startup-lock-cookie-regression.log) e [regressão do construtor](./test-logs/boot-entry-20261108/startup-lock-constructor-regression.log)
+
+**Bloqueio seguinte:** `0x011e0f4e` `CALL 0x011e1368` (`_amsg_exit`). Ele não é
+alcançado em runtime (o `JNZ 0x011e0f56` é tomado), mas o bloco não tomado está
+dentro da closure emitida e o corpo de `0x011e1368` não está recuperado — por
+isso a fronteira para em `0x011e0f43`. Depois dele vêm `0x011e0f6f`
+`CALL 0x011e1514` (também sem corpo recuperado), `0x011e0f7f`
+`MOV [0x016f2638],ESI` e a chamada em `0x011e0f85`.
+
+O APK continua sem chamar a entrada do PE; não há boot, menu ou renderização.
+
+### Bloqueio de tradução removido e `_initterm_e` identificado — 2026-11-08
+
+Os dois corpos que faltavam para compilar a closure foram recuperados. Ambos são
+**thunks de import**, não funções com corpo próprio:
+
+| Thunk | Bytes | IAT | Símbolo |
+| --- | --- | --- | --- |
+| `0x011e1368` | `ff253cc33c01` | `0x013cc33c` | `MSVCR90.dll!_amsg_exit` |
+| `0x011e1514` | `ff251cc33c01` | `0x013cc31c` | `MSVCR90.dll!_initterm_e` |
+
+O lifter já tinha `direct_import_aliases`; o gerador agora casa o `CALL` direto
+com o `JMP [IAT]` do thunk e com o símbolo da IAT, e se recusa a emitir o
+estágio se qualquer um dos três fatos mudar. Com isso o bloco não tomado
+(`0x011e0f4c`–`0x011e0f54`, que chama `_amsg_exit`) compila sem corpo liftado.
+
+**Novo limite: `0x011e0f6f`**, o `CALL _initterm_e`.
+
+```
+PASS crt_initterm_call stop=0x011e0f6f executed=97 esp_delta=-132 ebp=entry-4
+     ebx=0 esi=1 edi=lock_reg cookie=consistent imports=7 icc=acquired
+     owner=stack_base lock=owner state=1 try_level=1
+     table=0x13eb09c..0x13eb0ac startupinfo=cb,ptrs_valid,reserved_null
+```
+
+A tabela passada em `0x011e0f65`/`0x011e0f6a` foi conferida contra o PE:
+`0x013eb09c` = `0`, `0x013eb0a0` = `0x011e10bf`, `0x013eb0a4` =
+`0x011e1304`, `0x013eb0a8` = `0x011e135a`, fim exclusivo em `0x013eb0ac`.
+
+**Inicializadores recuperados por disassembly recursivo.** Ghidra não havia
+analisado `0x011e10bf`, `0x011e1304` nem `0x011e135a` (sem função e sem
+instrução). Um script próprio (`tools/ghidra_scripts/DisassembleSporeRoutines.java`)
+decodifica a partir da entrada, segue `CALL`/`JMP` condicionais e exporta no
+mesmo schema do batch:
+
+| Entrada | Instruções | Bytes | Papel |
+| --- | --- | --- | --- |
+| `0x011e10bf` | 58 | 225 | `__cinit`-like: valida a imagem, fixa globais e chama 7 imports |
+| `0x011e1304` | 4 | 13 | `CALL 0x011e12a2` e grava `0x0171e754` |
+| `0x011e135a` | 4 | 14 | `PUSH 0x011e1318` + `CALL [0x013cc150]` (`SetUnhandledExceptionFilter`) |
+
+Dependências imediatas de `0x011e10bf`: `MSVCR90.dll!__set_app_type`,
+`_encode_pointer`, `__p__fmode`, `__p__commode`, `_adjust_fdiv`,
+`__setusermatherr`, `_configthreadlocale`, além de `0x011e136e`, `0x011e1545` e
+`0x011e151a`.
+
+**Shim de `_initterm_e`** (`BatchStaticLiftRuntime.hpp`): valida os limites da
+tabela na memória guest, pula entradas nulas, para no primeiro inicializador que
+retorna diferente de zero e devolve esse valor. Cada alvo precisa de um corpo
+registrado (`register_guest_function`); sem corpo ele falha com
+`unsupported_dependency` e o endereço no diagnóstico. `_amsg_exit` é fatal por
+definição e também falha fechado. Dois probes no harness x86/ARM64 cobrem a
+ordem de chamada, o valor agregado e o caminho sem corpo (o teste roda em todos
+os cinco estágios e não altera a linha `PASS`).
+
+**Correção de contagem.** O estágio `startup-lock` reportava `executed=97`
+contando os 9 registros emitidos do bloco `_amsg_exit`, que nunca executa. A
+contagem real é 13 instruções de prefixo, então a linha passou a
+`executed=88`. Nada mais mudou nesse estágio.
+
+- [comparação x86 original versus lift x86](./test-logs/boot-entry-20261108/crt-initterm-call-differential.log)
+- [execução no aparelho `PJMZAEJRX4YLFIDI`](./test-logs/boot-entry-20261108/crt-initterm-call-arm64.log)
+- [stress 20/20 no aparelho](./test-logs/boot-entry-20261108/crt-initterm-call-arm64-stress.log)
+- [82 testes Python](./test-logs/boot-entry-20261108/initterm-python-tests.log)
+- [regressão cookie/pid](./test-logs/boot-entry-20261108/initterm-cookie-regression.log) e [regressão do construtor](./test-logs/boot-entry-20261108/initterm-constructor-regression.log)
+- [registros exportados do Ghidra](./test-logs/boot-entry-20261108/crt_init_routines.json)
+
+**Próximo bloqueio.** Executar `_initterm_e` exige os três inicializadores como
+corpo liftado e, dentro deles, mais quatro rotinas (`0x011e136e`, `0x011e1545`,
+`0x011e151a`, `0x011e12a2`) e sete imports da `MSVCR90`. Há ainda um detalhe de
+método: a `_initterm_e` real executa inicialização de processo de verdade
+(`__set_app_type`, `_configthreadlocale`, filtros de exceção), então ela não pode
+servir de referência diferencial dentro do harness x86 — a comparação dessa
+chamada terá de ser lift-versus-lift com inicializadores registrados, e isso
+precisa ser declarado como tal.
+
+O APK continua sem chamar a entrada do PE; não há boot, menu ou renderização.
+
+### Closure de inicialização do CRT traduzida e compilada — 2026-11-08
+
+`_initterm_e` executa três inicializadores; a closure completa deles foi
+levantada, traduzida e compilada para x86 e ARM64. Ela ainda não foi executada:
+faltam os shims dos imports.
+
+**Grafo real** (andado por chamadas diretas a partir da tabela, parando em
+thunks de import):
+
+| Função | Instr. | Papel |
+| --- | --- | --- |
+| `0x011e10bf` | 58 | `__cinit`-like: valida a imagem, fixa globais, chama 7 imports |
+| `0x011e136e` | 18 | laço `_initterm` com tabela vazia (`0x014f9130..0x014f9130`) |
+| `0x011e1545` | 2 | `XOR EAX,EAX; RET` |
+| `0x011e151a` | 19 | `_controlfp_s` + `_invoke_watson` (thunks) |
+| `0x011e1304` | 4 | grava o resultado de `__get_sse2_info` em `0x0171e754` |
+| `0x011e12a2` | 45 | `__get_sse2_info`: testa bit ID, `CPUID` folhas 0 e 1 |
+| `0x011e1252` | 11 | sonda SSE2 sob `__SEH_prolog4` (`MOVAPD`) |
+| `0x011e1219` | 11 | `__SEH_epilog4` |
+| `0x011e11d4` | 21 | `__SEH_prolog4` (já usada pelo prefixo) |
+| `0x011e135a` | 4 | instala `SetUnhandledExceptionFilter(0x011e1318)` |
+
+Total: **10 rotinas, 193 instruções**, todas com bytes conferidos nos dois PEs.
+
+**Thunks viram imports, não corpos**: `0x011e1312` → `?terminate@@YAXXZ`
+(`0x013cc340`), `0x011e16f6` → `_controlfp_s` (`0x013cc2f0`), `0x011e16f0` →
+`_invoke_watson` (`0x013cc2f4`). Os dois `CALL` são reescritos como import calls.
+
+**Capacidades novas no lifter/runtime:**
+
+| Instrução | Implementação |
+| --- | --- |
+| `MOVAPD xmm,xmm` | cópia de 16 bytes entre registradores SIMD |
+| `PUSHFD` / `POPFD` | EFLAGS no stack guest, bit 21 (ID) preservado |
+| `CPUID` | modelo fixo e documentado: folha 0 → folha máxima 1 + vendor; folha 1 → `EDX = 0x04000000` (SSE2); outra folha falha fechado |
+| `CALL r32` | `invoke_guest_call` no dispatcher, resolvido contra os corpos registrados; alvo desconhecido falha fechado com o endereço |
+
+O modelo de `CPUID` é do guest, não do host: nenhum bit de feature é copiado da
+máquina, então x86, ARM64 e qualquer host respondem igual. SSE2 é declarado
+presente porque o alvo (ARM64/NEON) e o resto do lift já assumem esse caminho —
+e a sonda `0x011e1252` traduz de fato (`MOVAPD` + frame SEH).
+
+Achados de implementação: `goto` sobre declaração inline quebra no clang (o
+status do `CPUID` passou a ser declarado no topo, como o dos `CALL`), e a coleta
+de alvos de `translate_function` levantava exceção em chamada computada.
+
+**Build comprovado** (não execução):
+
+```
+PASS closure_build routines=10 instructions=193 imports=10
+     x86_objects=10 arm64_objects=10
+```
+
+- [manifesto da closure](./test-logs/boot-entry-20261108/generated-initterm-closure/manifest.json)
+- [build x86](./test-logs/boot-entry-20261108/initterm-closure-x86-build.log) e [build ARM64](./test-logs/boot-entry-20261108/initterm-closure-arm64-build.log)
+- [84 testes Python](./test-logs/boot-entry-20261108/closure-python-tests.log)
+- regressões: [5 estágios no aparelho](#), [cookie/pid](./test-logs/boot-entry-20261108/closure-cookie-regression.log), [construtor](./test-logs/boot-entry-20261108/closure-constructor-regression.log)
+
+**Bloqueio seguinte (execução).** Para rodar `_initterm_e` faltam 10 shims, com
+semântica de guest, não valores fixos: `__set_app_type`, `__p__fmode`,
+`__p__commode`, `_adjust_fdiv`, `__setusermatherr`, `_configthreadlocale`,
+`_encode_pointer`, `SetUnhandledExceptionFilter`, `_controlfp_s`,
+`_invoke_watson`. `__p__fmode`/`__p__commode` precisam devolver ponteiros para
+inteiros na memória guest; `_encode_pointer` usa o cookie em `0x015cfe70`; e
+`_invoke_watson`/`?terminate` são fatais por definição e devem falhar fechado.
+
+O APK continua sem chamar a entrada do PE; não há boot, menu ou renderização.
+### `_initterm_e` executado nos três lados — 2026-11-08
+
+O prefixo de boot atravessou o `CALL 0x011e1514`: `_initterm_e` percorreu a
+tabela `0x013eb09c..0x013eb0ac`, chamou os três inicializadores na memória guest
+e retornou 0. Os 14 imports do caminho são atendidos por shims e o limite
+avançou de `0x011e0f6f` para **`0x011e0f85`** (102 instruções executadas).
+
+```
+PASS crt_initterm_executed stop=0x011e0f85 executed=102 esp_delta=-124
+     ebp=entry-4 eax=0 esi=1 edi=lock_reg cookie=consistent imports=14
+     initterm=walked initializers=3/3 app_type=2 fmode=0,0
+     encoded_null=consistent adjust_fdiv=propagated sse2=1
+     filter=0x011e1318 fpucw=0x0001027f
+```
+
+**Cadeia de imports observada** (nesta ordem): `GetStartupInfoA`,
+`InterlockedCompareExchange`, `_initterm_e`, `__set_app_type(2)`,
+`_encode_pointer(-1)`, `__p__fmode`, `__p__commode`,
+`_controlfp_s(NULL,0x10000,0x30000)`, `SetUnhandledExceptionFilter(0x011e1318)`.
+`__setusermatherr` e `_configthreadlocale` não rodam: o PE traz `1` em
+`0x015cfe84` e `0xfffffffe` em `0x015cfe80`.
+
+**Efeitos provados na memória guest:**
+
+| Endereço | Valor | Prova |
+| --- | --- | --- |
+| `0x016f2628` | `0` | sonda PE32 do `__cinit` (commit de pilha + diretório CLR) |
+| `0x015cff00`/`0x015cff04` | `0`/`0` | escrita por `*__p__fmode()` e `*__p__commode()` |
+| `0x0171e75c`/`0x0171e760` | iguais | `_encode_pointer(-1)` recalculado do cookie do run |
+| `0x0171e748` | `0x0fc0841c` | `[0x013cc310]` → `0x0110af9c` → valor |
+| `0x0171e754` | `1` | `__get_sse2_info` reportou SSE2 |
+| `0x0171e74c` | `1` | estado de inicialização do CRT |
+
+**Memória guest nova.** O que faltava não era instrução x86, era imagem: o
+gerador [generate_initterm_guest_image.py](./tools/batch_static_lift/generate_initterm_guest_image.py)
+monta 8 janelas (1332 bytes) a partir do PE — cabeçalhos em `0x00400000`,
+células de import, tabela de inicializadores, cookie, `_fmode`/`_commode` e as
+globais BSS `0x016f2600`/`0x0171e740` — e **falha** se a closure tocar qualquer
+endereço não coberto. Cada janela ou traz bytes crus (conferidos entre os dois
+PEs) ou prova que o loader zeraria a faixa.
+
+**Correções que a execução exigiu:**
+
+1. Convenção de chamada: os imports MSVCRT aqui são `__cdecl` e o código guest
+   limpa a pilha sozinho (`POP ECX`, `POP ECX`, `ADD ESP,0xc`). Os shims
+   popavam os argumentos e deslocavam `ESP` em 8 a 12 bytes. Agora só os
+   WINAPI (`GetStartupInfoA`, `InterlockedCompareExchange`,
+   `SetUnhandledExceptionFilter`) popam.
+2. `CPUID`: o modelo escrevia EBX/ECX/EDX em `regs[1..3]`, mas `regs` segue a
+   ordem ModRM (EAX=0, ECX=1, EDX=2, EBX=3). A folha 1 entregava
+   `0x04000000` no registrador errado e `__get_sse2_info` devolvia 0.
+3. Tempo de vida: `map_region` guarda ponteiros, então os buffers do cookie e
+   do lock precisam viver no escopo de `main`.
+4. A sonda de app-type lê `[optional+0xd0]` (diretório CLR), não o diretório de
+   load-config; o valor esperado agora vem do PE e vale `0` aqui.
+
+**Comparação.** Os cinco estágios anteriores continuam batendo contra os
+**bytes originais do PE rodando no Windows x86**. O estágio novo não pode: o
+`_initterm_e` real inicializa o processo hospedeiro. Ele compara lift x86 com
+lift ARM64 e o runner registra a exceção
+(`SKIP original_x86_real_win32 ... reason=_initterm_e_runs_process_initialization`).
+
+- [relatório do marco](./test-logs/boot-entry-20261108/report-initterm-executed.md)
+- [manifesto da imagem guest](./test-logs/boot-entry-20261108/generated-initterm-guest-image/manifest.json)
+- logs por estágio em `test-logs/boot-entry-20261108/crt-<estagio>-*.log`
+- regressões verdes: 81 testes Python, `closure_build`, cookie/pid no aparelho,
+  construtor `0x00a33817` (x86 original vs lift x86 vs ARM64)
+
+**Bloqueio seguinte.** Em `0x011e0f85` o CRT lê `[0x0171e74c]`, compara com
+`ESI` e, no caminho tomado, monta um segundo table walk
+(`PUSH 0x013eb098; PUSH 0x013cc80c; CALL 0x011e150e`) antes de gravar `2` no
+estado e seguir. Nada disso foi executado ainda. O APK continua sem chamar a
+entrada do PE: não há boot, menu ou renderização.
+### Estado `__initializing` e a fronteira dos inicializadores C++ — 2026-11-08
+
+O prefixo atravessou o estado de inicialização do CRT e parou no `CALL` que
+inicia a tabela de inicializadores C++. Limite novo: **`0x011e0f98`** (107
+instruções executadas).
+
+```
+PASS crt_startup_state_initializing stop=0x011e0f98 executed=107
+     esp_delta=-132 ebp=entry-4 eax=1 esi=1 edi=lock_reg cookie=consistent
+     imports=14 initterm_e=walked state=initializing cmp=equal
+     table=0x013cc80c..0x013eb098 app_type=2 fpucw=0x0001027f
+DETAIL ... walk_called=0x011e0e95 walk_missing=0x013000d0
+```
+
+**Instruções novas no prefixo:**
+
+| Endereço | Instrução | Efeito |
+| --- | --- | --- |
+| `0x011e0f85` | `MOV EAX,[0x0171e74c]` | `EAX = 1` (`__initializing`) |
+| `0x011e0f8a` | `CMP EAX,ESI` | `ESI = 1` → `ZF = 1` |
+| `0x011e0f8c` | `JNZ 0x011e0fa9` | **não** tomado |
+| `0x011e0f8e` | `PUSH 0x013eb098` | fim da tabela C++ |
+| `0x011e0f93` | `PUSH 0x013cc80c` | início da tabela C++ |
+| `0x011e0f98` | `CALL 0x011e150e` | limite: `JMP [0x013cc320]` = `MSVCR90.dll!_initterm` |
+
+`ESP = entry-0x84` (as duas `PUSH` ainda pendentes) e o estado nativo continua
+em `1`: a escrita de `2` está em `0x011e0f9f`, depois do limite.
+
+**O bloqueio, medido.** `_initterm` percorre a tabela de inicializadores
+estáticos do jogo:
+
+| Medida | Valor |
+| --- | --- |
+| Faixa | `0x013cc80c..0x013eb098` (`.rdata`, 125.068 bytes) |
+| Slots | 31.267 (1 nulo, o primeiro) |
+| Alvos não nulos | **31.266**, todos distintos |
+| Faixa dos alvos | `0x011e0e95 .. 0x013bc960`, todos em `.text` |
+| Já traduzidos | **0** |
+
+Implementei o shim de `_initterm` (ignora nulos, chama cada endereço por
+`invoke_guest_call`, exige `EIP`/`ESP` de volta e **falha fechado** nomeando o
+endereço sem corpo) e um probe que usa as duas primeiras entradas reais da
+tabela: chama `0x011e0e95` como stub de contrato e recusa `0x013000d0`,
+reportando exatamente esse endereço. Nenhum corpo de construtor é falsificado.
+
+- [relatório do marco](./test-logs/boot-entry-20261108/report-cpp-initializers.md)
+- [medição da tabela](./test-logs/boot-entry-20261108/cpp-initializer-table.json)
+- logs: `test-logs/boot-entry-20261108/crt-startup-state-initializing-*.log`
+- regressões verdes: 81 testes Python, `closure_build`, os 6 estágios
+  anteriores, cookie/pid no aparelho, construtor `0x00a33817`
+
+**Próximo passo.** O primeiro corpo necessário é `0x011e0e95`; depois dele há
+mais 31.265 inicializadores distintos, nenhum já traduzido. A partir daqui o
+boot exige traduzir e validar essa closure inteira — ou provar que parte dela
+nunca é chamada. O APK continua sem chamar a entrada do PE: não há boot, menu
+ou renderização.
+
+### Investigação da tabela de inicializadores C++ — 2026-11-08
+
+Antes de expandir a tradução, a tabela foi investigada. Nada foi traduzido nesta
+etapa.
+
+**1. Os argumentos de `_initterm`.** Bytes originais em `0x011e0f8e..0x011e0f98`:
+
+```
+6898b03e01  PUSH  0x013eb098   ; empilhado PRIMEIRO -> 2o argumento (end)
+680cc83c01  PUSH  0x013cc80c   ; empilhado DEPOIS   -> 1o argumento (begin)
+e871050000  CALL  0x011e150e   ; JMP [0x013cc320] = MSVCR90.dll!_initterm
+```
+
+Em `__cdecl` o primeiro argumento é o último `PUSH`, então a chamada é
+`_initterm(begin = 0x013cc80c, end = 0x013eb098)`. Três confirmações
+independentes: a ordem dos `PUSH`, o estado medido no limite
+(`[ESP] = begin`, `[ESP+4] = end`, `ESP = entry-0x84`, com `POP ECX` logo depois
+do `CALL`) e a semântica do laço (`pfbegin < pfend`, e `begin` é o endereço
+menor).
+
+**2. Os 31.266 valores são ponteiros de código.** A faixa é o grupo `.CRT$X*`
+delimitado por marcadores nulos:
+
+```
+0x013cc808 00000000   marcador
+0x013cc80c 00000000   <-- begin (__xc_a)
+0x013cc810 011e0e95   primeira entrada
+...
+0x013eb094 013bc960   última entrada
+0x013eb098 00000000   <-- end (__xc_z)
+0x013eb09c 00000000   __xi_a (tabela do _initterm_e logo depois)
+```
+
+Só existe **um** nulo, o inicial: não há subdivisões. Todas as entradas são
+distintas, todas em `.text`, e cada uma aponta para uma função curta separada da
+próxima por padding `CC`:
+
+```
+0x013bc900  f3 0f 10 05 7c724f01   MOVSS XMM0,[0x014f727c]
+            f3 0f 11 05 f4e67101   MOVSS [0x0171e6f4],XMM0
+            c3                     RET
+```
+
+Desmontei uma amostra de 24 entradas com Ghidra: **24/24 decodificaram por
+completo e terminam em `RET`**, cada corpo cabendo no seu slot. Primeiros bytes
+dominantes (assinatura de código, não de dado): `0x33` (8.391), `0x55` (7.360),
+`0xF3` (5.225), `0x0F` (4.156), `0x83` (2.200), `0x68`/`0x6A` (2.275).
+
+**Custo medido:** 31.266 rotinas, **1.996.940 bytes** de código (mediana de 26
+bytes por rotina, máximo 4.096), ~460 mil instruções estimadas. Das 24
+amostradas, 17 não chamam nada; as 7 que chamam usam `InitializeCriticalSection`,
+`TlsAlloc`, `__getmainargs` e helpers internos — um deles (`0x00935b70`, 78
+instruções) é o guard de instância única com `CreateMutexA`/`wsprintfA`, que puxa
+USER32.
+
+**Limitação de ferramenta:** o inventário Ghidra do projeto (57.801 funções)
+reconhece só 9.351 dos 31.266 alvos. A análise do project está incompleta — é o
+mesmo motivo pelo qual `0x011e10bf` "não existia" antes —, então a desmontagem
+por endereço foi usada como evidência.
+
+**3. Cabeça e cauda contra o PE.** VA, seção e offset de arquivo conferidos:
+
+| Registro | VA | Offset | Valor |
+| --- | --- | --- | --- |
+| slot inicial (nulo) | `0x013cc80c` | `0xfcbc0c` | `0x00000000` |
+| primeira entrada | `0x013cc810` | `0xfcbc10` | `0x011e0e95` |
+| segunda entrada | `0x013cc814` | `0xfcbc14` | `0x013000d0` |
+| última entrada | `0x013eb094` | `0xfea494` | `0x013bc960` |
+| slot final (nulo) | `0x013eb098` | `0xfea498` | `0x00000000` |
+
+Bytes do arquivo, leitura por VA e janela emitida no guest são idênticos, e o
+`DETAIL` do estágio mostra `walk_called=0x011e0e95 walk_missing=0x013000d0` tanto
+no lift x86 quanto no ARM64. A imagem não tem `.reloc`, então nenhum ponteiro é
+realocado pelo loader.
+
+**4. Consequência.** `_initterm` chama toda entrada não nula, em ordem. Como só
+existe o nulo inicial, **não há subconjunto pulável**: as 31.266 rotinas são
+necessárias, na ordem da tabela, e priorizar algumas divergiria do original no
+primeiro pulo.
+
+- [relatório da investigação](./test-logs/boot-entry-20261108/report-cpp-table-investigation.md)
+- [medição da tabela](./test-logs/boot-entry-20261108/cpp-initializer-table.json)
+- amostra desmontada: [24 inicializadores](./test-logs/boot-entry-20261108/cpp-initializer-sample.json)
+  e [helpers internos](./test-logs/boot-entry-20261108/cpp-initializer-helpers.json)
+
+O prefixo continua em `0x011e0f98` e os sete estágios seguem verdes. Sem commit e
+sem push. O APK continua sem chamar a entrada do PE: não há boot, menu ou
+renderização.
+
+### Lote 1 dos inicializadores C++ — closure medida e primeiro bloqueio
+
+Estratégia em curso: lotes de 256 em ordem de tabela, parando na primeira API sem
+shim ou na primeira divergência.
+
+**A closure transitiva não converge.** Canonicalizando cada alvo para a função
+que o contém (código de engine compartilha blocos no meio de funções), a
+caminhada do lote 1 chegou a **1.810 corpos, 137.585 instruções, 77 imports e
+2.441 alvos canonicalizados** depois de 40 rodadas, ainda descobrindo 46 corpos
+novos por rodada. Alguns inicializadores (o guard de instância única `0x00935b70`)
+puxam código cujo fecho alcança o binário inteiro. Agrupar por closure, portanto,
+não produz lote limitado; o modelo limitado é **por inicializador, na ordem da
+tabela**.
+
+**Requisitos dos primeiros inicializadores:**
+
+| # | Inicializador | Instr. | Exige |
+| --- | --- | --- | --- |
+| 0 | `0x011e0e95` | 18 | `MSVCR90!__getmainargs`, corpo `0x011e07ef`, `_amsg_exit` |
+| 1 | `0x013000d0` | 6 | `InitializeCriticalSection`, corpo `0x011e07ef` |
+| 2 | `0x013000f0` | 5 | `TlsAlloc` |
+| 3 | `0x013b64c0` | 6 | `InitializeCriticalSection`, corpo `0x011e07ef` |
+| 4 | `0x013b64e0` | 5 | `TlsAlloc` |
+| 5 | `0x013002d0` | 5 | corpo `0x00935b70` (guard de instância) |
+| 6 | `0x0138e640` | 11 | corpo `0x00f474d0` |
+| 14 | `0x0121a720` | 7 | nada |
+| 15 | `0x0121a740` | 8 | nada |
+
+O primeiro bloqueio é o inicializador **#0**, `0x011e0e95`, que chama
+`MSVCR90.dll!__getmainargs`. Pelo formato — 18 instruções, imediatamente antes de
+`___tmainCRTStartup`, guardando resultados em `0x016f2630`/`0x016f2640`/
+`0x016f2644` — essa entrada é o `pre_cpp_init` do próprio MSVCRT, não código do
+jogo. `0x011e0e95` e o helper `0x011e07ef` já traduzem e **compilam para ARM64**
+com `-Wall -Wextra -Werror`; falta só o shim.
+
+**Lacunas de lifter fechadas nesta etapa** (com testes): `SHR` (imediato e `CL`),
+`SAR` com qualquer contagem, `SHL` com `CL`, `XADD`/`LOCK XADD`, `INT3` →
+`BatchLiftStatus::debug_trap` (fatal), `CALL [mem]` via dispatcher e operandos
+indexados em `OR`/`TEST`. Os 85 testes Python passam.
+
+**Ferramentas novas:** [prepare_cpp_initializer_batch.py](./tools/batch_static_lift/prepare_cpp_initializer_batch.py)
+e [ResolveSporeFunctionEntries.java](./tools/ghidra_scripts/ResolveSporeFunctionEntries.java).
+A canonicalização eliminou 52 falhas de "branch target not exported" e zerou os
+exports truncados.
+
+- [relatório do lote 1](./test-logs/boot-entry-20261108/report-cpp-batch-1.md)
+- [análise do lote](./test-logs/boot-entry-20261108/cpp-batch-1/batch-1-analysis.json)
+- [closure medida](./test-logs/boot-entry-20261108/cpp-batch-1/summary.json)
+
+Nada foi registrado no harness: o walk ainda pararia no inicializador #0. Nesta
+etapa os sete estágios foram reconstruídos (x86 lift PASS, ARM64 compila), mas o
+aparelho `PJMZAEJRX4YLFIDI` estava desconectado, então **não houve execução ARM64
+no dispositivo** depois destas mudanças de lifter.
+
+### Lote 1 executado no aparelho — walk real até `0x013002d0`
+
+O walk do `_initterm` agora roda de verdade: percorre a tabela real, executa os
+**cinco primeiros inicializadores** e para no sexto endereço, falhando fechado e
+nomeando-o.
+
+```
+PASS crt_cpp_walk stop=0x011e0f98 executed=107 esp_delta=-136 ebp=entry-4
+     cookie=consistent imports=26 initializers=5 walk=stopped_at_0x013002d0
+     args=argc1,argv_guest,envp_empty sections=2 tls=2
+PASS arm64_build target=aarch64-linux-android29
+PASS x86_vs_arm64 <linha idêntica>
+PASS arm64_device_run serial=PJMZAEJRX4YLFIDI
+```
+
+O limite verificado do prefixo continua `0x011e0f98`; o que avançou foi o que
+roda depois dele. Os oito estágios passam, sete com execução no aparelho
+(`crt_entry`, `crt_startupinfo`, `crt_interlocked`, `crt_startup_lock`,
+`crt_initterm_call`, `crt_initterm_executed`, `crt_startup_state_initializing`,
+`crt_cpp_walk`).
+
+| # | inicializador | instr. | imports observados |
+| --- | --- | --- | --- |
+| 0 | `0x011e0e95` (`pre_cpp_init`) | 18 | `_decode_pointer`, `_onexit`, `__getmainargs` |
+| 1 | `0x013000d0` | 6 | `_decode_pointer`, `_onexit`, `InitializeCriticalSection(0x01667c00)` |
+| 2 | `0x013000f0` | 5 | `TlsAlloc` → 0 |
+| 3 | `0x013b64c0` | 6 | `_decode_pointer`, `_onexit`, `InitializeCriticalSection(0x016f4e98)` |
+| 4 | `0x013b64e0` | 5 | `TlsAlloc` → 1 |
+
+Paragem: `error=_initterm needs a lifted body for 0x013002d0`. Essa entrada exige
+o corpo `0x00935b70` (guarda de instância única, com USER32), que é o primeiro
+**código de engine** da cadeia — o lote 2 sai do escopo da CRT e pede decisão
+própria.
+
+**Correção estrutural — fixup da IAT.** O helper `0x011e074a` não chama pela IAT,
+ele lê o slot e chama pelo registrador
+(`mov esi,[0x013cc344]; call esi`). Na PE o slot guarda o RVA do registro
+`hint/name` ("_decode_pointer"), não código: quem troca isso pelo endereço
+resolvido é o loader, antes da primeira instrução. O modelo não tinha esse passo,
+então `install_import_trampolines` passou a fazer o mesmo: cada um dos 23 slots
+mapeados recebe um trampolim guest (`0x5f000000 + 0x10 * i`) registrado no
+dispatcher, e a janela `import_cells` virou gravável, como as páginas de IAT do
+Windows são. `_adjust_fdiv` fica de fora: é import de **dado** (o loader grava o
+endereço da variável) e não há valor verificado para ela.
+
+**Bugs reais corrigidos:** `__getmainargs` é `__cdecl` — o guest faz `add esp,0x14`
+depois da chamada, e o shim retirava os argumentos outra vez (o `ret` seguinte
+estourava em `0x77777777`); o mapa de memória guest passou de 16 para 32 regiões
+(o image tem 14 janelas + pilha + TEB + tabela de sonda); e o shim de `_initterm`
+verifica legibilidade **por slot** em vez de exigir os 124 KiB da tabela
+mapeados, nomeando o slot quando falha.
+
+**Shim novo:** `_decode_pointer`, inverso exato de `_encode_pointer`
+(`rotr(p, cookie & 0x1f) ^ cookie`, nulo continua nulo). Ida e volta verificadas
+no próprio walk: `_encode_pointer(0xffffffff)` → `0x2b8d56c0` e
+`_decode_pointer(0x2b8d56c0)` → `0xffffffff`.
+
+**Limitações:** `_encode_pointer`/`_decode_pointer` são modelados (par XOR +
+rotação auto-consistente), não verificados byte a byte contra a MSVCR90;
+`_onexit`/`__dllonexit`/`_lock`/`_unlock` só aceitam o registro; `_adjust_fdiv`
+mantém os bytes do arquivo no slot; a tabela do `_initterm` está mapeada só nos
+256 primeiros slots; o estágio não roda o x86 original porque o walk real
+inicializa o processo. Nada disso é boot, menu, renderização ou gameplay.
+
+- [relatório da execução do lote 1](./test-logs/boot-entry-20261108/report-cpp-batch-1-executed.md)
+- [manifesto do lote gerado](./test-logs/boot-entry-20261108/generated-cpp-batch-1/manifest.json)
+- [manifesto do image guest](./test-logs/boot-entry-20261108/generated-initterm-guest-image/manifest.json)

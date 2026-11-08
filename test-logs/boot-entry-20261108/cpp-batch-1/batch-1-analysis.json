@@ -1,0 +1,184 @@
+{
+  "batch_index": 1,
+  "batch_size": 256,
+  "table_slice": [
+    "0x011e0e95",
+    "0x0121dcd0"
+  ],
+  "closure_converged": false,
+  "closure_rounds": 40,
+  "closure_roots": 1810,
+  "closure_instructions": 137585,
+  "closure_imports": 77,
+  "canonicalised_targets": 2441,
+  "truncated_exports": 4,
+  "first_blocker": {
+    "index": 0,
+    "initializer": "0x011e0e95",
+    "imports": [
+      "MSVCR90.dll!__getmainargs"
+    ],
+    "internal": [
+      "0x011e07ef",
+      "0x011e1368"
+    ]
+  },
+  "first_sixteen_requirements": [
+    {
+      "index": 0,
+      "initializer": "0x011e0e95",
+      "instructions": 18,
+      "imports": [
+        "MSVCR90.dll!__getmainargs"
+      ],
+      "internal": [
+        "0x011e07ef",
+        "0x011e1368"
+      ]
+    },
+    {
+      "index": 1,
+      "initializer": "0x013000d0",
+      "instructions": 6,
+      "imports": [
+        "KERNEL32.dll!InitializeCriticalSection"
+      ],
+      "internal": [
+        "0x011e07ef"
+      ]
+    },
+    {
+      "index": 2,
+      "initializer": "0x013000f0",
+      "instructions": 5,
+      "imports": [
+        "KERNEL32.dll!TlsAlloc"
+      ],
+      "internal": []
+    },
+    {
+      "index": 3,
+      "initializer": "0x013b64c0",
+      "instructions": 6,
+      "imports": [
+        "KERNEL32.dll!InitializeCriticalSection"
+      ],
+      "internal": [
+        "0x011e07ef"
+      ]
+    },
+    {
+      "index": 4,
+      "initializer": "0x013b64e0",
+      "instructions": 5,
+      "imports": [
+        "KERNEL32.dll!TlsAlloc"
+      ],
+      "internal": []
+    },
+    {
+      "index": 5,
+      "initializer": "0x013002d0",
+      "instructions": 5,
+      "imports": [],
+      "internal": [
+        "0x00935b70",
+        "0x011e07ef"
+      ]
+    },
+    {
+      "index": 6,
+      "initializer": "0x0138e640",
+      "instructions": 11,
+      "imports": [],
+      "internal": [
+        "0x00f474d0",
+        "0x011e07ef"
+      ]
+    },
+    {
+      "index": 7,
+      "initializer": "0x01300210",
+      "instructions": 4,
+      "imports": [],
+      "internal": [
+        "0x011e07ef"
+      ]
+    },
+    {
+      "index": 8,
+      "initializer": "0x01300310",
+      "instructions": 16,
+      "imports": [],
+      "internal": [
+        "0x00939d40",
+        "0x011e07ef"
+      ]
+    },
+    {
+      "index": 9,
+      "initializer": "0x01300120",
+      "instructions": 8,
+      "imports": [],
+      "internal": [
+        "0x00935c80",
+        "0x011e07ef"
+      ]
+    },
+    {
+      "index": 10,
+      "initializer": "0x01300150",
+      "instructions": 8,
+      "imports": [],
+      "internal": [
+        "0x00935c80",
+        "0x011e07ef"
+      ]
+    },
+    {
+      "index": 11,
+      "initializer": "0x01300180",
+      "instructions": 8,
+      "imports": [],
+      "internal": [
+        "0x00935c80",
+        "0x011e07ef"
+      ]
+    },
+    {
+      "index": 12,
+      "initializer": "0x013001b0",
+      "instructions": 8,
+      "imports": [],
+      "internal": [
+        "0x009222a0",
+        "0x011e07ef"
+      ]
+    },
+    {
+      "index": 13,
+      "initializer": "0x013001d0",
+      "instructions": 11,
+      "imports": [],
+      "internal": [
+        "0x00925a30",
+        "0x011e07ef"
+      ]
+    },
+    {
+      "index": 14,
+      "initializer": "0x0121a720",
+      "instructions": 7,
+      "imports": [],
+      "internal": []
+    },
+    {
+      "index": 15,
+      "initializer": "0x0121a740",
+      "instructions": 8,
+      "imports": [],
+      "internal": []
+    }
+  ],
+  "note": "A closure transitiva do lote nao converge: ela alcanca codigo de engine. O modelo limitado e por inicializador, na ordem da tabela, parando na primeira dependencia nao atendida."
+}
