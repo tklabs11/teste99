@@ -1,10 +1,13 @@
 #include "BatchStaticLiftRuntime.hpp"
+BatchLiftStatus spore_lift_011e1119(BatchLiftMemory& memory, BatchLiftState& state);
+BatchLiftStatus spore_lift_011e111e(BatchLiftMemory& memory, BatchLiftState& state);
 BatchLiftStatus spore_lift_011e136e(BatchLiftMemory& memory, BatchLiftState& state);
 BatchLiftStatus spore_lift_011e151a(BatchLiftMemory& memory, BatchLiftState& state);
 BatchLiftStatus spore_lift_011e1545(BatchLiftMemory& memory, BatchLiftState& state);
 
 
 BatchLiftStatus spore_lift_011e10bf(BatchLiftMemory& memory, BatchLiftState& state) {
+    batch_guest_note_body(0x011e10bfu);
     std::uint32_t t0 = 0;
     std::uint32_t t1a = 0, t1b = 0, t1r = 0;
     std::uint32_t t3a = 0, t3b = 0, t3r = 0;

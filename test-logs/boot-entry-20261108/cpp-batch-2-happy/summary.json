@@ -1,0 +1,31 @@
+{
+  "batch_index": 1,
+  "batch_size": 3,
+  "table_slice": [
+    "0x00f47480",
+    "0x009274d0"
+  ],
+  "next_table_entry": null,
+  "roots": 7,
+  "initializers_in_batch": 3,
+  "helper_roots": 4,
+  "instructions": 413,
+  "imports": [
+    "KERNEL32.dll!EnterCriticalSection",
+    "KERNEL32.dll!GetProcessHeap",
+    "KERNEL32.dll!GetSystemInfo",
+    "KERNEL32.dll!HeapAlloc",
+    "KERNEL32.dll!InitializeCriticalSectionAndSpinCount",
+    "KERNEL32.dll!LeaveCriticalSection",
+    "KERNEL32.dll!VirtualQuery"
+  ],
+  "canonicalised_targets": {
+    "0x00927258": "0x00927140"
+  },
+  "truncated_exports": [],
+  "indirect_calls": {
+    "0x009274d0": [
+      "CALL ECX"
+    ]
+  }
+}

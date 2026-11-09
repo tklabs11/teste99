@@ -7,8 +7,10 @@ satisfy. This generator lifts exactly what the batch needs:
 - roots: the batch's initializers, in table order;
 - CRT helpers (``0x011e0000..0x011effff``) are followed transitively, because
   they belong to the runtime the port already reproduces;
-- anything outside that range is *engine code* and stays unregistered, so the
-  walk fails closed there and names it.
+- an engine body is followed only when ``--engine-body`` names it, so entering
+  engine code is always an explicit decision recorded on the command line;
+- anything else outside that range stays unregistered, so the walk fails closed
+  there and names it.
 
 Every body is byte-validated against both PE builds. Output:
 ``spore_<address>.cpp`` files, ``batch_entries.hpp`` and ``manifest.json``.
@@ -92,6 +94,15 @@ def thunk_symbol(function, iat):
     return iat.get(int(match.group(1), 16))
 
 
+def lifted_instruction_addresses(required, bodies):
+    """Every instruction address inside the bodies this batch lifts."""
+    return {
+        int(instruction["address"], 16)
+        for address in required
+        for instruction in bodies[address]["instructions"]
+    }
+
+
 def call_sites_to(function):
     """(call address, target) for every direct CALL in a body."""
 
@@ -113,6 +124,21 @@ def main():
                         help="closure.json from prepare_cpp_initializer_batch")
     parser.add_argument("--initializers", type=int, default=6,
                         help="how many table initializers to lift, in order")
+    parser.add_argument("--engine-body", action="append", default=[],
+                        type=lambda value: int(value, 0),
+                        help="engine body to lift and follow (repeatable)")
+    parser.add_argument("--bodies", type=int, default=0,
+                        help="lift at most this many bodies, closest first")
+    parser.add_argument("--allow-unresolved", action="store_true",
+                        help="dispatch a call to an unlifted body instead of "
+                             "rejecting the batch")
+    parser.add_argument("--follow-range", action="append", default=[],
+                        type=lambda value: tuple(
+                            int(part, 0) for part in value.split(":")),
+                        help="low:high code range followed like the CRT range")
+    parser.add_argument("--follow-outside", action="store_true",
+                        help="follow every direct target, so --bodies alone "
+                             "bounds the batch")
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
 
@@ -126,7 +152,12 @@ def main():
     roots = targets[:args.initializers]
 
     required, engine, missing, seen, thunks = [], set(), [], set(), {}
-    pending = list(roots)
+    unresolved = set()
+    engine_roots = set(args.engine_body)
+    # An engine body the batch must include can be reachable only through a
+    # function pointer, so it is seeded rather than discovered. The command line
+    # order is the priority order when --bodies caps the batch.
+    pending = list(args.engine_body) + list(roots)
     while pending:
         address = pending.pop(0)
         if address in seen:
@@ -142,10 +173,26 @@ def main():
             # calls, exactly like the boot prefix does for other thunks.
             thunks[address] = symbol
             continue
+        if args.bodies and len(required) >= args.bodies:
+            # The batch is capped: this reachable body stays unlifted and its
+            # callers dispatch to it, which is the runtime batch boundary.
+            unresolved.add(address)
+            continue
         required.append(address)
         direct, _ = direct_calls(function)
         for target in direct:
             if CRT_LOW <= target < CRT_HIGH:
+                pending.append(target)
+            elif args.follow_outside:
+                # Reachability, not address range, decides what belongs to the
+                # batch: the caller caps it with --bodies.
+                pending.append(target)
+            elif any(low <= target < high
+                     for low, high in args.follow_range):
+                # The image's own statically linked runtime: followed exactly
+                # like the CRT range, because it is runtime code.
+                pending.append(target)
+            elif target in engine_roots:
                 pending.append(target)
             elif target not in roots:
                 engine.add(target)
@@ -153,6 +200,20 @@ def main():
     for address in required:
         lifter.validate_function_bytes(bodies[address], reference)
         lifter.validate_function_bytes(bodies[address], candidate)
+
+    # A direct CALL or JMP that lands inside a body being lifted is local
+    # control flow, not a request for another body.
+    local = lifted_instruction_addresses(required, bodies)
+    engine = {target for target in engine if target not in local}
+    # Direct calls a lifted body makes to an address it does not lift: the
+    # dispatcher resolves them at runtime, and one of them is where the walk
+    # will stop.
+    pending_bodies = sorted({
+        target for address in required
+        for target in direct_calls(bodies[address])[0]
+        if target not in set(required) and target not in thunks
+        and target not in local
+    })
 
     entries = set(required)
     engine = {target for target in engine if target not in thunks}
@@ -169,7 +230,8 @@ def main():
         try:
             source, _ = lifter.translate_function(
                 bodies[address], exported_function_entries=entries,
-                iat_imports=iat, direct_import_aliases=aliases or None)
+                iat_imports=iat, direct_import_aliases=aliases or None,
+                allow_unresolved_calls=args.allow_unresolved)
         except lifter.LiftRejected as error:
             failures.append({
                 "entry": f"0x{address:08x}",
@@ -191,6 +253,7 @@ def main():
         for symbol in imports_of(bodies[address], iat)
     } | set(thunks.values()))
     blocker = f"0x{min(engine):08x}u" if engine else "0u"
+
     declarations = "\n".join(
         f"BatchLiftStatus spore_lift_{address:08x}("
         "BatchLiftMemory& memory, BatchLiftState& state);"
@@ -215,6 +278,17 @@ def main():
         "",
         "// The first engine body the batch needs, and every lifted body entry.",
         f"inline constexpr std::uint32_t kBatchEngineBlocker = {blocker};",
+        "",
+        "// Lifted bodies call these through the dispatcher because the batch does",
+        "// not lift them: the walk stops at the first one it actually reaches.",
+        "// The placeholder entry only exists because C++ forbids an empty array;",
+        "// kBatchPendingBodyCount is zero when there is nothing pending.",
+        "inline constexpr std::uint32_t kBatchPendingBodies[] = {",
+        ("    " + ", ".join(f"0x{address:08x}u" for address in pending_bodies)
+         + ",") if pending_bodies else "    0u,",
+        "};",
+        f"inline constexpr std::uint32_t kBatchPendingBodyCount = "
+        f"{len(pending_bodies)}u;",
         "struct BatchBodyEntry {",
         "    std::uint32_t entry;",
         "    BatchLiftStatus (*body)(BatchLiftMemory&, BatchLiftState&);",
@@ -233,12 +307,14 @@ def main():
         "imports": symbols,
         "next_initializer": f"0x{targets[len(roots)]:08x}",
         "engine_blockers": [f"0x{value:08x}" for value in sorted(engine)],
+        "pending_bodies": [f"0x{value:08x}" for value in pending_bodies],
         "missing_bodies": [f"0x{value:08x}" for value in sorted(missing)],
     }
     (args.output / "manifest.json").write_text(
         json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
     print(f"lote gerado: {len(roots)} inicializadores, {len(entries)} corpos, "
           f"{manifest['instructions']} instruções, {len(symbols)} imports, "
+          f"pendentes {len(pending_bodies)}, "
           f"bloqueio de engine {manifest['engine_blockers'][:1]}")
 
 

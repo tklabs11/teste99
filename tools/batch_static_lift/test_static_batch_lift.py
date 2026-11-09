@@ -584,11 +584,26 @@ class StaticBatchLiftTests(unittest.TestCase):
         )
         self.assertEqual(lifter.classify_instruction("XORPS"), "sse_logical")
 
-    def test_xorps_memory_form_remains_rejected(self):
+    def test_xorps_memory_form_is_translated(self):
+        body = function([
+            instruction(
+                0x401000, "0f5705b0b8f301", "XORPS",
+                ("XMM0", "xmmword ptr [0x013eb8b0]"),
+            ),
+            instruction(0x401007, "c3", "RET", flow="TERMINAL"),
+        ])
+
+        source, _ = lifter.translate_function(body)
+
+        self.assertIn(
+            "batch_guest_xorps_memory(memory, state, 0u, 0x013eb8b0u)", source
+        )
+
+    def test_xorps_memory_form_requires_the_128_bit_width(self):
         body = function([
             instruction(
                 0x401000, "0f5700", "XORPS",
-                ("XMM0", "oword ptr [EAX]"),
+                ("XMM0", "dword ptr [EAX]"),
             ),
             instruction(0x401003, "c3", "RET", flow="TERMINAL"),
         ])
@@ -596,7 +611,9 @@ class StaticBatchLiftTests(unittest.TestCase):
         with self.assertRaises(lifter.LiftRejected) as raised:
             lifter.translate_function(body)
 
-        self.assertIn("two XMM register operands", raised.exception.reasons[0])
+        self.assertIn(
+            "128-bit memory operand", raised.exception.reasons[0]
+        )
 
     def test_xchg_dword_memory_register_is_translated_without_flags(self):
         body = function([
@@ -660,8 +677,6 @@ class StaticBatchLiftTests(unittest.TestCase):
             "static_cast<std::uint32_t>(state.regs[6] + 0x0015b768u))",
             source,
         )
-        self.assertIn("state.x87_depth >= 8u", source)
-        self.assertIn("state.x87_depth == 0u", source)
         self.assertEqual(
             [item["status"] for item in diagnostics],
             ["translated"] * len(body["instructions"]),
@@ -669,40 +684,126 @@ class StaticBatchLiftTests(unittest.TestCase):
         self.assertEqual(lifter.classify_instruction("FLD"), "x87")
         self.assertEqual(lifter.classify_instruction("FSTP"), "x87")
 
-    def test_x87_arithmetic_remains_rejected(self):
+    def test_x87_stack_arithmetic_and_pop_forms_are_translated(self):
         body = function([
-            instruction(0x401000, "d8c1", "FADD", ("ST(0)", "ST(1)")),
+            instruction(0x401000, "d8c1", "FADD", ("ST0", "ST1")),
+            instruction(0x401002, "dec1", "FADDP", ("ST1", "ST0")),
+            instruction(0x401004, "d9c9", "FXCH", ()),
+            instruction(0x401006, "d8c9", "FMUL", ("ST1",)),
+            instruction(0x401008, "c3", "RET", flow="TERMINAL"),
+        ])
+
+        source, _ = lifter.translate_function(body)
+
+        self.assertIn(
+            "batch_guest_x87_arithmetic_stack(state, 0u, 1u, 0u, false)",
+            source,
+        )
+        self.assertIn(
+            "batch_guest_x87_arithmetic_stack(state, 1u, 0u, 0u, true)",
+            source,
+        )
+        self.assertIn("batch_guest_x87_fxch(state, 1u)", source)
+        self.assertIn(
+            "batch_guest_x87_arithmetic_stack(state, 1u, 0u, 1u, false)",
+            source,
+        )
+
+    def test_x87_compare_and_status_forms_are_translated(self):
+        body = function([
+            instruction(
+                0x401000, "d81d70534801", "FCOMP",
+                ("float ptr [0x01485370]",),
+            ),
+            instruction(0x401006, "d9c9", "FXCH", ("ST1",)),
+            instruction(0x401008, "dfe0", "FNSTSW", ("AX",)),
+            instruction(0x40100A, "dfe9", "FUCOMIP", ("ST0", "ST1")),
+            instruction(0x40100C, "d9e1", "FABS", ()),
+            instruction(0x40100E, "c3", "RET", flow="TERMINAL"),
+        ])
+
+        source, _ = lifter.translate_function(body)
+
+        self.assertIn(
+            "batch_guest_x87_compare_memory(memory, state, 0x01485370u, 1u, "
+            "false)",
+            source,
+        )
+        self.assertIn("batch_guest_fnstsw_ax(state)", source)
+        self.assertIn(
+            "batch_guest_x87_compare_stack(state, 1u, 1u, true)", source
+        )
+        self.assertIn("batch_guest_x87_abs(state)", source)
+
+    def test_x87_constant_and_integer_forms_are_translated(self):
+        body = function([
+            instruction(0x401000, "d9e8", "FLD1", ()),
+            instruction(0x401002, "d9ee", "FLDZ", ()),
+            instruction(0x401004, "d9c1", "FLD", ("ST1",)),
+            instruction(0x401006, "df3d382f4501", "FISTP",
+                        ("qword ptr [0x01452f38]",)),
+            instruction(0x40100C, "df2d382f4501", "FILD",
+                        ("qword ptr [0x01452f38]",)),
+            instruction(0x401012, "c3", "RET", flow="TERMINAL"),
+        ])
+
+        source, _ = lifter.translate_function(body)
+
+        self.assertIn("batch_guest_fld1(state)", source)
+        self.assertIn("batch_guest_fldz(state)", source)
+        self.assertIn("batch_guest_fld_stack(state, 1u)", source)
+        self.assertIn(
+            "batch_guest_fistp64(memory, state, 0x01452f38u)", source
+        )
+        self.assertIn(
+            "batch_guest_fild64(memory, state, 0x01452f38u)", source
+        )
+
+    def test_x87_arithmetic_rejects_reverse_forms_without_memory(self):
+        body = function([
+            instruction(0x401000, "d8e0", "FSUB", ("ST0", "ST1")),
             instruction(0x401002, "c3", "RET", flow="TERMINAL"),
         ])
 
-        with self.assertRaises(lifter.LiftRejected) as raised:
-            lifter.translate_function(body)
+        source, _ = lifter.translate_function(body)
 
-        self.assertEqual(
-            raised.exception.instruction_diagnostics[0]["mnemonic"], "FADD"
+        self.assertIn(
+            "batch_guest_x87_arithmetic_stack(state, 0u, 1u, 3u, false)",
+            source,
         )
         self.assertEqual(lifter.classify_instruction("FADD"), "x87")
 
-    def test_sse_arithmetic_remains_rejected(self):
+    def test_sse_scalar_arithmetic_and_compare_forms_are_translated(self):
         body = function([
+            instruction(0x401000, "f30f58c1", "ADDSS", ("XMM0", "XMM1")),
+            instruction(0x401004, "f30f59c2", "MULSS", ("XMM0", "XMM2")),
             instruction(
-                0x401000, "f30f58c1", "ADDSS", ("XMM0", "XMM1"),
+                0x401008, "f30f5c0424", "SUBSS",
+                ("XMM0", "dword ptr [ESP]"),
             ),
-            instruction(0x401004, "c3", "RET", flow="TERMINAL"),
+            instruction(0x40100D, "0f2f05b0b8f301", "COMISS",
+                        ("XMM0", "dword ptr [0x013eb8b0]")),
+            instruction(0x401015, "c3", "RET", flow="TERMINAL"),
         ])
 
-        with self.assertRaises(lifter.LiftRejected) as raised:
-            lifter.translate_function(body)
+        source, _ = lifter.translate_function(body)
 
-        rejected = [
-            item for item in raised.exception.instruction_diagnostics
-            if item.get("status") == "rejected"
-        ]
-        self.assertEqual(rejected[0]["mnemonic"], "ADDSS")
-        self.assertEqual(
-            lifter.classify_instruction(rejected[0]["mnemonic"]),
-            "sse_arithmetic",
+        self.assertIn(
+            "batch_guest_sse_scalar_arithmetic(state, 0u, state.xmm[1u][0], 0u)",
+            source,
         )
+        self.assertIn(
+            "batch_guest_sse_scalar_arithmetic(state, 0u, state.xmm[2u][0], 2u)",
+            source,
+        )
+        self.assertIn(
+            "batch_guest_sse_scalar_arithmetic(state, 0u, t2a, 1u)", source
+        )
+        self.assertIn(
+            "batch_guest_ucomiss_memory(memory, state, 0u, 0x013eb8b0u)",
+            source,
+        )
+        self.assertEqual(lifter.classify_instruction("ADDSS"), "sse_arithmetic")
 
     def test_pilot_manifest_accepts_baseline_and_nested_100_plan(self):
         baseline = [
@@ -847,6 +948,82 @@ class StaticBatchLiftTests(unittest.TestCase):
         self.assertIn("product < -2147483648ll || product > 2147483647ll", source)
         self.assertIn("state.eflags &= ~0x801u", source)
         self.assertEqual([item["status"] for item in diagnostics], ["translated"] * 3)
+
+    def test_xchg_two_registers_is_translated_without_flags(self):
+        body = function([
+            instruction(0x401000, "87c8", "XCHG", ("EAX", "ECX")),
+            instruction(0x401002, "c3", "RET", flow="TERMINAL"),
+        ])
+        source, diagnostics = lifter.translate_function(body)
+        self.assertIn("t0c = state.regs[0];", source)
+        self.assertIn("state.regs[0] = state.regs[1];", source)
+        self.assertIn("state.regs[1] = t0c;", source)
+        self.assertNotIn("eflags", source)
+        self.assertEqual([item["status"] for item in diagnostics],
+                         ["translated"] * 2)
+
+    def test_imul_three_operand_and_one_operand_forms(self):
+        body = function([
+            instruction(0x401000, "6bc00c", "IMUL", ("EAX", "EAX", "0xc")),
+            instruction(0x401003, "f7ef", "IMUL", ("EDI",)),
+            instruction(0x401005, "c3", "RET", flow="TERMINAL"),
+        ])
+        source, diagnostics = lifter.translate_function(body)
+        # The three-operand form multiplies the loaded source by the immediate
+        # into the destination register.
+        self.assertIn("t0b = 0x0000000cu;", source)
+        self.assertIn("state.regs[0] = static_cast<std::uint32_t>(product);", source)
+        # The one-operand form writes the high half to EDX.
+        self.assertIn(
+            "state.regs[2] = static_cast<std::uint32_t>("
+            "static_cast<std::uint64_t>(product) >> 32u);", source)
+        self.assertEqual([item["status"] for item in diagnostics],
+                         ["translated"] * 3)
+
+    def test_cdq_and_idiv_extend_and_divide_signed(self):
+        body = function([
+            instruction(0x401000, "99", "CDQ"),
+            instruction(0x401001, "f7f9", "IDIV", ("ECX",)),
+            instruction(0x401003, "c3", "RET", flow="TERMINAL"),
+        ])
+        source, diagnostics = lifter.translate_function(body)
+        self.assertIn(
+            "state.regs[2] = (state.regs[0] & 0x80000000u) != 0u "
+            "? 0xffffffffu : 0u;", source)
+        self.assertIn("const std::int64_t divisor", source)
+        self.assertIn("dividend / divisor", source)
+        self.assertIn("quotient < -2147483648ll || quotient > 2147483647ll", source)
+        self.assertEqual([item["status"] for item in diagnostics],
+                         ["translated"] * 3)
+
+    def test_computed_jump_dispatches_through_its_table(self):
+        body = function([
+            instruction(0x401000, "ff2485e0236900", "JMP",
+                        ("dword ptr [EAX*0x4 + 0x6923e0]",),
+                        flow="COMPUTED_JUMP",
+                        flows_to=("0x00401010", "0x00401020")),
+            instruction(0x401010, "c3", "RET", flow="TERMINAL"),
+            instruction(0x401020, "c3", "RET", flow="TERMINAL"),
+        ])
+        source, _ = lifter.translate_function(
+            body, exported_function_entries={0x401000})
+        self.assertIn("switch (t0a) {", source)
+        self.assertIn("case 0x00401010u: goto L_00401010;", source)
+        self.assertIn("case 0x00401020u: goto L_00401020;", source)
+        self.assertIn("state.eip = t0a;", source)
+        self.assertIn("return BatchLiftStatus::unsupported_dependency;", source)
+
+    def test_computed_jump_to_an_unknown_case_is_rejected(self):
+        body = function([
+            instruction(0x401000, "ff2485e0236900", "JMP",
+                        ("dword ptr [EAX*0x4 + 0x6923e0]",),
+                        flow="COMPUTED_JUMP",
+                        flows_to=("0x00401010", "0x00401040")),
+            instruction(0x401010, "c3", "RET", flow="TERMINAL"),
+        ])
+        with self.assertRaises(lifter.LiftRejected) as raised:
+            lifter.translate_function(body, exported_function_entries={0x401000})
+        self.assertIn("computed jump target 0x00401040", raised.exception.reasons[0])
 
     def test_sar_and_indexed_cmp_in_binary_search_helper(self):
         body = function([
@@ -1059,7 +1236,7 @@ class StaticBatchLiftTests(unittest.TestCase):
             instruction(0x401005, "c3", "RET", flow="TERMINAL"),
         ])
         rejected_callee = function([
-            instruction(0x402000, "d900", "FLD", ("dword ptr [EAX]",)),
+            instruction(0x402000, "db28", "FLD", ("tbyte ptr [EAX]",)),
             instruction(0x402002, "c3", "RET", flow="TERMINAL"),
         ])
 
@@ -1183,7 +1360,25 @@ class StaticBatchLiftTests(unittest.TestCase):
         with self.assertRaises(lifter.LiftRejected) as raised:
             lifter.translate_function(body)
 
-        self.assertIn("not an exported instruction", raised.exception.reasons[0])
+        # A jump out of its own body is a tail call, so the rejection names the
+        # missing body rather than an unresolved in-body branch. Both cases must
+        # still fail closed.
+        self.assertIn(
+            "tail jump target 0x00401020 is not in the exported function set",
+            raised.exception.reasons[0])
+
+    def test_out_of_body_jump_with_an_exported_target_is_a_tail_call(self):
+        body = function([
+            instruction(
+                0x401000, "eb1e", "JMP", ("0x00401020",),
+                flow="UNCONDITIONAL_JUMP", flows_to=("0x00401020",),
+            ),
+        ])
+        source, _ = lifter.translate_function(
+            body, exported_function_entries={0x401000, 0x401020})
+        self.assertIn("state.eip = 0x00401020u;", source)
+        self.assertIn("return spore_lift_00401020(memory, state);", source)
+        self.assertNotIn("goto L_00401020;", source)
 
     def test_instruction_order_must_begin_at_entry(self):
         body = function([
@@ -1252,9 +1447,10 @@ class StaticBatchLiftTests(unittest.TestCase):
             for index in range(10):
                 entry = 0x401000 + index * 8
                 if index == 0:
-                    code = bytes.fromhex("d900909090c3")
+                    code = bytes.fromhex("db28909090c3")
                     instructions = [
-                        insn(entry, bytes.fromhex("d900"), "FLD", ("dword ptr [EAX]",)),
+                        insn(entry, bytes.fromhex("db28"), "FLD",
+                             ("tbyte ptr [EAX]",)),
                         insn(entry + 2, b"\x90", "NOP"),
                         insn(entry + 3, b"\x90", "NOP"),
                         insn(entry + 4, b"\x90", "NOP"),
@@ -1907,6 +2103,75 @@ class StaticBatchLiftTests(unittest.TestCase):
             "0x011e158bu;", header
         )
         self.assertIn("kCookieCodeBytes{0x90u, 0xc3u};", header)
+
+
+class CppBatchGeneratorTests(unittest.TestCase):
+    """The batch generator decides what the walk may enter."""
+
+    def test_direct_calls_separate_engine_targets_from_local_jumps(self):
+        import generate_cpp_initializer_batch as batch
+
+        body = {
+            "instructions": [
+                instruction(0x00620230, "8b01", "MOV"),
+                instruction(0x00620234, "741f", "JMP", ("0x620255",)),
+                instruction(0x00620240, "e8ebfeffff", "CALL", ("0x935b70",)),
+                instruction(0x00620249, "ff1514c13c01", "CALL",
+                            ("dword ptr [0x13cc114]",)),
+                instruction(0x00620255, "c3", "RET"),
+            ]
+        }
+        direct, indirect = batch.direct_calls(body)
+        # A JMP is reported like a CALL; the batch then drops the ones that
+        # land inside a lifted body, so only the real dependency survives. An
+        # IAT call is an import call, never a dependency.
+        self.assertEqual(direct, [0x620255, 0x935B70])
+        self.assertEqual(indirect, [])
+        local = batch.lifted_instruction_addresses([0x00620230], {
+            0x00620230: body,
+        })
+        self.assertEqual(sorted(local),
+                         [0x00620230, 0x00620234, 0x00620240, 0x00620249,
+                          0x00620255])
+        self.assertNotIn(0x935B70, local)
+        self.assertIn(0x620255, local)
+
+    def test_engine_bodies_are_only_followed_when_named(self):
+        import generate_cpp_initializer_batch as batch
+
+        self.assertEqual(batch.CRT_LOW, 0x011E0000)
+        self.assertEqual(batch.CRT_HIGH, 0x011F0000)
+        # The guard lives outside the CRT range, so the default policy must
+        # treat it as an engine blocker rather than reaching into engine code.
+        self.assertFalse(batch.CRT_LOW <= 0x00935B70 < batch.CRT_HIGH)
+
+
+class GuestImageSlotsTests(unittest.TestCase):
+    """The image exposes exactly the import slots the loader would fix up."""
+
+    def test_adjust_fdiv_stays_a_data_import(self):
+        import generate_initterm_guest_image as image
+
+        source = Path(image.__file__).read_text(encoding="utf-8")
+        # _adjust_fdiv is the only slot deliberately left unpatched, and the
+        # exclusion is stated where the trampolines are built.
+        self.assertIn('data_imports = {"MSVCR90.dll!_adjust_fdiv"}', source)
+        self.assertIn("kGuestImportSlotCount", source)
+
+    def test_memory_accesses_and_pushed_arguments_are_separated(self):
+        import generate_initterm_guest_image as image
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "spore_00000001.cpp").write_text(
+                "    if (!memory.load32(0x01669930u, t0)) return x;\n"
+                "    t1a = 0x0143e838u;\n"
+                "    state.regs[4] = static_cast<std::uint32_t>("
+                "state.regs[4] - 4u);\n",
+                encoding="utf-8")
+            used, pushed = image.closure_addresses([root])
+        self.assertEqual(sorted(used), [0x01669930])
+        self.assertEqual(sorted(pushed), [0x0143E838])
 
 
 if __name__ == "__main__":

@@ -1,0 +1,47 @@
+{
+  "batch_index": 1,
+  "batch_size": 1,
+  "table_slice": [
+    "0x011e073e",
+    "0x011e073e"
+  ],
+  "next_table_entry": null,
+  "roots": 14,
+  "initializers_in_batch": 1,
+  "helper_roots": 13,
+  "instructions": 559,
+  "imports": [],
+  "canonicalised_targets": {
+    "0x00401933": "0x00401930",
+    "0x00401970": "0x00401960",
+    "0x00402467": "0x00402420",
+    "0x004206d3": "0x00420660",
+    "0x004206e8": "0x00420660",
+    "0x00425b14": "0x00425a80",
+    "0x00425bc6": "0x00425a80",
+    "0x00425bf8": "0x00425a80",
+    "0x00425c84": "0x00425a80",
+    "0x00425d24": "0x00425a80"
+  },
+  "truncated_exports": [],
+  "indirect_calls": {
+    "0x00401923": [
+      "CALL dword ptr [EBP + 0x14]"
+    ],
+    "0x00401930": [
+      "CALL dword ptr [EBP + 0x14]"
+    ],
+    "0x00401953": [
+      "CALL dword ptr [EBP + 0x14]"
+    ],
+    "0x00401960": [
+      "CALL dword ptr [EBP + 0x14]"
+    ],
+    "0x00402385": [
+      "CALL EAX"
+    ],
+    "0x004029e6": [
+      "CALL EAX"
+    ]
+  }
+}

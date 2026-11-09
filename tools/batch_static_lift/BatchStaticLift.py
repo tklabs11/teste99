@@ -38,15 +38,24 @@ REGISTER_ALIASES = {
     "SP": (4, 16, 0), "BP": (5, 16, 0), "SI": (6, 16, 0), "DI": (7, 16, 0),
 }
 MEMORY_OPERAND = re.compile(
-    r"^(?:(byte|word|dword|qword|double|float) ptr )?\[\s*"
+    r"^(?:(byte|word|dword|qword|double|float|xmmword) ptr )?\[\s*"
     r"(EAX|ECX|EDX|EBX|ESP|EBP|ESI|EDI)"
     r"(?:\s*([+-])\s*(-?(?:0x[0-9a-f]+|[0-9]+)))?\s*\]$",
     re.IGNORECASE,
 )
 INDEXED_MEMORY_OPERAND = re.compile(
-    r"^(?:(byte|word|dword|qword|double|float) ptr )?\[\s*"
+    r"^(?:(byte|word|dword|qword|double|float|xmmword) ptr )?\[\s*"
     r"(EAX|ECX|EDX|EBX|ESP|EBP|ESI|EDI)\s*\+\s*"
     r"(EAX|ECX|EDX|EBX|EBP|ESI|EDI)\s*\*\s*"
+    r"(0x[0-9a-f]+|[0-9]+)"
+    r"(?:\s*([+-])\s*(-?(?:0x[0-9a-f]+|[0-9]+)))?\s*\]$",
+    re.IGNORECASE,
+)
+# A scaled index with no base register, which is how a jump or lookup table is
+# addressed: "dword ptr [EAX*0x4 + 0x6923e0]".
+INDEX_ONLY_MEMORY_OPERAND = re.compile(
+    r"^(?:(byte|word|dword|qword|double|float|xmmword) ptr )?\[\s*"
+    r"(EAX|ECX|EDX|EBX|ESP|EBP|ESI|EDI)\s*\*\s*"
     r"(0x[0-9a-f]+|[0-9]+)"
     r"(?:\s*([+-])\s*(-?(?:0x[0-9a-f]+|[0-9]+)))?\s*\]$",
     re.IGNORECASE,
@@ -57,10 +66,31 @@ FS_MEMORY_OPERAND = re.compile(
     re.IGNORECASE,
 )
 ABSOLUTE_MEMORY_OPERAND = re.compile(
-    r"^(?:(byte|word|dword|qword|double|float) ptr )?\[\s*(0x[0-9a-f]+|[0-9]+)\s*\]$",
+    r"^(?:(byte|word|dword|qword|double|float|xmmword) ptr )?\[\s*(0x[0-9a-f]+|[0-9]+)\s*\]$",
     re.IGNORECASE,
 )
 XMM_REGISTER = re.compile(r"^XMM([0-7])$", re.IGNORECASE)
+X87_ST_REGISTER = re.compile(r"^ST([0-7])$", re.IGNORECASE)
+# x87 arithmetic codes match batch_guest_x87_compute: the left operand is the
+# destination, and codes 4 and 5 are the reversed forms the FSUBR/FDIVR
+# mnemonics select.
+X87_ARITHMETIC = {
+    "FADD": 0, "FMUL": 1, "FDIV": 2, "FSUB": 3, "FSUBR": 4, "FDIVR": 5,
+}
+X87_ARITHMETIC_POP = {
+    "FADDP": 0, "FMULP": 1, "FDIVP": 2, "FSUBP": 3, "FSUBRP": 4, "FDIVRP": 5,
+}
+# How many stack registers each compare form pops, and which ones also copy the
+# result into EFLAGS instead of only the x87 status word.
+X87_COMPARE_POPS = {
+    "FCOM": 0, "FCOMP": 1, "FCOMPP": 2, "FUCOMPP": 2,
+    "FCOMI": 0, "FCOMIP": 1, "FUCOMI": 0, "FUCOMIP": 1,
+}
+X87_EFLAGS_COMPARES = {"FCOMI", "FCOMIP", "FUCOMI", "FUCOMIP"}
+# Every operand kind that reads guest memory through an effective address.
+MEMORY_OPERAND_KINDS = {
+    "absolute_memory", "memory", "fs_memory", "indexed_memory",
+}
 ADDRESS = re.compile(r"^0x[0-9a-fA-F]+$")
 SSE_DATA_TRANSFER_MNEMONICS = {
     "MOVAPS", "MOVAPD", "MOVUPS", "MOVUPD", "MOVSS", "MOVSD",
@@ -160,6 +190,7 @@ def parse_operand(text, infer_memory_width=None):
             "qword": 64,
             "double": 64,
             "float": 32,
+            "xmmword": 128,
         }.get((match.group(1) or "").lower(), infer_memory_width)
         if memory_width is None:
             raise ValueError(f"memory operand width is ambiguous: {text!r}")
@@ -179,6 +210,7 @@ def parse_operand(text, infer_memory_width=None):
             "qword": 64,
             "double": 64,
             "float": 32,
+            "xmmword": 128,
         }.get((match.group(1) or "").lower(), infer_memory_width)
         if memory_width is None:
             raise ValueError(f"memory operand width is ambiguous: {text!r}")
@@ -207,6 +239,7 @@ def parse_operand(text, infer_memory_width=None):
             "qword": 64,
             "double": 64,
             "float": 32,
+            "xmmword": 128,
         }.get((match.group(1) or "").lower(), infer_memory_width)
         if memory_width is None:
             raise ValueError(f"memory operand width is ambiguous: {text!r}")
@@ -242,6 +275,7 @@ def parse_operand(text, infer_memory_width=None):
             "qword": 64,
             "double": 64,
             "float": 32,
+            "xmmword": 128,
         }.get((match.group(1) or "").lower(), infer_memory_width)
         if memory_width is None:
             raise ValueError(f"memory operand width is ambiguous: {text!r}")
@@ -249,6 +283,44 @@ def parse_operand(text, infer_memory_width=None):
             "indexed_memory",
             REGISTER_INDEX[match.group(2).upper()],
             REGISTER_INDEX[match.group(3).upper()],
+            scale,
+            displacement,
+            memory_width,
+        )
+    match = INDEX_ONLY_MEMORY_OPERAND.fullmatch(value)
+    if match:
+        scale_token = match.group(3)
+        scale = int(
+            scale_token,
+            16 if scale_token.lower().startswith("0x") else 10,
+        )
+        if scale not in {1, 2, 4, 8}:
+            raise ValueError(f"unsupported x86 index scale in {text!r}")
+        displacement = 0
+        displacement_token = match.group(5)
+        if displacement_token:
+            negative = displacement_token.startswith("-")
+            magnitude = displacement_token[1:] if negative else displacement_token
+            displacement = int(
+                magnitude, 16 if magnitude.lower().startswith("0x") else 10,
+            ) * (-1 if negative else 1)
+        if match.group(4) == "-":
+            displacement = -displacement
+        memory_width = {
+            "byte": 8,
+            "word": 16,
+            "dword": 32,
+            "qword": 64,
+            "double": 64,
+            "float": 32,
+            "xmmword": 128,
+        }.get((match.group(1) or "").lower(), infer_memory_width)
+        if memory_width is None:
+            raise ValueError(f"memory operand width is ambiguous: {text!r}")
+        return (
+            "indexed_memory",
+            None,
+            REGISTER_INDEX[match.group(2).upper()],
             scale,
             displacement,
             memory_width,
@@ -270,6 +342,12 @@ def memory_address(operand):
         )
     if operand[0] == "indexed_memory":
         _, base, index, scale, displacement, _ = operand
+        if base is None:
+            return (
+                "static_cast<std::uint32_t>("
+                f"state.regs[{index}] * {scale}u + "
+                f"{cpp_u32(displacement)})"
+            )
         return (
             "static_cast<std::uint32_t>("
             f"state.regs[{base}] + state.regs[{index}] * {scale}u + "
@@ -495,7 +573,36 @@ def indirect_iat_import(instruction, iat_imports):
     return None
 
 
+def out_of_body_jump_target(instruction, addresses):
+    """The target of a JMP that leaves its own body, which is a tail call.
+
+    Ghidra marks most tail calls as CALL_TERMINATOR, but a one-instruction
+    ``JMP thunk`` sometimes reaches the same shape without that label, and a
+    jump whose target is not an instruction of this body can only be a tail
+    call.
+    """
+
+    if str(instruction.get("mnemonic", "")).upper() != "JMP":
+        return None
+    operands = instruction.get("operands", [])
+    flows = instruction.get("flows_to", [])
+    if len(operands) != 1 or len(flows) != 1:
+        return None
+    if not ADDRESS.fullmatch(str(operands[0]).strip()):
+        return None
+    target = parse_address(flows[0])
+    if target in addresses:
+        return None
+    if parse_address(str(operands[0]).strip()) != target:
+        return None
+    return target
+
+
 def function_call_targets(function, iat_imports=None):
+    addresses = {
+        parse_address(instruction["address"])
+        for instruction in function.get("instructions", [])
+    }
     targets = []
     for instruction in function.get("instructions", []):
         mnemonic = str(instruction.get("mnemonic", "")).upper()
@@ -503,6 +610,11 @@ def function_call_targets(function, iat_imports=None):
         if mnemonic == "JMP" and flow == "CALL_TERMINATOR":
             targets.append(direct_tail_jump_target(instruction))
             continue
+        if mnemonic == "JMP":
+            tail = out_of_body_jump_target(instruction, addresses)
+            if tail is not None:
+                targets.append(tail)
+                continue
         if mnemonic in {"CALL", "CALLF"} or flow in {
             "UNCONDITIONAL_CALL", "CONDITIONAL_CALL", "COMPUTED_CALL"
         }:
@@ -516,7 +628,7 @@ def function_call_targets(function, iat_imports=None):
 
 def translate_instruction(
     instruction, index, addresses, next_address, exported_function_entries=None,
-    iat_imports=None, direct_import_aliases=None,
+    iat_imports=None, direct_import_aliases=None, allow_unresolved_calls=False,
 ):
     mnemonic = instruction["mnemonic"].upper()
     operands_text = instruction.get("operands", [])
@@ -602,9 +714,23 @@ def translate_instruction(
                 "return BatchLiftStatus::invalid_control_flow;",
             ]
         if exported_function_entries is None or target not in exported_function_entries:
-            raise ValueError(
-                f"direct call target 0x{target:08x} is not in the exported function set"
-            )
+            if not allow_unresolved_calls:
+                raise ValueError(
+                    f"direct call target 0x{target:08x} is not in the exported function set"
+                )
+            # The callee exists in the image but this batch does not lift it, so
+            # the call goes through the dispatcher. A target without a body
+            # fails closed there and names itself, which is the batch boundary.
+            return [
+                f"t{index}_call_status = state.imports == nullptr "
+                "? BatchLiftStatus::unsupported_import "
+                ": state.imports->invoke_guest_call(memory, state, "
+                f"0x{target:08x}u, 0x{next_address:08x}u);",
+                f"if (t{index}_call_status != BatchLiftStatus::returned) "
+                f"return t{index}_call_status;",
+                f"if (state.eip != 0x{next_address:08x}u) "
+                "return BatchLiftStatus::invalid_control_flow;",
+            ]
         return [
             f"if (!batch_guest_call32(memory, state, 0x{target:08x}u, "
             f"0x{next_address:08x}u)) return BatchLiftStatus::invalid_memory;",
@@ -630,9 +756,7 @@ def translate_instruction(
                     f"state, {destination[1]}u, {source[1]}u)) "
                     "return BatchLiftStatus::invalid_control_flow;"
                 ]
-            if source[0] in {
-                "absolute_memory", "memory", "fs_memory",
-            } and source[3] == 32:
+            if source[0] in MEMORY_OPERAND_KINDS and operand_width(source) == 32:
                 return [
                     "if (!batch_guest_movss_load("
                     f"memory, state, {destination[1]}u, "
@@ -642,9 +766,9 @@ def translate_instruction(
             raise ValueError(
                 "MOVSS XMM destination requires an XMM register or 32-bit memory source"
             )
-        if destination[0] in {
-            "absolute_memory", "memory", "fs_memory",
-        } and destination[3] == 32 and source[0] == "xmm":
+        if (destination[0] in MEMORY_OPERAND_KINDS
+                and operand_width(destination) == 32
+                and source[0] == "xmm"):
             return [
                 "if (!batch_guest_movss_store("
                 f"memory, state, {source[1]}u, "
@@ -654,18 +778,19 @@ def translate_instruction(
         raise ValueError(
             "MOVSS destination must be an XMM register or 32-bit memory operand"
         )
-    if mnemonic == "MOVAPD":
+    if mnemonic in {"MOVAPS", "MOVAPD"}:
         if len(operands_text) != 2:
             raise ValueError(
-                f"MOVAPD expects 2 operands; found {len(operands_text)}"
+                f"{mnemonic} expects 2 operands; found {len(operands_text)}"
             )
         destination = XMM_REGISTER.fullmatch(operands_text[0].strip())
         source = XMM_REGISTER.fullmatch(operands_text[1].strip())
         if destination is None or source is None:
             raise ValueError(
-                "MOVAPD currently requires two XMM register operands")
+                f"{mnemonic} currently requires two XMM register operands")
+        helper = "batch_guest_movaps" if mnemonic == "MOVAPS" else "batch_guest_movapd"
         return [
-            "if (!batch_guest_movapd("
+            f"if (!{helper}("
             f"state, {int(destination.group(1))}u, "
             f"{int(source.group(1))}u)) "
             "return BatchLiftStatus::invalid_control_flow;"
@@ -696,13 +821,26 @@ def translate_instruction(
             )
         destination = XMM_REGISTER.fullmatch(operands_text[0].strip())
         source = XMM_REGISTER.fullmatch(operands_text[1].strip())
-        if destination is None or source is None:
-            raise ValueError("XORPS currently requires two XMM register operands")
+        if destination is None:
+            raise ValueError("XORPS destination must be an XMM register")
+        if source is not None:
+            return [
+                "if (!batch_guest_xorps("
+                f"state, {int(destination.group(1))}u, "
+                f"{int(source.group(1))}u)) "
+                "return BatchLiftStatus::invalid_control_flow;"
+            ]
+        memory = parse_operand(operands_text[1], 128)
+        if (memory[0] not in MEMORY_OPERAND_KINDS
+                or operand_width(memory) != 128):
+            raise ValueError(
+                "XORPS source must be an XMM register or a 128-bit memory "
+                "operand")
         return [
-            "if (!batch_guest_xorps("
-            f"state, {int(destination.group(1))}u, "
-            f"{int(source.group(1))}u)) "
-            "return BatchLiftStatus::invalid_control_flow;"
+            "if (!batch_guest_xorps_memory("
+            f"memory, state, {int(destination.group(1))}u, "
+            f"{memory_address(memory)})) "
+            "return BatchLiftStatus::invalid_memory;"
         ]
     if mnemonic == "XCHG":
         if len(operands_text) != 2:
@@ -722,104 +860,372 @@ def translate_instruction(
             if operand[0] == "register" and operand[2] == 32
         ]
         if (
-            len(memory_operands) != 1
-            or len(register_operands) != 1
-            or memory_operands[0][3] != 32
+            len(memory_operands) == 1
+            and len(register_operands) == 1
+            and memory_operands[0][3] == 32
         ):
-            raise ValueError(
-            "XCHG currently requires one 32-bit memory operand and "
-            "one 32-bit general-purpose register"
-            )
-        return [
-            "if (!batch_guest_xchg32("
-            f"memory, state, {register_operands[0][1]}u, "
-            f"{memory_address(memory_operands[0])})) "
-            "return BatchLiftStatus::invalid_memory;"
+            return [
+                "if (!batch_guest_xchg32("
+                f"memory, state, {register_operands[0][1]}u, "
+                f"{memory_address(memory_operands[0])})) "
+                "return BatchLiftStatus::invalid_memory;"
+            ]
+        doubles = [
+            operand for operand in operands
+            if operand[0] == "register" and operand[2] == 32
         ]
-    if mnemonic in {"FLD", "FSTP"}:
+        if len(doubles) == 2:
+            # XCHG r32, r32 changes no flags.
+            left, right = doubles[0][1], doubles[1][1]
+            return [
+                f"t{index}c = state.regs[{left}];",
+                f"state.regs[{left}] = state.regs[{right}];",
+                f"state.regs[{right}] = t{index}c;",
+            ]
+        raise ValueError(
+            "XCHG requires either one 32-bit memory operand with one 32-bit "
+            "register or two 32-bit registers"
+        )
+    if mnemonic in {"FLD", "FLD1", "FLDZ"}:
+        if mnemonic != "FLD":
+            if operands_text:
+                raise ValueError(f"{mnemonic} expects no operands")
+            helper = (
+                "batch_guest_fld1" if mnemonic == "FLD1"
+                else "batch_guest_fldz"
+            )
+            return [
+                f"if (!{helper}(state)) "
+                "return BatchLiftStatus::invalid_x87_state;"
+            ]
         if len(operands_text) != 1:
             raise ValueError(
-                f"{mnemonic} expects 1 operand; found {len(operands_text)}"
-            )
-        operand = resolve_operands(operands_text)[0]
-        if mnemonic == "FSTP" and operand[0] in {"absolute_memory", "memory"} and operand[3] == 32:
+                f"FLD expects 1 operand; found {len(operands_text)}")
+        text = operands_text[0].strip()
+        stack = X87_ST_REGISTER.fullmatch(text)
+        if stack is not None:
             return [
-                "if (state.x87_depth == 0u) return BatchLiftStatus::invalid_x87_state;",
-                f"if (!batch_guest_fstp32(memory, state, {memory_address(operand)})) "
-                "return BatchLiftStatus::invalid_memory;",
+                "if (!batch_guest_fld_stack("
+                f"state, {int(stack.group(1))}u)) "
+                "return BatchLiftStatus::invalid_x87_state;"
             ]
-        if operand[0] not in {"absolute_memory", "memory"} or operand[3] != 64:
+        operand = parse_operand(text)
+        if operand[0] not in MEMORY_OPERAND_KINDS:
+            raise ValueError("FLD requires a stack register or memory operand")
+        helper = {32: "batch_guest_fld32", 64: "batch_guest_fld64"}.get(
+            operand_width(operand))
+        if helper is None:
             raise ValueError(
-                f"{mnemonic} currently supports only 64-bit memory operands"
-            )
-        helper = (
-            "batch_guest_fld64" if mnemonic == "FLD" else "batch_guest_fstp64"
-        )
-        stack_guard = (
-            "if (state.x87_depth >= 8u) return BatchLiftStatus::invalid_x87_state;"
-            if mnemonic == "FLD"
-            else "if (state.x87_depth == 0u) return BatchLiftStatus::invalid_x87_state;"
-        )
+                "FLD supports 32- and 64-bit memory operands only")
         return [
-            stack_guard,
-            f"if (!{helper}(memory, state, {memory_address(operand)})) "
+            "if (!" + helper + f"(memory, state, {memory_address(operand)})) "
             "return BatchLiftStatus::invalid_memory;"
         ]
-    if mnemonic in {"FILD", "FADD", "FMUL", "FDIV"}:
+    if mnemonic in {"FST", "FSTP"}:
         if len(operands_text) != 1:
-            raise ValueError(f"{mnemonic} expects one operand")
-        operand = resolve_operands(operands_text)[0]
-        if operand[0] not in {"absolute_memory", "memory"} or operand[3] != 32:
-            raise ValueError(f"{mnemonic} requires 32-bit memory")
-        if mnemonic == "FILD":
+            raise ValueError(
+                f"{mnemonic} expects 1 operand; found {len(operands_text)}")
+        text = operands_text[0].strip()
+        stack = X87_ST_REGISTER.fullmatch(text)
+        if stack is not None:
+            if mnemonic != "FSTP":
+                raise ValueError("FST requires a memory operand")
             return [
-                "if (state.x87_depth >= 8u) return BatchLiftStatus::invalid_x87_state;",
-                f"if (!batch_guest_fild32(memory, state, {memory_address(operand)})) "
-                "return BatchLiftStatus::invalid_memory;",
+                "if (!batch_guest_fstp_stack("
+                f"state, {int(stack.group(1))}u)) "
+                "return BatchLiftStatus::invalid_x87_state;"
             ]
-        operation = {"FADD": 0, "FMUL": 1, "FDIV": 2}[mnemonic]
+        operand = parse_operand(text)
+        if operand[0] not in MEMORY_OPERAND_KINDS:
+            raise ValueError(f"{mnemonic} requires a memory operand")
+        width = operand_width(operand)
+        helpers = (
+            {32: "batch_guest_fstp32", 64: "batch_guest_fstp64"}
+            if mnemonic == "FSTP" else {32: "batch_guest_fst32"}
+        )
+        helper = helpers.get(width)
+        if helper is None:
+            raise ValueError(
+                f"{mnemonic} does not support {width}-bit memory operands")
         return [
-            "if (state.x87_depth == 0u) return BatchLiftStatus::invalid_x87_state;",
-            f"if (!batch_guest_x87_float32_arithmetic(memory, state, {memory_address(operand)}, "
-            f"{operation}u)) "
-            "return BatchLiftStatus::invalid_memory;",
+            "if (!" + helper + f"(memory, state, {memory_address(operand)})) "
+            "return BatchLiftStatus::invalid_memory;"
+        ]
+    if mnemonic in {"FILD", "FISTP"}:
+        if len(operands_text) != 1:
+            raise ValueError(
+                f"{mnemonic} expects 1 operand; found {len(operands_text)}")
+        operand = parse_operand(operands_text[0])
+        if operand[0] not in MEMORY_OPERAND_KINDS:
+            raise ValueError(f"{mnemonic} requires a memory operand")
+        width = operand_width(operand)
+        helpers = (
+            {32: "batch_guest_fild32", 64: "batch_guest_fild64"}
+            if mnemonic == "FILD" else {64: "batch_guest_fistp64"}
+        )
+        helper = helpers.get(width)
+        if helper is None:
+            raise ValueError(
+                f"{mnemonic} does not support {width}-bit memory operands")
+        return [
+            "if (!" + helper + f"(memory, state, {memory_address(operand)})) "
+            "return BatchLiftStatus::invalid_memory;"
+        ]
+    if mnemonic in X87_ARITHMETIC or mnemonic in X87_ARITHMETIC_POP:
+        pop = mnemonic in X87_ARITHMETIC_POP
+        operation = X87_ARITHMETIC.get(mnemonic, X87_ARITHMETIC_POP.get(mnemonic))
+        if not 0 <= operation <= 5:
+            raise ValueError(f"unknown x87 arithmetic operation {mnemonic}")
+        if len(operands_text) > 2:
+            raise ValueError(f"{mnemonic} expects at most 2 operands")
+        if not operands_text:
+            if not pop:
+                raise ValueError(f"{mnemonic} expects an operand")
+            # A bare FADDP and friends are FADDP ST(1), ST(0).
+            return [
+                "if (!batch_guest_x87_arithmetic_stack("
+                f"state, 1u, 0u, {operation}u, true)) "
+                "return BatchLiftStatus::invalid_x87_state;"
+            ]
+        indexes = []
+        for text in operands_text:
+            stack = X87_ST_REGISTER.fullmatch(text.strip())
+            if stack is None:
+                indexes = None
+                break
+            indexes.append(int(stack.group(1)))
+        if indexes is not None:
+            destination = indexes[0]
+            source = indexes[1] if len(indexes) == 2 else 0
+            return [
+                "if (!batch_guest_x87_arithmetic_stack("
+                f"state, {destination}u, {source}u, {operation}u, "
+                f"{'true' if pop else 'false'})) "
+                "return BatchLiftStatus::invalid_x87_state;"
+            ]
+        if len(operands_text) != 1:
+            raise ValueError(
+                f"{mnemonic} takes stack registers or one 32-bit memory operand")
+        operand = parse_operand(operands_text[0])
+        if (operand[0] not in MEMORY_OPERAND_KINDS
+                or operand_width(operand) != 32):
+            raise ValueError(
+                f"{mnemonic} requires a stack register or 32-bit memory")
+        return [
+            "if (!batch_guest_x87_float32_arithmetic("
+            f"memory, state, {memory_address(operand)}, {operation}u)) "
+            "return BatchLiftStatus::invalid_memory;"
+        ]
+    if mnemonic in {"FCHS", "FABS", "FSQRT"}:
+        if operands_text:
+            raise ValueError(
+                f"{mnemonic} expects no operands; found {len(operands_text)}")
+        helper = {
+            "FCHS": "batch_guest_x87_chs",
+            "FABS": "batch_guest_x87_abs",
+            "FSQRT": "batch_guest_x87_sqrt",
+        }[mnemonic]
+        return [
+            f"if (!{helper}(state)) "
+            "return BatchLiftStatus::invalid_x87_state;"
+        ]
+    if mnemonic == "FXCH":
+        if len(operands_text) > 1:
+            raise ValueError(
+                f"FXCH expects at most 1 operand; found {len(operands_text)}")
+        if not operands_text:
+            index = 1
+        else:
+            stack = X87_ST_REGISTER.fullmatch(operands_text[0].strip())
+            if stack is None:
+                raise ValueError("FXCH requires a stack register operand")
+            index = int(stack.group(1))
+        return [
+            f"if (!batch_guest_x87_fxch(state, {index}u)) "
+            "return BatchLiftStatus::invalid_x87_state;"
+        ]
+    if mnemonic == "FNSTSW":
+        if len(operands_text) != 1 or operands_text[0].strip().upper() != "AX":
+            raise ValueError("FNSTSW is only supported with the AX destination")
+        return [
+            "if (!batch_guest_fnstsw_ax(state)) "
+            "return BatchLiftStatus::invalid_x87_state;"
+        ]
+    if mnemonic in X87_COMPARE_POPS:
+        pops = X87_COMPARE_POPS[mnemonic]
+        to_eflags = mnemonic in X87_EFLAGS_COMPARES
+        if len(operands_text) > 2:
+            raise ValueError(f"{mnemonic} expects at most 2 operands")
+        if len(operands_text) == 2:
+            left = X87_ST_REGISTER.fullmatch(operands_text[0].strip())
+            right = X87_ST_REGISTER.fullmatch(operands_text[1].strip())
+            if left is None or right is None or int(left.group(1)) != 0:
+                raise ValueError(
+                    f"{mnemonic} compares ST(0) with a stack register")
+            return [
+                "if (!batch_guest_x87_compare_stack("
+                f"state, {int(right.group(1))}u, {pops}u, "
+                f"{'true' if to_eflags else 'false'})) "
+                "return BatchLiftStatus::invalid_x87_state;"
+            ]
+        if not operands_text:
+            if pops == 0:
+                raise ValueError(f"{mnemonic} expects an operand")
+            # A bare FCOMP is FCOMP ST(1); the compare-and-pop-pair forms
+            # always compare ST(0) with ST(1).
+            return [
+                "if (!batch_guest_x87_compare_stack("
+                f"state, 1u, {pops}u, "
+                f"{'true' if to_eflags else 'false'})) "
+                "return BatchLiftStatus::invalid_x87_state;"
+            ]
+        text = operands_text[0].strip()
+        stack = X87_ST_REGISTER.fullmatch(text)
+        if stack is not None:
+            return [
+                "if (!batch_guest_x87_compare_stack("
+                f"state, {int(stack.group(1))}u, {pops}u, "
+                f"{'true' if to_eflags else 'false'})) "
+                "return BatchLiftStatus::invalid_x87_state;"
+            ]
+        operand = parse_operand(text)
+        if (operand[0] not in MEMORY_OPERAND_KINDS
+                or operand_width(operand) != 32):
+            raise ValueError(
+                f"{mnemonic} requires a stack register or 32-bit memory")
+        return [
+            "if (!batch_guest_x87_compare_memory("
+            f"memory, state, {memory_address(operand)}, {pops}u, "
+            f"{'true' if to_eflags else 'false'})) "
+            "return BatchLiftStatus::invalid_memory;"
         ]
     if mnemonic == "CVTTSS2SI":
         if len(operands_text) != 2:
             raise ValueError("CVTTSS2SI expects two operands")
-        destination = REGISTER.fullmatch(operands_text[0])
-        source = parse_operand(operands_text[1])
-        if destination is None or source[0] not in {"memory", "absolute_memory"} or source[3] != 32:
-            raise ValueError("CVTTSS2SI requires a 32-bit register and 32-bit memory")
+        destination = REGISTER.fullmatch(operands_text[0].strip())
+        if destination is None:
+            raise ValueError("CVTTSS2SI destination must be a 32-bit register")
         dst = REGISTER_INDEX[destination.group(0).upper()]
+        source = operands_text[1].strip()
+        register = XMM_REGISTER.fullmatch(source)
+        if register is not None:
+            return [
+                "if (!batch_guest_cvttss2si("
+                f"state, {dst}u, {int(register.group(1))}u)) "
+                "return BatchLiftStatus::invalid_control_flow;"
+            ]
+        operand = parse_operand(source, 32)
+        if (operand[0] not in MEMORY_OPERAND_KINDS
+                or operand_width(operand) != 32):
+            raise ValueError(
+                "CVTTSS2SI requires a 32-bit register and 32-bit memory")
         return [
-            f"if (!batch_guest_cvttss2si_memory(memory, state, {dst}u, {memory_address(source)})) "
+            "if (!batch_guest_cvttss2si_memory("
+            f"memory, state, {dst}u, {memory_address(operand)})) "
             "return BatchLiftStatus::invalid_memory;"
         ]
     if mnemonic in {"CVTSS2SI", "CVTSI2SS"}:
         if len(operands_text) != 2:
             raise ValueError(f"{mnemonic} expects two operands")
+        destination = operands_text[0].strip()
+        source = operands_text[1].strip()
         if mnemonic == "CVTSS2SI":
-            destination = REGISTER.fullmatch(operands_text[0])
-            source = XMM_REGISTER.fullmatch(operands_text[1])
-            helper = "batch_guest_cvtss2si"
-        else:
-            destination = XMM_REGISTER.fullmatch(operands_text[0])
-            source = REGISTER.fullmatch(operands_text[1])
-            helper = "batch_guest_cvtsi2ss"
-        if destination is None or source is None:
-            raise ValueError(f"{mnemonic} requires a 32-bit register and XMM register")
-        dst = REGISTER_INDEX[destination.group(0).upper()] if mnemonic == "CVTSS2SI" else int(destination.group(1))
-        src = int(source.group(1)) if mnemonic == "CVTSS2SI" else REGISTER_INDEX[source.group(0).upper()]
-        return [f"if (!{helper}(state, {dst}u, {src}u)) return BatchLiftStatus::invalid_control_flow;"]
-    if mnemonic == "UCOMISS":
+            register = REGISTER.fullmatch(destination)
+            xmm = XMM_REGISTER.fullmatch(source)
+            if register is None or xmm is None:
+                raise ValueError(
+                    "CVTSS2SI requires a 32-bit register and XMM register")
+            return [
+                "if (!batch_guest_cvtss2si("
+                f"state, {REGISTER_INDEX[register.group(0).upper()]}u, "
+                f"{int(xmm.group(1))}u)) "
+                "return BatchLiftStatus::invalid_control_flow;"
+            ]
+        xmm = XMM_REGISTER.fullmatch(destination)
+        if xmm is None:
+            raise ValueError("CVTSI2SS destination must be an XMM register")
+        register = REGISTER.fullmatch(source)
+        if register is not None:
+            return [
+                "if (!batch_guest_cvtsi2ss("
+                f"state, {int(xmm.group(1))}u, "
+                f"{REGISTER_INDEX[register.group(0).upper()]}u)) "
+                "return BatchLiftStatus::invalid_control_flow;"
+            ]
+        operand = parse_operand(source, 32)
+        if (operand[0] not in MEMORY_OPERAND_KINDS
+                or operand_width(operand) != 32):
+            raise ValueError(
+                "CVTSI2SS requires a 32-bit register or 32-bit memory source")
+        return [
+            "if (!batch_guest_cvtsi2ss_memory("
+            f"memory, state, {int(xmm.group(1))}u, {memory_address(operand)})) "
+            "return BatchLiftStatus::invalid_memory;"
+        ]
+    if mnemonic in {"COMISS", "UCOMISS"}:
         if len(operands_text) != 2:
-            raise ValueError("UCOMISS expects two operands")
-        left = XMM_REGISTER.fullmatch(operands_text[0])
-        right = XMM_REGISTER.fullmatch(operands_text[1])
-        if left is None or right is None:
-            raise ValueError("UCOMISS requires two XMM registers")
-        return [f"if (!batch_guest_ucomiss(state, {int(left.group(1))}u, {int(right.group(1))}u)) return BatchLiftStatus::invalid_control_flow;"]
+            raise ValueError(f"{mnemonic} expects two operands")
+        left = XMM_REGISTER.fullmatch(operands_text[0].strip())
+        if left is None:
+            raise ValueError(
+                f"{mnemonic} requires an XMM register destination")
+        right = XMM_REGISTER.fullmatch(operands_text[1].strip())
+        if right is not None:
+            return [
+                "if (!batch_guest_ucomiss("
+                f"state, {int(left.group(1))}u, {int(right.group(1))}u)) "
+                "return BatchLiftStatus::invalid_control_flow;"
+            ]
+        memory = parse_operand(operands_text[1], 32)
+        if (memory[0] not in MEMORY_OPERAND_KINDS
+                or operand_width(memory) != 32):
+            raise ValueError(
+                f"{mnemonic} source must be an XMM register or a 32-bit "
+                "memory operand")
+        return [
+            "if (!batch_guest_ucomiss_memory("
+            f"memory, state, {int(left.group(1))}u, "
+            f"{memory_address(memory)})) "
+            "return BatchLiftStatus::invalid_memory;"
+        ]
+    if mnemonic in {"ADDSS", "SUBSS", "MULSS", "DIVSS"}:
+        if len(operands_text) != 2:
+            raise ValueError(f"{mnemonic} expects two operands")
+        destination = XMM_REGISTER.fullmatch(operands_text[0].strip())
+        if destination is None:
+            raise ValueError(
+                f"{mnemonic} destination must be an XMM register")
+        operation = {"ADDSS": 0, "SUBSS": 1, "MULSS": 2, "DIVSS": 3}[mnemonic]
+        right = XMM_REGISTER.fullmatch(operands_text[1].strip())
+        if right is not None:
+            source_bits = f"state.xmm[{int(right.group(1))}u][0]"
+            prefix = []
+        else:
+            memory = parse_operand(operands_text[1], 32)
+            if (memory[0] not in MEMORY_OPERAND_KINDS
+                    or operand_width(memory) != 32):
+                raise ValueError(
+                    f"{mnemonic} source must be an XMM register or a 32-bit "
+                    "memory operand")
+            prefix = [
+                f"if (!memory.load32({memory_address(memory)}, t{index}a)) "
+                "return BatchLiftStatus::invalid_memory;"
+            ]
+            source_bits = f"t{index}a"
+        return prefix + [
+            "if (!batch_guest_sse_scalar_arithmetic("
+            f"state, {int(destination.group(1))}u, {source_bits}, "
+            f"{operation}u)) "
+            "return BatchLiftStatus::invalid_control_flow;"
+        ]
+    if mnemonic == "LAHF":
+        if operands_text:
+            raise ValueError(
+                f"LAHF expects no operands; found {len(operands_text)}")
+        return [
+            "if (!batch_guest_lahf(state)) "
+            "return BatchLiftStatus::invalid_control_flow;"
+        ]
 
     set_condition = None
     if mnemonic.startswith("SET") and len(mnemonic) > 3:
@@ -834,7 +1240,9 @@ def translate_instruction(
             infer_untyped_memory=mnemonic not in {"MOVZX", "MOVSX"},
         )
     )
-    if mnemonic not in {"MOV", "LEA", "CMP", "OR", "TEST"} and any(
+    if mnemonic not in {
+        "MOV", "LEA", "CMP", "OR", "TEST", "JMP", "MOVZX", "MOVSX",
+    } and any(
         operand[0] == "indexed_memory" for operand in operands
     ):
         raise ValueError("indexed memory operands currently support MOV only")
@@ -954,20 +1362,100 @@ def translate_instruction(
             "}",
         ]
     elif mnemonic == "IMUL":
+        if len(operands) == 1:
+            # IMUL r/m32: the implicit form writes EDX:EAX.
+            if operand_width(operands[0]) != 32:
+                raise ValueError("IMUL requires a 32-bit operand")
+            lines += emit_load(operands[0], f"{temp}a")
+            lines += [
+                "{",
+                "const std::int64_t product = "
+                "static_cast<std::int64_t>("
+                "static_cast<std::int32_t>(state.regs[0])) * "
+                f"static_cast<std::int32_t>({temp}a);",
+                "state.regs[0] = static_cast<std::uint32_t>(product);",
+                "state.regs[2] = static_cast<std::uint32_t>("
+                "static_cast<std::uint64_t>(product) >> 32u);",
+                "state.eflags &= ~0x801u;",
+                "if (product < -2147483648ll || product > 2147483647ll) "
+                "state.eflags |= 0x801u;",
+                "}",
+            ]
+        else:
+            if len(operands) not in {2, 3}:
+                raise ValueError(
+                    f"IMUL expects 1, 2 or 3 operands; found {len(operands)}")
+            if operands[0][0] != "register" or operand_width(operands[0]) != 32:
+                raise ValueError("IMUL requires a 32-bit register destination")
+            if len(operands) == 3:
+                multiplicand, multiplier = operands[1], operands[2]
+                if multiplier[0] != "immediate":
+                    raise ValueError(
+                        "IMUL with three operands requires an immediate "
+                        "multiplier")
+            else:
+                multiplicand, multiplier = operands[0], operands[1]
+            if operand_width(multiplicand) != 32:
+                raise ValueError("IMUL requires a 32-bit source")
+            lines += emit_load(multiplicand, f"{temp}a")
+            if multiplier[0] == "immediate":
+                lines.append(f"{temp}b = {cpp_u32(multiplier[1])};")
+            else:
+                if operand_width(multiplier) != 32:
+                    raise ValueError("IMUL requires a 32-bit multiplier")
+                lines += emit_load(multiplier, f"{temp}b")
+            lines += [
+                "{",
+                "const std::int64_t product = "
+                f"static_cast<std::int64_t>(static_cast<std::int32_t>({temp}a)) "
+                f"* static_cast<std::int32_t>({temp}b);",
+                f"state.regs[{operands[0][1]}] = "
+                "static_cast<std::uint32_t>(product);",
+                "state.eflags &= ~0x801u;",
+                "if (product < -2147483648ll || product > 2147483647ll) "
+                "state.eflags |= 0x801u;",
+                "}",
+            ]
+    elif mnemonic.startswith("CMOV"):
         require(2)
-        if any(operand[0] != "register" or operand_width(operand) != 32
-               for operand in operands):
-            raise ValueError("IMUL currently requires two 32-bit registers")
+        condition = SUPPORTED_CONDITIONS.get("J" + mnemonic[len("CMOV"):])
+        if condition is None:
+            raise ValueError(f"{mnemonic} condition is not modelled")
+        if operands[0][0] != "register" or operand_width(operands[0]) != 32:
+            raise ValueError("CMOV requires a 32-bit register destination")
+        if operand_width(operands[1]) != 32:
+            raise ValueError("CMOV requires a 32-bit source")
+        lines += emit_load(operands[1], f"{temp}a")
+        # A conditional move loads only when the condition holds; no flags change.
+        lines.append(
+            f"if ({condition}) state.regs[{operands[0][1]}] = {temp}a;")
+    elif mnemonic == "IDIV":
+        require(1)
+        if operand_width(operands[0]) != 32:
+            raise ValueError("IDIV requires a 32-bit divisor")
         lines += emit_load(operands[0], f"{temp}a")
-        lines += emit_load(operands[1], f"{temp}b")
         lines += [
+            f"if ({temp}a == 0u) return BatchLiftStatus::divide_error;",
             "{",
-            f"const std::int64_t product = static_cast<std::int64_t>(static_cast<std::int32_t>({temp}a)) * static_cast<std::int32_t>({temp}b);",
-            f"state.regs[{operands[0][1]}] = static_cast<std::uint32_t>(product);",
-            "state.eflags &= ~0x801u;",
-            "if (product < -2147483648ll || product > 2147483647ll) state.eflags |= 0x801u;",
+            f"const std::int64_t divisor = static_cast<std::int64_t>("
+            f"static_cast<std::int32_t>({temp}a));",
+            "const std::int64_t dividend = static_cast<std::int64_t>("
+            "(static_cast<std::uint64_t>(state.regs[2]) << 32u) "
+            "| state.regs[0]);",
+            "const std::int64_t quotient = dividend / divisor;",
+            "const std::int64_t remainder = dividend % divisor;",
+            "if (quotient < -2147483648ll || quotient > 2147483647ll) "
+            "return BatchLiftStatus::divide_error;",
+            "state.regs[0] = static_cast<std::uint32_t>(quotient);",
+            "state.regs[2] = static_cast<std::uint32_t>(remainder);",
             "}",
         ]
+    elif mnemonic == "CDQ":
+        require(0)
+        # Sign-extend EAX into EDX:EAX. No flags change.
+        lines.append(
+            "state.regs[2] = (state.regs[0] & 0x80000000u) != 0u "
+            "? 0xffffffffu : 0u;")
     elif mnemonic in {"SHL", "SHR", "SAR"}:
         require(2)
         if operands[0][0] != "register" or operand_width(operands[0]) != 32:
@@ -1128,21 +1616,78 @@ def translate_instruction(
     elif mnemonic == "JMP":
         require(1)
         if operands[0][0] != "immediate":
-            raise ValueError("indirect JMP is not supported")
-        if flow == "CALL_TERMINATOR":
-            target = direct_tail_jump_target(instruction)
-            if (exported_function_entries is None
-                    or target not in exported_function_entries):
+            if operands[0][0] not in {
+                "absolute_memory", "memory", "indexed_memory",
+            } or operand_width(operands[0]) != 32:
+                raise ValueError("indirect JMP is not supported")
+            # A jump table: the slot is read at runtime and dispatched to the
+            # case bodies the provider resolved. An address outside them fails
+            # closed instead of jumping somewhere unknown.
+            imported = indirect_iat_import(instruction, iat_imports)
+            if imported is not None:
+                # JMP [IAT]: a tail-called import leaves this body's return
+                # address on the stack, so the shim returns to our caller.
+                return [
+                    f"t{index}_call_status = batch_guest_import_tail_call32("
+                    f"memory, state, \"{imported['symbol']}\", "
+                    f"0x{imported['iat_address']:08x}u);",
+                    f"if (t{index}_call_status != BatchLiftStatus::returned) "
+                    f"return t{index}_call_status;",
+                    "return BatchLiftStatus::returned;",
+                ]
+            targets = sorted({
+                parse_address(target)
+                for target in instruction.get("flows_to", [])
+            })
+            if not targets:
                 raise ValueError(
-                    f"tail jump target 0x{target:08x} is not in the exported function set"
-                )
+                    "computed jump has no statically resolved targets")
+            outside = [target for target in targets if target not in addresses]
+            if outside:
+                raise ValueError(
+                    "computed jump target "
+                    f"0x{outside[0]:08x} is not an exported instruction")
+            lines += emit_load(operands[0], f"{temp}a")
+            lines.append(f"switch ({temp}a) {{")
+            for target in targets:
+                lines.append(f"case 0x{target:08x}u: goto L_{target:08x};")
             lines += [
-                f"state.eip = 0x{target:08x}u;",
-                f"return spore_lift_{target:08x}(memory, state);",
+                "default:",
+                # The guest jumped through a table slot that names nothing this
+                # body contains, so the run stops with that address visible.
+                f"state.eip = {temp}a;",
+                "return BatchLiftStatus::unsupported_dependency;",
+                "}",
             ]
         else:
-            target = branch_target(instruction, addresses)
-            lines.append(f"goto L_{target:08x};")
+            tail = (direct_tail_jump_target(instruction)
+                    if flow == "CALL_TERMINATOR"
+                    else out_of_body_jump_target(instruction, addresses))
+            if tail is not None:
+                if (exported_function_entries is not None
+                        and tail in exported_function_entries):
+                    lines += [
+                        f"state.eip = 0x{tail:08x}u;",
+                        f"return spore_lift_{tail:08x}(memory, state);",
+                    ]
+                elif allow_unresolved_calls:
+                    # The target is a body this batch does not lift. A tail jump
+                    # pushes no return address, so the callee returns straight to
+                    # this body's caller and there is nothing to verify here.
+                    lines += [
+                        f"state.eip = 0x{tail:08x}u;",
+                        "return state.imports == nullptr "
+                        "? BatchLiftStatus::unsupported_import "
+                        ": state.imports->invoke_guest_tail_call(memory, state, "
+                        f"0x{tail:08x}u);",
+                    ]
+                else:
+                    raise ValueError(
+                        f"tail jump target 0x{tail:08x} is not in the exported function set"
+                    )
+            else:
+                target = branch_target(instruction, addresses)
+                lines.append(f"goto L_{target:08x};")
     elif mnemonic in SUPPORTED_CONDITIONS:
         require(1)
         if operands[0][0] != "immediate":
@@ -1191,10 +1736,11 @@ def static_source(function, translated, call_targets, terminal_status=None,
         if instruction["mnemonic"].upper() == "JMP"
         or instruction["mnemonic"].upper() in SUPPORTED_CONDITIONS
         for target in instruction.get("flows_to", [])
+        if ADDRESS.fullmatch(str(target))
     }
     for index, (instruction, instruction_body) in enumerate(translated):
         used_temps = sorted(set(re.findall(
-            r"\bt\d+(?:a|b|c|r)?\b",
+            r"\bt\d+(?:a|b|c|r|t)?\b",
             "\n".join(instruction_body),
         )))
         if used_temps:
@@ -1203,7 +1749,9 @@ def static_source(function, translated, call_targets, terminal_status=None,
                     f"{name} = 0" for name in used_temps
                 ) + ";"
             )
-        if instruction["mnemonic"].upper() == "CALL":
+        if any(
+            f"t{index}_call_status" in line for line in instruction_body
+        ):
             body_lines.append(
                 f"BatchLiftStatus t{index}_call_status = "
                 "BatchLiftStatus::invalid_control_flow;"
@@ -1249,6 +1797,7 @@ def static_source(function, translated, call_targets, terminal_status=None,
         "",
         "",
         f"BatchLiftStatus {symbol}(BatchLiftMemory& memory, BatchLiftState& state) {{",
+        f"    batch_guest_note_body(0x{entry:08x}u);",
         *[f"    {line}" if line else "" for line in body_lines],
         "}",
     ])
@@ -1257,6 +1806,7 @@ def static_source(function, translated, call_targets, terminal_status=None,
 def translate_function(
     function, exported_function_entries=None, iat_imports=None,
     stop_call_site=None, stop_call_sites=None, direct_import_aliases=None,
+    allow_unresolved_calls=False,
 ):
     reasons = []
     diagnostics = []
@@ -1351,6 +1901,7 @@ def translate_function(
                     exported_function_entries,
                     iat_imports,
                     direct_import_aliases,
+                    allow_unresolved_calls,
                 )
             translated.append((instruction, body))
             diagnostics.append({

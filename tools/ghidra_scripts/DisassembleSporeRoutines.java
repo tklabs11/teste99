@@ -16,6 +16,7 @@ import java.util.Set;
 import java.util.TreeMap;
 import ghidra.app.script.GhidraScript;
 import ghidra.program.model.address.Address;
+import ghidra.program.model.listing.Function;
 import ghidra.program.model.listing.Instruction;
 import ghidra.program.model.symbol.Reference;
 
@@ -65,6 +66,7 @@ public class DisassembleSporeRoutines extends GhidraScript {
         TreeMap<Long, Instruction> decoded = new TreeMap<>();
         Deque<Long> pending = new ArrayDeque<>();
         Set<Long> visited = new HashSet<>();
+        Function entryFunction = getFunctionContaining(entry);
         long min = entry.getOffset();
         long max = entry.getOffset() + MAX_SPAN;
         pending.add(entry.getOffset());
@@ -97,9 +99,21 @@ public class DisassembleSporeRoutines extends GhidraScript {
             if (isJump) {
                 Address[] flows = instruction.getFlows();
                 for (Address flow : flows) {
-                    if (flow != null) {
-                        pending.add(flow.getOffset());
+                    if (flow == null) {
+                        continue;
                     }
+                    // An unconditional jump into another function is a tail
+                    // call: the body ends here and the target is measured on its
+                    // own. A conditional branch must still be followed, because
+                    // compilers merge identical tails into a neighbouring
+                    // function's address range.
+                    Function flowFunction = getFunctionContaining(flow);
+                    if (!conditional && entryFunction != null
+                            && flowFunction != null
+                            && !entryFunction.equals(flowFunction)) {
+                        continue;
+                    }
+                    pending.add(flow.getOffset());
                 }
                 if (conditional) {
                     pending.add(fallthrough);

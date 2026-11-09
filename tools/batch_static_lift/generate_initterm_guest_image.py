@@ -26,8 +26,9 @@ WINDOWS = [
      "the __cinit application-type probe reads the DOS and NT headers"),
     (0x0110af9c, 0x04, "adjust_fdiv_cell", False,
      "the _adjust_fdiv import is read through its IAT pointer"),
-    (0x013cc300, 0x60, "import_cells", True,
-     "the CRT import slots, which the loader rewrites with resolved addresses"),
+    (0x013cc000, 0x800, "import_cells", True,
+     "the whole IAT: the loader rewrites every slot with a resolved address, "
+     "so the guest may read any of them as data"),
     (0x013cc80c, 0x400, "cpp_initializer_head", False,
      "the first 256 slots of the C++ initializer table _initterm walks"),
     (0x013eb090, 0x20, "initializer_table", False,
@@ -48,6 +49,18 @@ WINDOWS = [
      "the loader-zeroed critical section the fourth initializer initializes"),
     (0x016f2600, 0x60, "crt_globals", True,
      "_fmode/_commode defaults, the app-type flag and the app-type address"),
+    (0x0143e830, 0x20, "engine_format_strings", False,
+     "the two format strings the single-instance guard passes to sprintf and wsprintfA"),
+    (0x01669930, 0x18, "engine_guard_globals", True,
+     "the guard's node pointer, node count and the second counter"),
+    (0x015fd8c4, 0x04, "engine_singleton_word_a", True,
+     "a loader-zeroed .data word the batch tests before building its object"),
+    (0x01600508, 0x04, "engine_singleton_word_b", True,
+     "a loader-zeroed .data word the batch tests before building its object"),
+    (0x01668ec0, 0x04, "engine_singleton_word_c", True,
+     "a loader-zeroed .data word the batch loads as its object pointer"),
+    (0x016c8b40, 0x10, "cpp_initializer_engine_state", True,
+     "the three .data words the seventh initializer and its factory test"),
     (0x0171e740, 0x30, "startup_state", True,
      "startup lock, startup state and the encoded null pointers"),
 ]
@@ -116,7 +129,7 @@ def app_type_probe_flag(pe):
     return 1 if clr_directory != 0 else 0
 
 
-def closure_addresses(closure_directory):
+def closure_addresses(closure_directories):
     """Absolute guest addresses the generated closure sources access.
 
     ``memory.load32(0x...)`` operands are memory accesses and must be mapped.
@@ -134,14 +147,20 @@ def closure_addresses(closure_directory):
         re.MULTILINE)
     addresses = {}
     pushed = {}
-    for path in sorted(closure_directory.glob("spore_*.cpp")):
-        text = path.read_text(encoding="utf-8")
-        for match in memory_pattern.finditer(text):
-            addresses.setdefault(int(match.group(1), 16), set()).add(path.stem)
-        for match in push_pattern.finditer(text):
-            value = int(match.group(1), 16)
-            if 0x00400000 <= value < 0x80000000:
-                pushed.setdefault(value, set()).add(path.stem)
+    for directory in closure_directories:
+        for path in sorted(directory.glob("spore_*.cpp")):
+            text = path.read_text(encoding="utf-8")
+            for match in memory_pattern.finditer(text):
+                address = int(match.group(1), 16)
+                # Reading the null page is a real fault on Windows too, so the
+                # guest keeps it unmapped and fails closed if it is ever reached.
+                if address == 0:
+                    continue
+                addresses.setdefault(address, set()).add(path.stem)
+            for match in push_pattern.finditer(text):
+                value = int(match.group(1), 16)
+                if 0x00400000 <= value < 0x80000000:
+                    pushed.setdefault(value, set()).add(path.stem)
     return addresses, pushed
 
 
@@ -175,8 +194,8 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--reference", type=Path, required=True)
     parser.add_argument("--candidate", type=Path, required=True)
-    parser.add_argument("--closure", type=Path, required=True,
-                        help="directory holding the generated closure sources")
+    parser.add_argument("--closure", type=Path, required=True, nargs="+",
+                        help="directories holding the generated sources")
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
 

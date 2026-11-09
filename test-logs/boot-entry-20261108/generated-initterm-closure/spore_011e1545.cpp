@@ -2,6 +2,7 @@
 
 
 BatchLiftStatus spore_lift_011e1545(BatchLiftMemory& memory, BatchLiftState& state) {
+    batch_guest_note_body(0x011e1545u);
     std::uint32_t t0a = 0, t0b = 0, t0r = 0;
 
     // 0x011e1545: 33c0 XOR

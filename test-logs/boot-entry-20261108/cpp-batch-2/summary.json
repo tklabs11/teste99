@@ -1,0 +1,37 @@
+{
+  "batch_index": 1,
+  "batch_size": 1,
+  "table_slice": [
+    "0x0138e640",
+    "0x0138e640"
+  ],
+  "next_table_entry": null,
+  "roots": 6,
+  "initializers_in_batch": 1,
+  "helper_roots": 5,
+  "instructions": 171,
+  "imports": [
+    "KERNEL32.dll!EnterCriticalSection",
+    "KERNEL32.dll!GetProcessHeap",
+    "KERNEL32.dll!HeapFree",
+    "KERNEL32.dll!LeaveCriticalSection",
+    "MSVCR90.dll!_onexit"
+  ],
+  "canonicalised_targets": {
+    "0x011e07e0": "0x011e074a"
+  },
+  "truncated_exports": [],
+  "indirect_calls": {
+    "0x00935c80": [
+      "CALL ECX"
+    ],
+    "0x011e074a": [
+      "CALL ESI",
+      "CALL ESI",
+      "CALL ESI",
+      "CALL ESI",
+      "CALL ESI",
+      "CALL ESI"
+    ]
+  }
+}

@@ -3,6 +3,7 @@ BatchLiftStatus spore_lift_011e074a(BatchLiftMemory& memory, BatchLiftState& sta
 
 
 BatchLiftStatus spore_lift_011e07ef(BatchLiftMemory& memory, BatchLiftState& state) {
+    batch_guest_note_body(0x011e07efu);
     std::uint32_t t0 = 0;
     std::uint32_t t1a = 0;
     std::uint32_t t2 = 0;

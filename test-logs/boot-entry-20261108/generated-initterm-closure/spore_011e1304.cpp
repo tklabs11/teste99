@@ -3,6 +3,7 @@ BatchLiftStatus spore_lift_011e12a2(BatchLiftMemory& memory, BatchLiftState& sta
 
 
 BatchLiftStatus spore_lift_011e1304(BatchLiftMemory& memory, BatchLiftState& state) {
+    batch_guest_note_body(0x011e1304u);
     BatchLiftStatus t0_call_status = BatchLiftStatus::invalid_control_flow;
     std::uint32_t t1 = 0;
     std::uint32_t t2a = 0, t2b = 0, t2r = 0;

@@ -3,6 +3,7 @@ BatchLiftStatus spore_lift_011e1219(BatchLiftMemory& memory, BatchLiftState& sta
 
 
 BatchLiftStatus spore_lift_011e07e0(BatchLiftMemory& memory, BatchLiftState& state) {
+    batch_guest_note_body(0x011e07e0u);
     BatchLiftStatus t0_call_status = BatchLiftStatus::invalid_control_flow;
 
     // 0x011e07e0: e8340a0000 CALL

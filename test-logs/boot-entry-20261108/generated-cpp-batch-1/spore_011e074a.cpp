@@ -1,10 +1,12 @@
 #include "BatchStaticLiftRuntime.hpp"
+BatchLiftStatus spore_lift_011e07e0(BatchLiftMemory& memory, BatchLiftState& state);
 BatchLiftStatus spore_lift_011e07e6(BatchLiftMemory& memory, BatchLiftState& state);
 BatchLiftStatus spore_lift_011e11d4(BatchLiftMemory& memory, BatchLiftState& state);
 BatchLiftStatus spore_lift_011e1219(BatchLiftMemory& memory, BatchLiftState& state);
 
 
 BatchLiftStatus spore_lift_011e074a(BatchLiftMemory& memory, BatchLiftState& state) {
+    batch_guest_note_body(0x011e074au);
     std::uint32_t t0a = 0;
     std::uint32_t t1a = 0;
     BatchLiftStatus t2_call_status = BatchLiftStatus::invalid_control_flow;

@@ -96,6 +96,9 @@ def main():
     parser.add_argument("--program", default="SporeApp.exe")
     parser.add_argument("--script-path", default=r"C:\Users\wesll\ghidra_scripts")
     parser.add_argument("--rounds", type=int, default=12)
+    parser.add_argument("--roots", action="append", default=[],
+                        type=lambda value: int(value, 0),
+                        help="walk from these addresses instead of a table slice")
     args = parser.parse_args()
 
     if lifter.sha256_file(args.reference) != lifter.EXPECTED_SHA256:
@@ -104,7 +107,10 @@ def main():
     iat = lifter.parse_pe_iat_imports(pe)
     targets = table_targets(pe)
     start = (args.batch_index - 1) * args.batch_size
-    batch = targets[start:start + args.batch_size]
+    if args.roots:
+        batch = list(args.roots)
+    else:
+        batch = targets[start:start + args.batch_size]
     if not batch:
         parser.error("the requested batch is outside the table")
     args.output.mkdir(parents=True, exist_ok=True)
@@ -166,7 +172,8 @@ def main():
         "batch_index": args.batch_index,
         "batch_size": len(batch),
         "table_slice": [f"0x{batch[0]:08x}", f"0x{batch[-1]:08x}"],
-        "next_table_entry": f"0x{targets[start + len(batch)]:08x}",
+        "next_table_entry": (
+            f"0x{targets[start + len(batch)]:08x}" if not args.roots else None),
         "roots": len(known),
         "initializers_in_batch": len(batch),
         "helper_roots": len(set(known) - set(batch)),

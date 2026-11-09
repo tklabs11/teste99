@@ -4,7 +4,8 @@ param(
     [string]$BatchDirectory = "C:\SporeAnalysis\spore_batch_all_parts",
     [string]$DeviceSerial = "",
     [string[]]$Stage = @("seh-call-boundary", "startupinfo-call", "interlocked-call", "startup-lock", "initterm-call", "initterm-executed", "startup-state-initializing", "cpp-walk-initializers"),
-    [int]$BatchInitializers = 5,
+    [int]$BatchInitializers = 7,
+    [int]$BatchBodies = 120,
     [switch]$BuildOnly
 )
 
@@ -132,31 +133,43 @@ try {
     # cannot be compared against the real CRT bytes.
     $closureStages = @("initterm-executed", "startup-state-initializing")
     $imageDirectory = Join-Path $logsDirectory "generated-initterm-guest-image"
-    if (Test-Path -LiteralPath $imageDirectory) {
-        Remove-Item -LiteralPath $imageDirectory -Recurse -Force
-    }
-    $imageLog = & $python $imageGenerator --reference $ReferencePe `
-        --candidate $CandidatePe --closure $closureDirectory `
-        --output $imageDirectory 2>&1
-    $imageLog | Tee-Object -FilePath (Join-Path $logsDirectory "initterm-guest-image.log")
-    if ($LASTEXITCODE -ne 0) { throw "Guest image generation failed" }
 
-    # Batch 1 of the C++ initializers: the lifted bodies the walk needs, built
-    # from the measured closure, plus the runtime it links.
-    $batchClosure = Join-Path $logsDirectory "cpp-batch-1\closure.json"
+    # The C++ initializer batch: the seventh table entry opens the engine object
+    # subsystem, so the batch registers it together with the measured chain it
+    # reaches. The body budget keeps the batch bounded; the callers that stay
+    # outside it are the walk's own batch boundary.
+    $batchClosure = Join-Path $logsDirectory "cpp-batch-2\closure-union.json"
     $batchOutputDirectory = Join-Path $logsDirectory "generated-cpp-batch-1"
     if (Test-Path -LiteralPath $batchOutputDirectory) {
         Remove-Item -LiteralPath $batchOutputDirectory -Recurse -Force
     }
     $batchLog = & $python $batchGenerator --reference $ReferencePe `
         --candidate $CandidatePe --closure $batchClosure `
-        --initializers $BatchInitializers --output $batchOutputDirectory 2>&1
+        --initializers $BatchInitializers `
+        --engine-body 0x935b70 --engine-body 0x935a30 `
+        --engine-body 0x935a70 --engine-body 0x620230 `
+        --engine-body 0x138e640 --engine-body 0xf474d0 `
+        --engine-body 0xf47480 --engine-body 0x927860 `
+        --engine-body 0x935c80 --engine-body 0xf47430 `
+        --follow-outside --bodies $BatchBodies --allow-unresolved `
+        --output $batchOutputDirectory 2>&1
     $batchLog | Tee-Object -FilePath (Join-Path $logsDirectory "cpp-batch-generation.log")
     if ($LASTEXITCODE -ne 0) { throw "C++ initializer batch generation failed" }
     $batchSources = @(
         Get-ChildItem -LiteralPath $batchOutputDirectory -Filter *.cpp |
             ForEach-Object { $_.FullName }
     )
+
+    # The image covers both the CRT closure and the lifted batch, so the guest
+    # cannot read an address either of them uses without a proven window.
+    if (Test-Path -LiteralPath $imageDirectory) {
+        Remove-Item -LiteralPath $imageDirectory -Recurse -Force
+    }
+    $imageLog = & $python $imageGenerator --reference $ReferencePe `
+        --candidate $CandidatePe --closure $closureDirectory `
+        $batchOutputDirectory --output $imageDirectory 2>&1
+    $imageLog | Tee-Object -FilePath (Join-Path $logsDirectory "initterm-guest-image.log")
+    if ($LASTEXITCODE -ne 0) { throw "Guest image generation failed" }
 
     foreach ($stageName in $Stage) {
         $crtDirectory = Join-Path $logsDirectory ("generated-crt-" + $stageName)
@@ -225,6 +238,11 @@ try {
         New-Item -ItemType Directory -Path $liftObjectDirectory | Out-Null
 
         $quotedSources = ($generatedSources | ForEach-Object { '"' + $_ + '"' }) -join ' '
+        # A batch of this size exceeds the Windows command-line limit, so the
+        # source list travels in a response file instead.
+        $responseFile = Join-Path $buildDirectory "crt-$stageName-lift-sources.rsp"
+        $generatedSources | ForEach-Object { '"' + $_ + '"' } |
+            Set-Content -LiteralPath $responseFile -Encoding ASCII
         $originalCommand = 'call "' + $vsDevCmd +
             '" -arch=x86 -host_arch=x64 -no_logo && cl /nologo /std:c++17 /EHsc /O2 /W4 ' +
             $includes + ' /Fo"' + $originalObjectDirectory + '\\" /Fe:"' +
@@ -232,7 +250,7 @@ try {
         $liftCommand = 'call "' + $vsDevCmd +
             '" -arch=x86 -host_arch=x64 -no_logo && cl /nologo /std:c++17 /EHsc /O2 /W4 ' +
             $includes + ' /Fo"' + $liftObjectDirectory + '\\" /Fe:"' +
-            $liftExecutable + '" "' + $liftHarness + '" ' + $quotedSources
+            $liftExecutable + '" "' + $liftHarness + '" @' + $responseFile
 
         if (-not $skipOriginal) {
             $originalBuild = & $env:ComSpec /d /s /c $originalCommand 2>&1
@@ -255,11 +273,21 @@ try {
         try {
             $ErrorActionPreference = "Continue"
             if (-not $skipOriginal) {
-                $originalOutput = & $originalExecutable 2>&1
-                $originalCode = $LASTEXITCODE
+                # Real-time scanning can hold a just-written executable for a
+                # moment; the retry does not change what is executed.
+                for ($attempt = 0; $attempt -lt 30; $attempt++) {
+                    $originalOutput = & $originalExecutable 2>&1
+                    $originalCode = $LASTEXITCODE
+                    if (-not ($originalOutput -match 'usado por outro processo|being used by another process')) { break }
+                    Start-Sleep -Milliseconds 500
+                }
             }
-            $liftOutput = & $liftExecutable 2>&1
-            $liftCode = $LASTEXITCODE
+            for ($attempt = 0; $attempt -lt 30; $attempt++) {
+                $liftOutput = & $liftExecutable 2>&1
+                $liftCode = $LASTEXITCODE
+                if (-not ($liftOutput -match 'usado por outro processo|being used by another process')) { break }
+                Start-Sleep -Milliseconds 500
+            }
         } finally {
             $ErrorActionPreference = $previousPreference
         }
@@ -302,10 +330,28 @@ try {
             "-I$imageDirectory", "-I$batchOutputDirectory", "-I$crtDirectory",
             $liftHarness
         ) + $generatedSources + @('-o', $arm64Executable)
-        & $clang @clangArguments 2>&1 |
-            Set-Content -LiteralPath (Join-Path $logsDirectory "crt-$stageName-arm64-build.log")
-        if ($LASTEXITCODE -ne 0) {
-            Get-Content -LiteralPath (Join-Path $logsDirectory "crt-$stageName-arm64-build.log")
+        # Real-time scanning can hold a just-written output file for a moment;
+        # the retry does not change what is compiled.
+        $clangOutput = @()
+        $clangCode = 1
+        for ($attempt = 0; $attempt -lt 30; $attempt++) {
+            $previousPreference = $ErrorActionPreference
+            try {
+                $ErrorActionPreference = "Continue"
+                $clangOutput = & $clang @clangArguments 2>&1
+                $clangCode = $LASTEXITCODE
+            } finally {
+                $ErrorActionPreference = $previousPreference
+            }
+            if (-not ("$clangOutput" -match 'used by another process|usado por outro processo')) {
+                break
+            }
+            Start-Sleep -Milliseconds 500
+        }
+        $clangOutput | Set-Content -LiteralPath `
+            (Join-Path $logsDirectory "crt-$stageName-arm64-build.log")
+        if ($clangCode -ne 0) {
+            $clangOutput | ForEach-Object { Write-Output $_ }
             throw "Android ARM64 CRT harness build failed for $stageName"
         }
         Write-Output "PASS arm64_build stage=$stageName target=aarch64-linux-android29"

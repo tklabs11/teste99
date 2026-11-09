@@ -1,7 +1,7 @@
 {
   "reference_sha256": "6aec99cb2dc7fd08851a1718e92a60f359fb3fccca3b244a890ae07e93cbe59b",
   "candidate_sha256": "6aec99cb2dc7fd08851a1718e92a60f359fb3fccca3b244a890ae07e93cbe59b",
-  "image_bytes": 2476,
+  "image_bytes": 4512,
   "regions": [
     {
       "address": 4194304,
@@ -22,17 +22,17 @@
       "reason": "the _adjust_fdiv import is read through its IAT pointer"
     },
     {
-      "address": 20759296,
+      "address": 20758528,
       "offset": 1028,
-      "size": 96,
+      "size": 2048,
       "name": "import_cells",
       "writable": true,
       "source": "raw",
-      "reason": "the CRT import slots, which the loader rewrites with resolved addresses"
+      "reason": "the whole IAT: the loader rewrites every slot with a resolved address, so the guest may read any of them as data"
     },
     {
       "address": 20760588,
-      "offset": 1124,
+      "offset": 3076,
       "size": 1024,
       "name": "cpp_initializer_head",
       "writable": false,
@@ -41,7 +41,7 @@
     },
     {
       "address": 20885648,
-      "offset": 2148,
+      "offset": 4100,
       "size": 32,
       "name": "initializer_table",
       "writable": false,
@@ -50,7 +50,7 @@
     },
     {
       "address": 22871664,
-      "offset": 2180,
+      "offset": 4132,
       "size": 24,
       "name": "security_cookie",
       "writable": true,
@@ -59,7 +59,7 @@
     },
     {
       "address": 22871808,
-      "offset": 2204,
+      "offset": 4156,
       "size": 8,
       "name": "fmode_commode",
       "writable": true,
@@ -68,7 +68,7 @@
     },
     {
       "address": 22871872,
-      "offset": 2212,
+      "offset": 4164,
       "size": 64,
       "name": "argv_envp",
       "writable": true,
@@ -77,7 +77,7 @@
     },
     {
       "address": 22339384,
-      "offset": 2276,
+      "offset": 4228,
       "size": 4,
       "name": "initializer_flag",
       "writable": true,
@@ -86,7 +86,7 @@
     },
     {
       "address": 22873744,
-      "offset": 2280,
+      "offset": 4232,
       "size": 4,
       "name": "initializer_state",
       "writable": true,
@@ -95,7 +95,7 @@
     },
     {
       "address": 23493632,
-      "offset": 2284,
+      "offset": 4236,
       "size": 24,
       "name": "initializer_critical_section",
       "writable": true,
@@ -104,7 +104,7 @@
     },
     {
       "address": 24071832,
-      "offset": 2308,
+      "offset": 4260,
       "size": 24,
       "name": "initializer_critical_section_2",
       "writable": true,
@@ -113,7 +113,7 @@
     },
     {
       "address": 24061440,
-      "offset": 2332,
+      "offset": 4284,
       "size": 96,
       "name": "crt_globals",
       "writable": true,
@@ -121,8 +121,62 @@
       "reason": "_fmode/_commode defaults, the app-type flag and the app-type address"
     },
     {
+      "address": 21227568,
+      "offset": 4380,
+      "size": 32,
+      "name": "engine_format_strings",
+      "writable": false,
+      "source": "raw",
+      "reason": "the two format strings the single-instance guard passes to sprintf and wsprintfA"
+    },
+    {
+      "address": 23501104,
+      "offset": 4412,
+      "size": 24,
+      "name": "engine_guard_globals",
+      "writable": true,
+      "source": "bss",
+      "reason": "the guard's node pointer, node count and the second counter"
+    },
+    {
+      "address": 23058628,
+      "offset": 4436,
+      "size": 4,
+      "name": "engine_singleton_word_a",
+      "writable": true,
+      "source": "bss",
+      "reason": "a loader-zeroed .data word the batch tests before building its object"
+    },
+    {
+      "address": 23069960,
+      "offset": 4440,
+      "size": 4,
+      "name": "engine_singleton_word_b",
+      "writable": true,
+      "source": "bss",
+      "reason": "a loader-zeroed .data word the batch tests before building its object"
+    },
+    {
+      "address": 23498432,
+      "offset": 4444,
+      "size": 4,
+      "name": "engine_singleton_word_c",
+      "writable": true,
+      "source": "bss",
+      "reason": "a loader-zeroed .data word the batch loads as its object pointer"
+    },
+    {
+      "address": 23890752,
+      "offset": 4448,
+      "size": 16,
+      "name": "cpp_initializer_engine_state",
+      "writable": true,
+      "source": "bss",
+      "reason": "the three .data words the seventh initializer and its factory test"
+    },
+    {
       "address": 24241984,
-      "offset": 2428,
+      "offset": 4464,
       "size": 48,
       "name": "startup_state",
       "writable": true,
@@ -133,11 +187,29 @@
   "closure_addresses": [
     "0x00400000",
     "0x0040003c",
+    "0x013cc188",
+    "0x013cc2bc",
+    "0x013cc2e4",
     "0x013cc310",
+    "0x013cc344",
+    "0x013cc350",
+    "0x0154df38",
     "0x015cfe70",
     "0x015cfe80",
     "0x015cfe84",
+    "0x015d0690",
+    "0x015fd8c4",
+    "0x01600508",
+    "0x01668ec0",
+    "0x01669930",
+    "0x016c8b40",
+    "0x016c8b44",
+    "0x016c8b48",
     "0x016f2628",
+    "0x016f262c",
+    "0x016f2630",
+    "0x016f2640",
+    "0x016f2644",
     "0x016f2648",
     "0x016f264c",
     "0x0171e748",
@@ -146,13 +218,815 @@
     "0x0171e760"
   ],
   "pushed_addresses": [
+    "0x00f47480",
     "0x011e122d",
     "0x011e1318",
+    "0x011e1394",
     "0x011e1545",
-    "0x01508cd0"
+    "0x0120cd8a",
+    "0x0120ce58",
+    "0x0120cf58",
+    "0x0121743f",
+    "0x012174f4",
+    "0x012187d8",
+    "0x013c0d40",
+    "0x013c0f50",
+    "0x013c9950",
+    "0x013cb620",
+    "0x013eb430",
+    "0x013eb438",
+    "0x013eb454",
+    "0x013eb478",
+    "0x013eb4dc",
+    "0x013eb4e8",
+    "0x013eb540",
+    "0x013eb548",
+    "0x013eb574",
+    "0x013eb580",
+    "0x013eb5cc",
+    "0x013eb5d4",
+    "0x013eb5f8",
+    "0x013eb600",
+    "0x013eb620",
+    "0x013eb628",
+    "0x013eb648",
+    "0x013eb658",
+    "0x013eb670",
+    "0x013eb688",
+    "0x013eb6e4",
+    "0x013eb708",
+    "0x013eb73c",
+    "0x013eb754",
+    "0x013eb784",
+    "0x013eb790",
+    "0x013eb7bc",
+    "0x013eb7cc",
+    "0x013eb83c",
+    "0x013ebb38",
+    "0x013ec47c",
+    "0x01403750",
+    "0x0140379c",
+    "0x0141042c",
+    "0x01410434",
+    "0x0141b18c",
+    "0x0141b2a8",
+    "0x0141b584",
+    "0x0143e830",
+    "0x0143e838",
+    "0x01508c08",
+    "0x01508cd0",
+    "0x01667c00",
+    "0x016f261c",
+    "0x016f2620",
+    "0x016f2624",
+    "0x016f4e98"
   ],
   "app_type_probe_flag": 0,
   "import_slots": [
+    {
+      "address": "0x013cc000",
+      "symbol": "ADVAPI32.dll!GetUserNameW"
+    },
+    {
+      "address": "0x013cc004",
+      "symbol": "ADVAPI32.dll!RegQueryValueExA"
+    },
+    {
+      "address": "0x013cc008",
+      "symbol": "ADVAPI32.dll!RegOpenKeyExA"
+    },
+    {
+      "address": "0x013cc00c",
+      "symbol": "ADVAPI32.dll!RegSetValueExA"
+    },
+    {
+      "address": "0x013cc010",
+      "symbol": "ADVAPI32.dll!RegEnumKeyExW"
+    },
+    {
+      "address": "0x013cc014",
+      "symbol": "ADVAPI32.dll!RegQueryValueExW"
+    },
+    {
+      "address": "0x013cc018",
+      "symbol": "ADVAPI32.dll!RegisterEventSourceA"
+    },
+    {
+      "address": "0x013cc01c",
+      "symbol": "ADVAPI32.dll!ReportEventA"
+    },
+    {
+      "address": "0x013cc020",
+      "symbol": "ADVAPI32.dll!DeregisterEventSource"
+    },
+    {
+      "address": "0x013cc024",
+      "symbol": "ADVAPI32.dll!RegOpenKeyExW"
+    },
+    {
+      "address": "0x013cc028",
+      "symbol": "ADVAPI32.dll!RegCloseKey"
+    },
+    {
+      "address": "0x013cc02c",
+      "symbol": "ADVAPI32.dll!GetUserNameA"
+    },
+    {
+      "address": "0x013cc034",
+      "symbol": "DINPUT8.dll!DirectInput8Create"
+    },
+    {
+      "address": "0x013cc03c",
+      "symbol": "DSOUND.dll!ordinal_1"
+    },
+    {
+      "address": "0x013cc040",
+      "symbol": "DSOUND.dll!ordinal_9"
+    },
+    {
+      "address": "0x013cc048",
+      "symbol": "GDI32.dll!CreateSolidBrush"
+    },
+    {
+      "address": "0x013cc04c",
+      "symbol": "GDI32.dll!DeleteObject"
+    },
+    {
+      "address": "0x013cc050",
+      "symbol": "GDI32.dll!ExtEscape"
+    },
+    {
+      "address": "0x013cc054",
+      "symbol": "GDI32.dll!DeleteDC"
+    },
+    {
+      "address": "0x013cc058",
+      "symbol": "GDI32.dll!GetDeviceCaps"
+    },
+    {
+      "address": "0x013cc05c",
+      "symbol": "GDI32.dll!CreateDCA"
+    },
+    {
+      "address": "0x013cc064",
+      "symbol": "IMM32.dll!ImmDisableTextFrameService"
+    },
+    {
+      "address": "0x013cc068",
+      "symbol": "IMM32.dll!ImmGetCompositionStringW"
+    },
+    {
+      "address": "0x013cc06c",
+      "symbol": "IMM32.dll!ImmSetCompositionStringW"
+    },
+    {
+      "address": "0x013cc070",
+      "symbol": "IMM32.dll!ImmNotifyIME"
+    },
+    {
+      "address": "0x013cc074",
+      "symbol": "IMM32.dll!ImmSetOpenStatus"
+    },
+    {
+      "address": "0x013cc078",
+      "symbol": "IMM32.dll!ImmSimulateHotKey"
+    },
+    {
+      "address": "0x013cc07c",
+      "symbol": "IMM32.dll!ImmReleaseContext"
+    },
+    {
+      "address": "0x013cc080",
+      "symbol": "IMM32.dll!ImmGetConversionStatus"
+    },
+    {
+      "address": "0x013cc084",
+      "symbol": "IMM32.dll!ImmGetContext"
+    },
+    {
+      "address": "0x013cc088",
+      "symbol": "IMM32.dll!ImmGetOpenStatus"
+    },
+    {
+      "address": "0x013cc08c",
+      "symbol": "IMM32.dll!ImmGetCandidateListW"
+    },
+    {
+      "address": "0x013cc090",
+      "symbol": "IMM32.dll!ImmSetConversionStatus"
+    },
+    {
+      "address": "0x013cc098",
+      "symbol": "KERNEL32.dll!GlobalMemoryStatusEx"
+    },
+    {
+      "address": "0x013cc09c",
+      "symbol": "KERNEL32.dll!QueryPerformanceFrequency"
+    },
+    {
+      "address": "0x013cc0a0",
+      "symbol": "KERNEL32.dll!SetThreadPriority"
+    },
+    {
+      "address": "0x013cc0a4",
+      "symbol": "KERNEL32.dll!SetPriorityClass"
+    },
+    {
+      "address": "0x013cc0a8",
+      "symbol": "KERNEL32.dll!GetPriorityClass"
+    },
+    {
+      "address": "0x013cc0ac",
+      "symbol": "KERNEL32.dll!GetThreadPriority"
+    },
+    {
+      "address": "0x013cc0b0",
+      "symbol": "KERNEL32.dll!GetCurrentThread"
+    },
+    {
+      "address": "0x013cc0b4",
+      "symbol": "KERNEL32.dll!SetThreadAffinityMask"
+    },
+    {
+      "address": "0x013cc0b8",
+      "symbol": "KERNEL32.dll!GetProcessAffinityMask"
+    },
+    {
+      "address": "0x013cc0bc",
+      "symbol": "KERNEL32.dll!GetProcAddress"
+    },
+    {
+      "address": "0x013cc0c0",
+      "symbol": "KERNEL32.dll!GetModuleHandleA"
+    },
+    {
+      "address": "0x013cc0c4",
+      "symbol": "KERNEL32.dll!CloseHandle"
+    },
+    {
+      "address": "0x013cc0c8",
+      "symbol": "KERNEL32.dll!DeviceIoControl"
+    },
+    {
+      "address": "0x013cc0cc",
+      "symbol": "KERNEL32.dll!CreateFileA"
+    },
+    {
+      "address": "0x013cc0d0",
+      "symbol": "KERNEL32.dll!LocalFree"
+    },
+    {
+      "address": "0x013cc0d4",
+      "symbol": "KERNEL32.dll!LocalAlloc"
+    },
+    {
+      "address": "0x013cc0d8",
+      "symbol": "KERNEL32.dll!GetModuleFileNameA"
+    },
+    {
+      "address": "0x013cc0dc",
+      "symbol": "KERNEL32.dll!GetSystemInfo"
+    },
+    {
+      "address": "0x013cc0e0",
+      "symbol": "KERNEL32.dll!GetVersionExA"
+    },
+    {
+      "address": "0x013cc0e4",
+      "symbol": "KERNEL32.dll!FreeLibrary"
+    },
+    {
+      "address": "0x013cc0e8",
+      "symbol": "KERNEL32.dll!LoadLibraryA"
+    },
+    {
+      "address": "0x013cc0ec",
+      "symbol": "KERNEL32.dll!GetComputerNameExA"
+    },
+    {
+      "address": "0x013cc0f0",
+      "symbol": "KERNEL32.dll!CompareStringW"
+    },
+    {
+      "address": "0x013cc0f4",
+      "symbol": "KERNEL32.dll!LCMapStringW"
+    },
+    {
+      "address": "0x013cc0f8",
+      "symbol": "KERNEL32.dll!InterlockedIncrement"
+    },
+    {
+      "address": "0x013cc0fc",
+      "symbol": "KERNEL32.dll!InterlockedDecrement"
+    },
+    {
+      "address": "0x013cc100",
+      "symbol": "KERNEL32.dll!GetSystemDirectoryW"
+    },
+    {
+      "address": "0x013cc104",
+      "symbol": "KERNEL32.dll!GetVersionExW"
+    },
+    {
+      "address": "0x013cc108",
+      "symbol": "KERNEL32.dll!IsDebuggerPresent"
+    },
+    {
+      "address": "0x013cc10c",
+      "symbol": "KERNEL32.dll!SetProcessAffinityMask"
+    },
+    {
+      "address": "0x013cc110",
+      "symbol": "KERNEL32.dll!OpenProcess"
+    },
+    {
+      "address": "0x013cc114",
+      "symbol": "KERNEL32.dll!GetCurrentProcessId"
+    },
+    {
+      "address": "0x013cc118",
+      "symbol": "KERNEL32.dll!SetThreadExecutionState"
+    },
+    {
+      "address": "0x013cc11c",
+      "symbol": "KERNEL32.dll!GetLocaleInfoW"
+    },
+    {
+      "address": "0x013cc120",
+      "symbol": "KERNEL32.dll!SetLastError"
+    },
+    {
+      "address": "0x013cc124",
+      "symbol": "KERNEL32.dll!EnumResourceNamesA"
+    },
+    {
+      "address": "0x013cc128",
+      "symbol": "KERNEL32.dll!GetSystemDefaultLCID"
+    },
+    {
+      "address": "0x013cc12c",
+      "symbol": "KERNEL32.dll!GetWindowsDirectoryW"
+    },
+    {
+      "address": "0x013cc130",
+      "symbol": "KERNEL32.dll!GetTickCount"
+    },
+    {
+      "address": "0x013cc134",
+      "symbol": "KERNEL32.dll!VirtualQuery"
+    },
+    {
+      "address": "0x013cc138",
+      "symbol": "KERNEL32.dll!ResumeThread"
+    },
+    {
+      "address": "0x013cc13c",
+      "symbol": "KERNEL32.dll!GetCurrentThreadId"
+    },
+    {
+      "address": "0x013cc140",
+      "symbol": "KERNEL32.dll!CreateEventA"
+    },
+    {
+      "address": "0x013cc144",
+      "symbol": "KERNEL32.dll!FormatMessageA"
+    },
+    {
+      "address": "0x013cc148",
+      "symbol": "KERNEL32.dll!FlushFileBuffers"
+    },
+    {
+      "address": "0x013cc14c",
+      "symbol": "KERNEL32.dll!TerminateProcess"
+    },
+    {
+      "address": "0x013cc150",
+      "symbol": "KERNEL32.dll!SetUnhandledExceptionFilter"
+    },
+    {
+      "address": "0x013cc154",
+      "symbol": "KERNEL32.dll!GetComputerNameA"
+    },
+    {
+      "address": "0x013cc158",
+      "symbol": "KERNEL32.dll!SystemTimeToFileTime"
+    },
+    {
+      "address": "0x013cc15c",
+      "symbol": "KERNEL32.dll!GetSystemTime"
+    },
+    {
+      "address": "0x013cc160",
+      "symbol": "KERNEL32.dll!GetModuleFileNameW"
+    },
+    {
+      "address": "0x013cc164",
+      "symbol": "KERNEL32.dll!OutputDebugStringA"
+    },
+    {
+      "address": "0x013cc168",
+      "symbol": "KERNEL32.dll!GetExitCodeThread"
+    },
+    {
+      "address": "0x013cc16c",
+      "symbol": "KERNEL32.dll!TlsAlloc"
+    },
+    {
+      "address": "0x013cc170",
+      "symbol": "KERNEL32.dll!TlsSetValue"
+    },
+    {
+      "address": "0x013cc174",
+      "symbol": "KERNEL32.dll!DuplicateHandle"
+    },
+    {
+      "address": "0x013cc178",
+      "symbol": "KERNEL32.dll!SetThreadIdealProcessor"
+    },
+    {
+      "address": "0x013cc17c",
+      "symbol": "KERNEL32.dll!SleepEx"
+    },
+    {
+      "address": "0x013cc180",
+      "symbol": "KERNEL32.dll!CreateMutexA"
+    },
+    {
+      "address": "0x013cc184",
+      "symbol": "KERNEL32.dll!WaitForSingleObject"
+    },
+    {
+      "address": "0x013cc188",
+      "symbol": "KERNEL32.dll!TryEnterCriticalSection"
+    },
+    {
+      "address": "0x013cc18c",
+      "symbol": "KERNEL32.dll!ReleaseMutex"
+    },
+    {
+      "address": "0x013cc190",
+      "symbol": "KERNEL32.dll!InterlockedExchangeAdd"
+    },
+    {
+      "address": "0x013cc194",
+      "symbol": "KERNEL32.dll!InterlockedCompareExchange"
+    },
+    {
+      "address": "0x013cc198",
+      "symbol": "KERNEL32.dll!CreateSemaphoreA"
+    },
+    {
+      "address": "0x013cc19c",
+      "symbol": "KERNEL32.dll!ReleaseSemaphore"
+    },
+    {
+      "address": "0x013cc1a0",
+      "symbol": "KERNEL32.dll!InterlockedExchange"
+    },
+    {
+      "address": "0x013cc1a4",
+      "symbol": "KERNEL32.dll!TlsFree"
+    },
+    {
+      "address": "0x013cc1a8",
+      "symbol": "KERNEL32.dll!RaiseException"
+    },
+    {
+      "address": "0x013cc1ac",
+      "symbol": "KERNEL32.dll!QueueUserAPC"
+    },
+    {
+      "address": "0x013cc1b0",
+      "symbol": "KERNEL32.dll!CreateThread"
+    },
+    {
+      "address": "0x013cc1b4",
+      "symbol": "KERNEL32.dll!HeapAlloc"
+    },
+    {
+      "address": "0x013cc1b8",
+      "symbol": "KERNEL32.dll!GetProcessHeap"
+    },
+    {
+      "address": "0x013cc1bc",
+      "symbol": "KERNEL32.dll!HeapFree"
+    },
+    {
+      "address": "0x013cc1c0",
+      "symbol": "KERNEL32.dll!InitializeCriticalSectionAndSpinCount"
+    },
+    {
+      "address": "0x013cc1c4",
+      "symbol": "KERNEL32.dll!VirtualFree"
+    },
+    {
+      "address": "0x013cc1c8",
+      "symbol": "KERNEL32.dll!VirtualAlloc"
+    },
+    {
+      "address": "0x013cc1cc",
+      "symbol": "KERNEL32.dll!GetSystemTimeAsFileTime"
+    },
+    {
+      "address": "0x013cc1d0",
+      "symbol": "KERNEL32.dll!GlobalFree"
+    },
+    {
+      "address": "0x013cc1d4",
+      "symbol": "KERNEL32.dll!GlobalUnlock"
+    },
+    {
+      "address": "0x013cc1d8",
+      "symbol": "KERNEL32.dll!GlobalLock"
+    },
+    {
+      "address": "0x013cc1dc",
+      "symbol": "KERNEL32.dll!GlobalAlloc"
+    },
+    {
+      "address": "0x013cc1e0",
+      "symbol": "KERNEL32.dll!GlobalSize"
+    },
+    {
+      "address": "0x013cc1e4",
+      "symbol": "KERNEL32.dll!GetVersion"
+    },
+    {
+      "address": "0x013cc1e8",
+      "symbol": "KERNEL32.dll!GetModuleHandleW"
+    },
+    {
+      "address": "0x013cc1ec",
+      "symbol": "KERNEL32.dll!FindFirstFileW"
+    },
+    {
+      "address": "0x013cc1f0",
+      "symbol": "KERNEL32.dll!FindNextFileW"
+    },
+    {
+      "address": "0x013cc1f4",
+      "symbol": "KERNEL32.dll!FindClose"
+    },
+    {
+      "address": "0x013cc1f8",
+      "symbol": "KERNEL32.dll!SetEvent"
+    },
+    {
+      "address": "0x013cc1fc",
+      "symbol": "KERNEL32.dll!CancelIo"
+    },
+    {
+      "address": "0x013cc200",
+      "symbol": "KERNEL32.dll!GetLongPathNameW"
+    },
+    {
+      "address": "0x013cc204",
+      "symbol": "KERNEL32.dll!WaitForMultipleObjectsEx"
+    },
+    {
+      "address": "0x013cc208",
+      "symbol": "KERNEL32.dll!FindCloseChangeNotification"
+    },
+    {
+      "address": "0x013cc20c",
+      "symbol": "KERNEL32.dll!FindNextChangeNotification"
+    },
+    {
+      "address": "0x013cc210",
+      "symbol": "KERNEL32.dll!WaitForMultipleObjects"
+    },
+    {
+      "address": "0x013cc214",
+      "symbol": "KERNEL32.dll!FindFirstChangeNotificationW"
+    },
+    {
+      "address": "0x013cc218",
+      "symbol": "KERNEL32.dll!CreateFileW"
+    },
+    {
+      "address": "0x013cc21c",
+      "symbol": "KERNEL32.dll!GetVolumeInformationW"
+    },
+    {
+      "address": "0x013cc220",
+      "symbol": "KERNEL32.dll!MultiByteToWideChar"
+    },
+    {
+      "address": "0x013cc224",
+      "symbol": "KERNEL32.dll!WideCharToMultiByte"
+    },
+    {
+      "address": "0x013cc228",
+      "symbol": "KERNEL32.dll!GetLastError"
+    },
+    {
+      "address": "0x013cc22c",
+      "symbol": "KERNEL32.dll!GetFileSize"
+    },
+    {
+      "address": "0x013cc230",
+      "symbol": "KERNEL32.dll!SetEndOfFile"
+    },
+    {
+      "address": "0x013cc234",
+      "symbol": "KERNEL32.dll!SetFilePointer"
+    },
+    {
+      "address": "0x013cc238",
+      "symbol": "KERNEL32.dll!ReadFile"
+    },
+    {
+      "address": "0x013cc23c",
+      "symbol": "KERNEL32.dll!WriteFile"
+    },
+    {
+      "address": "0x013cc240",
+      "symbol": "KERNEL32.dll!GetFileAttributesW"
+    },
+    {
+      "address": "0x013cc244",
+      "symbol": "KERNEL32.dll!DeleteFileW"
+    },
+    {
+      "address": "0x013cc248",
+      "symbol": "KERNEL32.dll!MoveFileExW"
+    },
+    {
+      "address": "0x013cc24c",
+      "symbol": "KERNEL32.dll!CopyFileW"
+    },
+    {
+      "address": "0x013cc250",
+      "symbol": "KERNEL32.dll!SetFileAttributesW"
+    },
+    {
+      "address": "0x013cc254",
+      "symbol": "KERNEL32.dll!GetTempPathW"
+    },
+    {
+      "address": "0x013cc258",
+      "symbol": "KERNEL32.dll!GetVolumePathNameW"
+    },
+    {
+      "address": "0x013cc25c",
+      "symbol": "KERNEL32.dll!CreateDirectoryW"
+    },
+    {
+      "address": "0x013cc260",
+      "symbol": "KERNEL32.dll!GetFullPathNameW"
+    },
+    {
+      "address": "0x013cc264",
+      "symbol": "KERNEL32.dll!RemoveDirectoryW"
+    },
+    {
+      "address": "0x013cc268",
+      "symbol": "KERNEL32.dll!SetEnvironmentVariableA"
+    },
+    {
+      "address": "0x013cc26c",
+      "symbol": "KERNEL32.dll!GetEnvironmentVariableA"
+    },
+    {
+      "address": "0x013cc270",
+      "symbol": "KERNEL32.dll!LoadLibraryW"
+    },
+    {
+      "address": "0x013cc274",
+      "symbol": "KERNEL32.dll!GetACP"
+    },
+    {
+      "address": "0x013cc278",
+      "symbol": "KERNEL32.dll!GetFullPathNameA"
+    },
+    {
+      "address": "0x013cc27c",
+      "symbol": "KERNEL32.dll!GetProcessTimes"
+    },
+    {
+      "address": "0x013cc280",
+      "symbol": "KERNEL32.dll!GetCommandLineA"
+    },
+    {
+      "address": "0x013cc284",
+      "symbol": "KERNEL32.dll!Sleep"
+    },
+    {
+      "address": "0x013cc288",
+      "symbol": "KERNEL32.dll!MoveFileA"
+    },
+    {
+      "address": "0x013cc28c",
+      "symbol": "KERNEL32.dll!CreateDirectoryA"
+    },
+    {
+      "address": "0x013cc290",
+      "symbol": "KERNEL32.dll!RemoveDirectoryA"
+    },
+    {
+      "address": "0x013cc294",
+      "symbol": "KERNEL32.dll!GetCurrentDirectoryA"
+    },
+    {
+      "address": "0x013cc298",
+      "symbol": "KERNEL32.dll!UnhandledExceptionFilter"
+    },
+    {
+      "address": "0x013cc29c",
+      "symbol": "KERNEL32.dll!GetStartupInfoA"
+    },
+    {
+      "address": "0x013cc2a0",
+      "symbol": "KERNEL32.dll!FlushConsoleInputBuffer"
+    },
+    {
+      "address": "0x013cc2a4",
+      "symbol": "KERNEL32.dll!FindFirstFileA"
+    },
+    {
+      "address": "0x013cc2a8",
+      "symbol": "KERNEL32.dll!FindNextFileA"
+    },
+    {
+      "address": "0x013cc2ac",
+      "symbol": "KERNEL32.dll!GlobalMemoryStatus"
+    },
+    {
+      "address": "0x013cc2b0",
+      "symbol": "KERNEL32.dll!GetStdHandle"
+    },
+    {
+      "address": "0x013cc2b4",
+      "symbol": "KERNEL32.dll!GetFileType"
+    },
+    {
+      "address": "0x013cc2b8",
+      "symbol": "KERNEL32.dll!QueryPerformanceCounter"
+    },
+    {
+      "address": "0x013cc2bc",
+      "symbol": "KERNEL32.dll!TlsGetValue"
+    },
+    {
+      "address": "0x013cc2c0",
+      "symbol": "KERNEL32.dll!GetDiskFreeSpaceExA"
+    },
+    {
+      "address": "0x013cc2c4",
+      "symbol": "KERNEL32.dll!GetVolumeInformationA"
+    },
+    {
+      "address": "0x013cc2c8",
+      "symbol": "KERNEL32.dll!GetDriveTypeA"
+    },
+    {
+      "address": "0x013cc2cc",
+      "symbol": "KERNEL32.dll!GetLogicalDrives"
+    },
+    {
+      "address": "0x013cc2d0",
+      "symbol": "KERNEL32.dll!InitializeCriticalSection"
+    },
+    {
+      "address": "0x013cc2d4",
+      "symbol": "KERNEL32.dll!DeleteCriticalSection"
+    },
+    {
+      "address": "0x013cc2d8",
+      "symbol": "KERNEL32.dll!EnterCriticalSection"
+    },
+    {
+      "address": "0x013cc2dc",
+      "symbol": "KERNEL32.dll!LeaveCriticalSection"
+    },
+    {
+      "address": "0x013cc2e0",
+      "symbol": "KERNEL32.dll!DeleteFileA"
+    },
+    {
+      "address": "0x013cc2e4",
+      "symbol": "KERNEL32.dll!GetCurrentProcess"
+    },
+    {
+      "address": "0x013cc2ec",
+      "symbol": "MSVCR90.dll!tolower"
+    },
+    {
+      "address": "0x013cc2f0",
+      "symbol": "MSVCR90.dll!_controlfp_s"
+    },
+    {
+      "address": "0x013cc2f4",
+      "symbol": "MSVCR90.dll!_invoke_watson"
+    },
+    {
+      "address": "0x013cc2f8",
+      "symbol": "MSVCR90.dll!?_type_info_dtor_internal_method@type_info@@QAEXXZ"
+    },
+    {
+      "address": "0x013cc2fc",
+      "symbol": "MSVCR90.dll!_except_handler4_common"
+    },
     {
       "address": "0x013cc300",
       "symbol": "MSVCR90.dll!_time32"
@@ -244,6 +1118,1138 @@
     {
       "address": "0x013cc35c",
       "symbol": "MSVCR90.dll!_getch"
+    },
+    {
+      "address": "0x013cc360",
+      "symbol": "MSVCR90.dll!signal"
+    },
+    {
+      "address": "0x013cc364",
+      "symbol": "MSVCR90.dll!isupper"
+    },
+    {
+      "address": "0x013cc368",
+      "symbol": "MSVCR90.dll!strcmp"
+    },
+    {
+      "address": "0x013cc36c",
+      "symbol": "MSVCR90.dll!vfprintf"
+    },
+    {
+      "address": "0x013cc370",
+      "symbol": "MSVCR90.dll!ldexp"
+    },
+    {
+      "address": "0x013cc374",
+      "symbol": "MSVCR90.dll!vsprintf"
+    },
+    {
+      "address": "0x013cc378",
+      "symbol": "MSVCR90.dll!_aligned_free"
+    },
+    {
+      "address": "0x013cc37c",
+      "symbol": "MSVCR90.dll!_aligned_malloc"
+    },
+    {
+      "address": "0x013cc380",
+      "symbol": "MSVCR90.dll!wcsncat"
+    },
+    {
+      "address": "0x013cc384",
+      "symbol": "MSVCR90.dll!_control87"
+    },
+    {
+      "address": "0x013cc388",
+      "symbol": "MSVCR90.dll!wcscspn"
+    },
+    {
+      "address": "0x013cc38c",
+      "symbol": "MSVCR90.dll!strncat"
+    },
+    {
+      "address": "0x013cc390",
+      "symbol": "MSVCR90.dll!_controlfp"
+    },
+    {
+      "address": "0x013cc394",
+      "symbol": "MSVCR90.dll!_ultoa"
+    },
+    {
+      "address": "0x013cc398",
+      "symbol": "MSVCR90.dll!_strlwr"
+    },
+    {
+      "address": "0x013cc39c",
+      "symbol": "MSVCR90.dll!fputs"
+    },
+    {
+      "address": "0x013cc3a0",
+      "symbol": "MSVCR90.dll!_isnan"
+    },
+    {
+      "address": "0x013cc3a4",
+      "symbol": "MSVCR90.dll!_finite"
+    },
+    {
+      "address": "0x013cc3a8",
+      "symbol": "MSVCR90.dll!_searchenv"
+    },
+    {
+      "address": "0x013cc3ac",
+      "symbol": "MSVCR90.dll!_wsearchenv"
+    },
+    {
+      "address": "0x013cc3b0",
+      "symbol": "MSVCR90.dll!_spawnv"
+    },
+    {
+      "address": "0x013cc3b4",
+      "symbol": "MSVCR90.dll!_wspawnv"
+    },
+    {
+      "address": "0x013cc3b8",
+      "symbol": "MSVCR90.dll!_strtoui64"
+    },
+    {
+      "address": "0x013cc3bc",
+      "symbol": "MSVCR90.dll!_wgetcwd"
+    },
+    {
+      "address": "0x013cc3c0",
+      "symbol": "MSVCR90.dll!_wstat64i32"
+    },
+    {
+      "address": "0x013cc3c4",
+      "symbol": "MSVCR90.dll!_getdrive"
+    },
+    {
+      "address": "0x013cc3c8",
+      "symbol": "MSVCR90.dll!_wgetdcwd"
+    },
+    {
+      "address": "0x013cc3cc",
+      "symbol": "MSVCR90.dll!_fcvt"
+    },
+    {
+      "address": "0x013cc3d0",
+      "symbol": "MSVCR90.dll!_ecvt"
+    },
+    {
+      "address": "0x013cc3d4",
+      "symbol": "MSVCR90.dll!_beginthreadex"
+    },
+    {
+      "address": "0x013cc3d8",
+      "symbol": "MSVCR90.dll!_mktime64"
+    },
+    {
+      "address": "0x013cc3dc",
+      "symbol": "MSVCR90.dll!strftime"
+    },
+    {
+      "address": "0x013cc3e0",
+      "symbol": "MSVCR90.dll!_localtime64"
+    },
+    {
+      "address": "0x013cc3e4",
+      "symbol": "MSVCR90.dll!strtol"
+    },
+    {
+      "address": "0x013cc3e8",
+      "symbol": "MSVCR90.dll!strpbrk"
+    },
+    {
+      "address": "0x013cc3ec",
+      "symbol": "MSVCR90.dll!isprint"
+    },
+    {
+      "address": "0x013cc3f0",
+      "symbol": "MSVCR90.dll!atof"
+    },
+    {
+      "address": "0x013cc3f4",
+      "symbol": "MSVCR90.dll!atoi"
+    },
+    {
+      "address": "0x013cc3f8",
+      "symbol": "MSVCR90.dll!towupper"
+    },
+    {
+      "address": "0x013cc3fc",
+      "symbol": "MSVCR90.dll!setlocale"
+    },
+    {
+      "address": "0x013cc400",
+      "symbol": "MSVCR90.dll!_setmbcp"
+    },
+    {
+      "address": "0x013cc404",
+      "symbol": "MSVCR90.dll!_wcslwr"
+    },
+    {
+      "address": "0x013cc408",
+      "symbol": "MSVCR90.dll!_ltow"
+    },
+    {
+      "address": "0x013cc40c",
+      "symbol": "MSVCR90.dll!strrchr"
+    },
+    {
+      "address": "0x013cc410",
+      "symbol": "MSVCR90.dll!_gmtime64"
+    },
+    {
+      "address": "0x013cc414",
+      "symbol": "MSVCR90.dll!abort"
+    },
+    {
+      "address": "0x013cc418",
+      "symbol": "MSVCR90.dll!_snprintf"
+    },
+    {
+      "address": "0x013cc41c",
+      "symbol": "MSVCR90.dll!ftell"
+    },
+    {
+      "address": "0x013cc420",
+      "symbol": "MSVCR90.dll!fflush"
+    },
+    {
+      "address": "0x013cc424",
+      "symbol": "MSVCR90.dll!_vsnprintf"
+    },
+    {
+      "address": "0x013cc428",
+      "symbol": "MSVCR90.dll!_errno"
+    },
+    {
+      "address": "0x013cc42c",
+      "symbol": "MSVCR90.dll!ferror"
+    },
+    {
+      "address": "0x013cc430",
+      "symbol": "MSVCR90.dll!longjmp"
+    },
+    {
+      "address": "0x013cc434",
+      "symbol": "MSVCR90.dll!getenv"
+    },
+    {
+      "address": "0x013cc438",
+      "symbol": "MSVCR90.dll!tmpfile"
+    },
+    {
+      "address": "0x013cc43c",
+      "symbol": "MSVCR90.dll!fseek"
+    },
+    {
+      "address": "0x013cc440",
+      "symbol": "MSVCR90.dll!_setjmp3"
+    },
+    {
+      "address": "0x013cc444",
+      "symbol": "MSVCR90.dll!_ltoa"
+    },
+    {
+      "address": "0x013cc448",
+      "symbol": "MSVCR90.dll!fgets"
+    },
+    {
+      "address": "0x013cc44c",
+      "symbol": "MSVCR90.dll!_stat64i32"
+    },
+    {
+      "address": "0x013cc450",
+      "symbol": "MSVCR90.dll!strspn"
+    },
+    {
+      "address": "0x013cc454",
+      "symbol": "MSVCR90.dll!strcspn"
+    },
+    {
+      "address": "0x013cc458",
+      "symbol": "MSVCR90.dll!wcsrchr"
+    },
+    {
+      "address": "0x013cc45c",
+      "symbol": "MSVCR90.dll!__iob_func"
+    },
+    {
+      "address": "0x013cc460",
+      "symbol": "MSVCR90.dll!_aligned_realloc"
+    },
+    {
+      "address": "0x013cc464",
+      "symbol": "MSVCR90.dll!exit"
+    },
+    {
+      "address": "0x013cc468",
+      "symbol": "MSVCR90.dll!_purecall"
+    },
+    {
+      "address": "0x013cc46c",
+      "symbol": "MSVCR90.dll!_CIcos"
+    },
+    {
+      "address": "0x013cc470",
+      "symbol": "MSVCR90.dll!_CIsin"
+    },
+    {
+      "address": "0x013cc474",
+      "symbol": "MSVCR90.dll!_CIsqrt"
+    },
+    {
+      "address": "0x013cc478",
+      "symbol": "MSVCR90.dll!memset"
+    },
+    {
+      "address": "0x013cc47c",
+      "symbol": "MSVCR90.dll!memcpy"
+    },
+    {
+      "address": "0x013cc480",
+      "symbol": "MSVCR90.dll!memmove"
+    },
+    {
+      "address": "0x013cc484",
+      "symbol": "MSVCR90.dll!_CIasin"
+    },
+    {
+      "address": "0x013cc488",
+      "symbol": "MSVCR90.dll!_CIfmod"
+    },
+    {
+      "address": "0x013cc48c",
+      "symbol": "MSVCR90.dll!_CIacos"
+    },
+    {
+      "address": "0x013cc490",
+      "symbol": "MSVCR90.dll!fclose"
+    },
+    {
+      "address": "0x013cc494",
+      "symbol": "MSVCR90.dll!fprintf"
+    },
+    {
+      "address": "0x013cc498",
+      "symbol": "MSVCR90.dll!fopen"
+    },
+    {
+      "address": "0x013cc49c",
+      "symbol": "MSVCR90.dll!fwrite"
+    },
+    {
+      "address": "0x013cc4a0",
+      "symbol": "MSVCR90.dll!sprintf"
+    },
+    {
+      "address": "0x013cc4a4",
+      "symbol": "MSVCR90.dll!_CIpow"
+    },
+    {
+      "address": "0x013cc4a8",
+      "symbol": "MSVCR90.dll!wcstoul"
+    },
+    {
+      "address": "0x013cc4ac",
+      "symbol": "MSVCR90.dll!_ultow"
+    },
+    {
+      "address": "0x013cc4b0",
+      "symbol": "MSVCR90.dll!strtod"
+    },
+    {
+      "address": "0x013cc4b4",
+      "symbol": "MSVCR90.dll!_CIlog"
+    },
+    {
+      "address": "0x013cc4b8",
+      "symbol": "MSVCR90.dll!floor"
+    },
+    {
+      "address": "0x013cc4bc",
+      "symbol": "MSVCR90.dll!ceil"
+    },
+    {
+      "address": "0x013cc4c0",
+      "symbol": "MSVCR90.dll!modf"
+    },
+    {
+      "address": "0x013cc4c4",
+      "symbol": "MSVCR90.dll!__CxxFrameHandler3"
+    },
+    {
+      "address": "0x013cc4c8",
+      "symbol": "MSVCR90.dll!atol"
+    },
+    {
+      "address": "0x013cc4cc",
+      "symbol": "MSVCR90.dll!isdigit"
+    },
+    {
+      "address": "0x013cc4d0",
+      "symbol": "MSVCR90.dll!_strnicmp"
+    },
+    {
+      "address": "0x013cc4d4",
+      "symbol": "MSVCR90.dll!_CxxThrowException"
+    },
+    {
+      "address": "0x013cc4d8",
+      "symbol": "MSVCR90.dll!sscanf"
+    },
+    {
+      "address": "0x013cc4dc",
+      "symbol": "MSVCR90.dll!_stricmp"
+    },
+    {
+      "address": "0x013cc4e0",
+      "symbol": "MSVCR90.dll!swscanf"
+    },
+    {
+      "address": "0x013cc4e4",
+      "symbol": "MSVCR90.dll!wcstol"
+    },
+    {
+      "address": "0x013cc4e8",
+      "symbol": "MSVCR90.dll!wcsncmp"
+    },
+    {
+      "address": "0x013cc4ec",
+      "symbol": "MSVCR90.dll!_wtol"
+    },
+    {
+      "address": "0x013cc4f0",
+      "symbol": "MSVCR90.dll!wcsncpy"
+    },
+    {
+      "address": "0x013cc4f4",
+      "symbol": "MSVCR90.dll!strncpy"
+    },
+    {
+      "address": "0x013cc4f8",
+      "symbol": "MSVCR90.dll!strtoul"
+    },
+    {
+      "address": "0x013cc4fc",
+      "symbol": "MSVCR90.dll!strncmp"
+    },
+    {
+      "address": "0x013cc500",
+      "symbol": "MSVCR90.dll!toupper"
+    },
+    {
+      "address": "0x013cc504",
+      "symbol": "MSVCR90.dll!strchr"
+    },
+    {
+      "address": "0x013cc508",
+      "symbol": "MSVCR90.dll!isspace"
+    },
+    {
+      "address": "0x013cc50c",
+      "symbol": "MSVCR90.dll!_wcsicmp"
+    },
+    {
+      "address": "0x013cc510",
+      "symbol": "MSVCR90.dll!isalnum"
+    },
+    {
+      "address": "0x013cc514",
+      "symbol": "MSVCR90.dll!wcstod"
+    },
+    {
+      "address": "0x013cc518",
+      "symbol": "MSVCR90.dll!isalpha"
+    },
+    {
+      "address": "0x013cc51c",
+      "symbol": "MSVCR90.dll!wcsstr"
+    },
+    {
+      "address": "0x013cc520",
+      "symbol": "MSVCR90.dll!wcschr"
+    },
+    {
+      "address": "0x013cc524",
+      "symbol": "MSVCR90.dll!_wcsnicmp"
+    },
+    {
+      "address": "0x013cc528",
+      "symbol": "MSVCR90.dll!towlower"
+    },
+    {
+      "address": "0x013cc52c",
+      "symbol": "MSVCR90.dll!iswctype"
+    },
+    {
+      "address": "0x013cc530",
+      "symbol": "MSVCR90.dll!isxdigit"
+    },
+    {
+      "address": "0x013cc534",
+      "symbol": "MSVCR90.dll!memchr"
+    },
+    {
+      "address": "0x013cc538",
+      "symbol": "MSVCR90.dll!strstr"
+    },
+    {
+      "address": "0x013cc53c",
+      "symbol": "MSVCR90.dll!printf"
+    },
+    {
+      "address": "0x013cc540",
+      "symbol": "MSVCR90.dll!qsort"
+    },
+    {
+      "address": "0x013cc544",
+      "symbol": "MSVCR90.dll!_except_handler3"
+    },
+    {
+      "address": "0x013cc548",
+      "symbol": "MSVCR90.dll!fread"
+    },
+    {
+      "address": "0x013cc54c",
+      "symbol": "MSVCR90.dll!feof"
+    },
+    {
+      "address": "0x013cc550",
+      "symbol": "MSVCR90.dll!free"
+    },
+    {
+      "address": "0x013cc554",
+      "symbol": "MSVCR90.dll!realloc"
+    },
+    {
+      "address": "0x013cc558",
+      "symbol": "MSVCR90.dll!malloc"
+    },
+    {
+      "address": "0x013cc55c",
+      "symbol": "MSVCR90.dll!_time64"
+    },
+    {
+      "address": "0x013cc560",
+      "symbol": "MSVCR90.dll!rand"
+    },
+    {
+      "address": "0x013cc564",
+      "symbol": "MSVCR90.dll!_crt_debugger_hook"
+    },
+    {
+      "address": "0x013cc56c",
+      "symbol": "PSAPI.DLL!GetModuleInformation"
+    },
+    {
+      "address": "0x013cc574",
+      "symbol": "SHELL32.dll!SHGetFolderPathW"
+    },
+    {
+      "address": "0x013cc578",
+      "symbol": "SHELL32.dll!DragQueryFileW"
+    },
+    {
+      "address": "0x013cc57c",
+      "symbol": "SHELL32.dll!ShellExecuteW"
+    },
+    {
+      "address": "0x013cc584",
+      "symbol": "USER32.dll!SetWindowLongW"
+    },
+    {
+      "address": "0x013cc588",
+      "symbol": "USER32.dll!CreateWindowExW"
+    },
+    {
+      "address": "0x013cc58c",
+      "symbol": "USER32.dll!SetWindowPos"
+    },
+    {
+      "address": "0x013cc590",
+      "symbol": "USER32.dll!GetWindowLongA"
+    },
+    {
+      "address": "0x013cc594",
+      "symbol": "USER32.dll!GetSystemMetrics"
+    },
+    {
+      "address": "0x013cc598",
+      "symbol": "USER32.dll!GetClientRect"
+    },
+    {
+      "address": "0x013cc59c",
+      "symbol": "USER32.dll!SetWindowTextW"
+    },
+    {
+      "address": "0x013cc5a0",
+      "symbol": "USER32.dll!DestroyWindow"
+    },
+    {
+      "address": "0x013cc5a4",
+      "symbol": "USER32.dll!GetDesktopWindow"
+    },
+    {
+      "address": "0x013cc5a8",
+      "symbol": "USER32.dll!IsDlgButtonChecked"
+    },
+    {
+      "address": "0x013cc5ac",
+      "symbol": "USER32.dll!CheckDlgButton"
+    },
+    {
+      "address": "0x013cc5b0",
+      "symbol": "USER32.dll!GetDoubleClickTime"
+    },
+    {
+      "address": "0x013cc5b4",
+      "symbol": "USER32.dll!wsprintfA"
+    },
+    {
+      "address": "0x013cc5b8",
+      "symbol": "USER32.dll!RegisterClassA"
+    },
+    {
+      "address": "0x013cc5bc",
+      "symbol": "USER32.dll!CreateWindowExA"
+    },
+    {
+      "address": "0x013cc5c0",
+      "symbol": "USER32.dll!SetClipboardViewer"
+    },
+    {
+      "address": "0x013cc5c4",
+      "symbol": "USER32.dll!IsClipboardFormatAvailable"
+    },
+    {
+      "address": "0x013cc5c8",
+      "symbol": "USER32.dll!GetClipboardData"
+    },
+    {
+      "address": "0x013cc5cc",
+      "symbol": "USER32.dll!TranslateMessage"
+    },
+    {
+      "address": "0x013cc5d0",
+      "symbol": "USER32.dll!EmptyClipboard"
+    },
+    {
+      "address": "0x013cc5d4",
+      "symbol": "USER32.dll!SetClipboardData"
+    },
+    {
+      "address": "0x013cc5d8",
+      "symbol": "USER32.dll!CloseClipboard"
+    },
+    {
+      "address": "0x013cc5dc",
+      "symbol": "USER32.dll!ChangeClipboardChain"
+    },
+    {
+      "address": "0x013cc5e0",
+      "symbol": "USER32.dll!wsprintfW"
+    },
+    {
+      "address": "0x013cc5e4",
+      "symbol": "USER32.dll!GetCursorPos"
+    },
+    {
+      "address": "0x013cc5e8",
+      "symbol": "USER32.dll!GetKeyboardState"
+    },
+    {
+      "address": "0x013cc5ec",
+      "symbol": "USER32.dll!DefWindowProcA"
+    },
+    {
+      "address": "0x013cc5f0",
+      "symbol": "USER32.dll!PeekMessageA"
+    },
+    {
+      "address": "0x013cc5f4",
+      "symbol": "USER32.dll!GetKeyboardLayout"
+    },
+    {
+      "address": "0x013cc5f8",
+      "symbol": "USER32.dll!RegisterClassExW"
+    },
+    {
+      "address": "0x013cc5fc",
+      "symbol": "USER32.dll!SetTimer"
+    },
+    {
+      "address": "0x013cc600",
+      "symbol": "USER32.dll!SetCursor"
+    },
+    {
+      "address": "0x013cc604",
+      "symbol": "USER32.dll!SetCursorPos"
+    },
+    {
+      "address": "0x013cc608",
+      "symbol": "USER32.dll!IntersectRect"
+    },
+    {
+      "address": "0x013cc60c",
+      "symbol": "USER32.dll!ReleaseCapture"
+    },
+    {
+      "address": "0x013cc610",
+      "symbol": "USER32.dll!SetCapture"
+    },
+    {
+      "address": "0x013cc614",
+      "symbol": "USER32.dll!GetMenu"
+    },
+    {
+      "address": "0x013cc618",
+      "symbol": "USER32.dll!AdjustWindowRectEx"
+    },
+    {
+      "address": "0x013cc61c",
+      "symbol": "USER32.dll!MoveWindow"
+    },
+    {
+      "address": "0x013cc620",
+      "symbol": "USER32.dll!BeginPaint"
+    },
+    {
+      "address": "0x013cc624",
+      "symbol": "USER32.dll!EndPaint"
+    },
+    {
+      "address": "0x013cc628",
+      "symbol": "USER32.dll!EnumDisplayMonitors"
+    },
+    {
+      "address": "0x013cc62c",
+      "symbol": "USER32.dll!PeekMessageW"
+    },
+    {
+      "address": "0x013cc630",
+      "symbol": "USER32.dll!DispatchMessageW"
+    },
+    {
+      "address": "0x013cc634",
+      "symbol": "USER32.dll!ClientToScreen"
+    },
+    {
+      "address": "0x013cc638",
+      "symbol": "USER32.dll!KillTimer"
+    },
+    {
+      "address": "0x013cc63c",
+      "symbol": "USER32.dll!UnregisterClassA"
+    },
+    {
+      "address": "0x013cc640",
+      "symbol": "USER32.dll!GetKeyState"
+    },
+    {
+      "address": "0x013cc644",
+      "symbol": "USER32.dll!PostMessageA"
+    },
+    {
+      "address": "0x013cc648",
+      "symbol": "USER32.dll!ShowCursor"
+    },
+    {
+      "address": "0x013cc64c",
+      "symbol": "USER32.dll!GetWindowRect"
+    },
+    {
+      "address": "0x013cc650",
+      "symbol": "USER32.dll!MonitorFromWindow"
+    },
+    {
+      "address": "0x013cc654",
+      "symbol": "USER32.dll!IsZoomed"
+    },
+    {
+      "address": "0x013cc658",
+      "symbol": "USER32.dll!GetAncestor"
+    },
+    {
+      "address": "0x013cc65c",
+      "symbol": "USER32.dll!IsIconic"
+    },
+    {
+      "address": "0x013cc660",
+      "symbol": "USER32.dll!IsWindowVisible"
+    },
+    {
+      "address": "0x013cc664",
+      "symbol": "USER32.dll!SetActiveWindow"
+    },
+    {
+      "address": "0x013cc668",
+      "symbol": "USER32.dll!GetActiveWindow"
+    },
+    {
+      "address": "0x013cc66c",
+      "symbol": "USER32.dll!FillRect"
+    },
+    {
+      "address": "0x013cc670",
+      "symbol": "USER32.dll!UpdateWindow"
+    },
+    {
+      "address": "0x013cc674",
+      "symbol": "USER32.dll!ValidateRect"
+    },
+    {
+      "address": "0x013cc678",
+      "symbol": "USER32.dll!InvalidateRect"
+    },
+    {
+      "address": "0x013cc67c",
+      "symbol": "USER32.dll!LoadIconA"
+    },
+    {
+      "address": "0x013cc680",
+      "symbol": "USER32.dll!DestroyCursor"
+    },
+    {
+      "address": "0x013cc684",
+      "symbol": "USER32.dll!GetIconInfo"
+    },
+    {
+      "address": "0x013cc688",
+      "symbol": "USER32.dll!LoadImageW"
+    },
+    {
+      "address": "0x013cc68c",
+      "symbol": "USER32.dll!UnhookWindowsHookEx"
+    },
+    {
+      "address": "0x013cc690",
+      "symbol": "USER32.dll!SetWindowsHookExA"
+    },
+    {
+      "address": "0x013cc694",
+      "symbol": "USER32.dll!GetAsyncKeyState"
+    },
+    {
+      "address": "0x013cc698",
+      "symbol": "USER32.dll!CallNextHookEx"
+    },
+    {
+      "address": "0x013cc69c",
+      "symbol": "USER32.dll!GetForegroundWindow"
+    },
+    {
+      "address": "0x013cc6a0",
+      "symbol": "USER32.dll!GetWindowThreadProcessId"
+    },
+    {
+      "address": "0x013cc6a4",
+      "symbol": "USER32.dll!GetMonitorInfoA"
+    },
+    {
+      "address": "0x013cc6a8",
+      "symbol": "USER32.dll!ScreenToClient"
+    },
+    {
+      "address": "0x013cc6ac",
+      "symbol": "USER32.dll!SendMessageA"
+    },
+    {
+      "address": "0x013cc6b0",
+      "symbol": "USER32.dll!LoadCursorA"
+    },
+    {
+      "address": "0x013cc6b4",
+      "symbol": "USER32.dll!SetWindowLongA"
+    },
+    {
+      "address": "0x013cc6b8",
+      "symbol": "USER32.dll!SetFocus"
+    },
+    {
+      "address": "0x013cc6bc",
+      "symbol": "USER32.dll!DefWindowProcW"
+    },
+    {
+      "address": "0x013cc6c0",
+      "symbol": "USER32.dll!GetDC"
+    },
+    {
+      "address": "0x013cc6c4",
+      "symbol": "USER32.dll!ReleaseDC"
+    },
+    {
+      "address": "0x013cc6c8",
+      "symbol": "USER32.dll!SystemParametersInfoA"
+    },
+    {
+      "address": "0x013cc6cc",
+      "symbol": "USER32.dll!GetProcessWindowStation"
+    },
+    {
+      "address": "0x013cc6d0",
+      "symbol": "USER32.dll!GetUserObjectInformationW"
+    },
+    {
+      "address": "0x013cc6d4",
+      "symbol": "USER32.dll!ShowWindow"
+    },
+    {
+      "address": "0x013cc6d8",
+      "symbol": "USER32.dll!MessageBoxW"
+    },
+    {
+      "address": "0x013cc6dc",
+      "symbol": "USER32.dll!MessageBoxA"
+    },
+    {
+      "address": "0x013cc6e0",
+      "symbol": "USER32.dll!OpenClipboard"
+    },
+    {
+      "address": "0x013cc6e4",
+      "symbol": "USER32.dll!PostQuitMessage"
+    },
+    {
+      "address": "0x013cc6ec",
+      "symbol": "USP10.dll!ScriptItemize"
+    },
+    {
+      "address": "0x013cc6f0",
+      "symbol": "USP10.dll!ScriptBreak"
+    },
+    {
+      "address": "0x013cc6f8",
+      "symbol": "VERSION.dll!GetFileVersionInfoSizeA"
+    },
+    {
+      "address": "0x013cc6fc",
+      "symbol": "VERSION.dll!GetFileVersionInfoA"
+    },
+    {
+      "address": "0x013cc700",
+      "symbol": "VERSION.dll!VerQueryValueA"
+    },
+    {
+      "address": "0x013cc704",
+      "symbol": "VERSION.dll!VerQueryValueW"
+    },
+    {
+      "address": "0x013cc708",
+      "symbol": "VERSION.dll!GetFileVersionInfoW"
+    },
+    {
+      "address": "0x013cc710",
+      "symbol": "WINMM.dll!timeEndPeriod"
+    },
+    {
+      "address": "0x013cc714",
+      "symbol": "WINMM.dll!timeBeginPeriod"
+    },
+    {
+      "address": "0x013cc718",
+      "symbol": "WINMM.dll!timeGetTime"
+    },
+    {
+      "address": "0x013cc720",
+      "symbol": "WS2_32.dll!WSAIoctl"
+    },
+    {
+      "address": "0x013cc724",
+      "symbol": "WS2_32.dll!ordinal_112"
+    },
+    {
+      "address": "0x013cc728",
+      "symbol": "WS2_32.dll!WSASocketA"
+    },
+    {
+      "address": "0x013cc730",
+      "symbol": "WSOCK32.dll!ordinal_19"
+    },
+    {
+      "address": "0x013cc734",
+      "symbol": "WSOCK32.dll!ordinal_13"
+    },
+    {
+      "address": "0x013cc738",
+      "symbol": "WSOCK32.dll!ordinal_4"
+    },
+    {
+      "address": "0x013cc73c",
+      "symbol": "WSOCK32.dll!ordinal_1"
+    },
+    {
+      "address": "0x013cc740",
+      "symbol": "WSOCK32.dll!ordinal_6"
+    },
+    {
+      "address": "0x013cc744",
+      "symbol": "WSOCK32.dll!ordinal_7"
+    },
+    {
+      "address": "0x013cc748",
+      "symbol": "WSOCK32.dll!ordinal_151"
+    },
+    {
+      "address": "0x013cc74c",
+      "symbol": "WSOCK32.dll!ordinal_18"
+    },
+    {
+      "address": "0x013cc750",
+      "symbol": "WSOCK32.dll!ordinal_16"
+    },
+    {
+      "address": "0x013cc754",
+      "symbol": "WSOCK32.dll!ordinal_10"
+    },
+    {
+      "address": "0x013cc758",
+      "symbol": "WSOCK32.dll!ordinal_52"
+    },
+    {
+      "address": "0x013cc75c",
+      "symbol": "WSOCK32.dll!ordinal_3"
+    },
+    {
+      "address": "0x013cc760",
+      "symbol": "WSOCK32.dll!ordinal_115"
+    },
+    {
+      "address": "0x013cc764",
+      "symbol": "WSOCK32.dll!ordinal_116"
+    },
+    {
+      "address": "0x013cc768",
+      "symbol": "WSOCK32.dll!ordinal_111"
+    },
+    {
+      "address": "0x013cc76c",
+      "symbol": "WSOCK32.dll!ordinal_20"
+    },
+    {
+      "address": "0x013cc770",
+      "symbol": "WSOCK32.dll!ordinal_17"
+    },
+    {
+      "address": "0x013cc774",
+      "symbol": "WSOCK32.dll!ordinal_12"
+    },
+    {
+      "address": "0x013cc778",
+      "symbol": "WSOCK32.dll!ordinal_23"
+    },
+    {
+      "address": "0x013cc77c",
+      "symbol": "WSOCK32.dll!ordinal_2"
+    },
+    {
+      "address": "0x013cc780",
+      "symbol": "WSOCK32.dll!ordinal_22"
+    },
+    {
+      "address": "0x013cc784",
+      "symbol": "WSOCK32.dll!ordinal_5"
+    },
+    {
+      "address": "0x013cc788",
+      "symbol": "WSOCK32.dll!ordinal_21"
+    },
+    {
+      "address": "0x013cc790",
+      "symbol": "d3d9.dll!Direct3DCreate9"
+    },
+    {
+      "address": "0x013cc798",
+      "symbol": "d3dx9_27.dll!D3DXVec3Transform"
+    },
+    {
+      "address": "0x013cc79c",
+      "symbol": "d3dx9_27.dll!D3DXVec3TransformNormal"
+    },
+    {
+      "address": "0x013cc7a0",
+      "symbol": "d3dx9_27.dll!D3DXCheckVersion"
+    },
+    {
+      "address": "0x013cc7a4",
+      "symbol": "d3dx9_27.dll!D3DXGetPixelShaderProfile"
+    },
+    {
+      "address": "0x013cc7a8",
+      "symbol": "d3dx9_27.dll!D3DXGetVertexShaderProfile"
+    },
+    {
+      "address": "0x013cc7ac",
+      "symbol": "d3dx9_27.dll!D3DXMatrixMultiplyTranspose"
+    },
+    {
+      "address": "0x013cc7b0",
+      "symbol": "d3dx9_27.dll!D3DXMatrixTranspose"
+    },
+    {
+      "address": "0x013cc7b4",
+      "symbol": "d3dx9_27.dll!D3DXMatrixMultiply"
+    },
+    {
+      "address": "0x013cc7b8",
+      "symbol": "d3dx9_27.dll!D3DXCompileShader"
+    },
+    {
+      "address": "0x013cc7c0",
+      "symbol": "dbghelp.dll!UnDecorateSymbolName"
+    },
+    {
+      "address": "0x013cc7c4",
+      "symbol": "dbghelp.dll!SymLoadModule64"
+    },
+    {
+      "address": "0x013cc7c8",
+      "symbol": "dbghelp.dll!SymInitialize"
+    },
+    {
+      "address": "0x013cc7cc",
+      "symbol": "dbghelp.dll!SymSetOptions"
+    },
+    {
+      "address": "0x013cc7d0",
+      "symbol": "dbghelp.dll!SymCleanup"
+    },
+    {
+      "address": "0x013cc7d4",
+      "symbol": "dbghelp.dll!SymGetSymFromAddr64"
+    },
+    {
+      "address": "0x013cc7d8",
+      "symbol": "dbghelp.dll!SymGetLineFromAddr64"
+    },
+    {
+      "address": "0x013cc7e0",
+      "symbol": "ole32.dll!OleInitialize"
+    },
+    {
+      "address": "0x013cc7e4",
+      "symbol": "ole32.dll!RegisterDragDrop"
+    },
+    {
+      "address": "0x013cc7e8",
+      "symbol": "ole32.dll!RevokeDragDrop"
+    },
+    {
+      "address": "0x013cc7ec",
+      "symbol": "ole32.dll!CoLockObjectExternal"
+    },
+    {
+      "address": "0x013cc7f0",
+      "symbol": "ole32.dll!OleUninitialize"
+    },
+    {
+      "address": "0x013cc7f4",
+      "symbol": "ole32.dll!ReleaseStgMedium"
+    },
+    {
+      "address": "0x013cc7fc",
+      "symbol": "steam_api.dll!SteamApps"
     }
   ]
 }

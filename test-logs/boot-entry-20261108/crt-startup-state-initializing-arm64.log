@@ -1,2 +1,2 @@
 PASS crt_startup_state_initializing stop=0x011e0f98 executed=107 esp_delta=-132 ebp=entry-4 eax=1 esi=1 edi=lock_reg cookie=consistent imports=14 initterm_e=walked state=initializing cmp=equal table=0x013cc80c..0x013eb098 app_type=2 fpucw=0x0001027f
-DETAIL crt_startup_state_initializing cookie=0x34ce1662 complement=0xcb31e99d lock=0x70000400 state=0x00000001 walk_called=0x011e0e95 walk_missing=0x013000d0
+DETAIL crt_startup_state_initializing cookie=0xf6742710 complement=0x098bd8ef lock=0x70000400 state=0x00000001 walk_called=0x011e0e95 walk_missing=0x013000d0

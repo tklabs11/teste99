@@ -4721,3 +4721,218 @@ inicializa o processo. Nada disso é boot, menu, renderização ou gameplay.
 - [relatório da execução do lote 1](./test-logs/boot-entry-20261108/report-cpp-batch-1-executed.md)
 - [manifesto do lote gerado](./test-logs/boot-entry-20261108/generated-cpp-batch-1/manifest.json)
 - [manifesto do image guest](./test-logs/boot-entry-20261108/generated-initterm-guest-image/manifest.json)
+
+### Segundo lote — a guarda de instância única do motor
+
+`0x013002d0` chama `0x00935b70`, uma guarda de instância única: mutex nomeado,
+contador atômico, nó alocado no heap com seção crítica e o identificador
+publicado em variável de ambiente. O walk agora a executa **inteira** no aparelho:
+
+```
+PASS crt_cpp_walk stop=0x011e0f98 executed=107 imports=40 initializers=6
+     walk=stopped_at_0x0138e640 sections=3 tls=2
+     guard=single_instance node=0x5e000010 count=1
+     mutex=SingleMgrMutex00001234 encoded=5e000010
+PASS arm64_build target=aarch64-linux-android29
+PASS x86_vs_arm64 <linha idêntica>
+PASS arm64_device_run serial=PJMZAEJRX4YLFIDI
+```
+
+A ordem observada é a evidência: `GetCurrentProcessId` → `wsprintfA`
+(`"SingleMgrMutex%08x"`) → `CreateMutexA` → `WaitForSingleObject` →
+`GetEnvironmentVariableA` → `GetProcessHeap` → `HeapAlloc` →
+`InitializeCriticalSection` → `sprintf` (`"%I64x"`) → `SetEnvironmentVariableA` →
+`ReleaseMutex` → `CloseHandle`. Estado final: nó em `0x5e000010`, lista
+auto-encadeada, contador do nó `1`, `LockCount = -1` e contador global `1`.
+
+**Shims novos:** `wsprintfA` e `sprintf` com um formatador estrito (`%%`, `%s`,
+`%d/%i/%u/%x/%X/%p`, `%I64x/%I64u/%I64d`, largura e zero-pad — qualquer outra
+conversão falha fechado nomeando o especificador), `_strtoui64` com `EDX:EAX`,
+`GetProcessHeap`, `HeapAlloc`/`HeapFree` (bump allocator em
+`0x5e000000..0x5e001000`, blocos alinhados e nunca reutilizados),
+`WaitForSingleObject`, `ReleaseMutex`, `CloseHandle`,
+`GetEnvironmentVariableA`/`SetEnvironmentVariableA` com ambiente do próprio
+guest. Strings produzidas por shim passaram a ser gravadas no registro da
+chamada: o buffer de pilha do guest já foi reutilizado quando o teste confere.
+
+**Corpos de engine entram por decisão explícita:** o gerador ganhou
+`--engine-body` (repetível), e saltos diretos que caem dentro de um corpo já
+traduzido deixaram de ser reportados como dependência (`0x00620240`,
+`0x00935c2c` eram fluxo local). O lote 2 tem 6 inicializadores, 16 corpos, 284
+instruções e 22 imports, com `engine_blockers` vazio.
+
+**Image guest:** 16 regiões, 2 532 bytes, 23 slots de import; janelas novas para
+os format strings (`0x0143e830`) e para as globais da guarda (`0x01669930`). O
+gerador agora recebe todas as fontes e separa acesso de memória de immediates
+empilhados.
+
+**Bloqueio atual:** `0x0138e640` exige o corpo `0x00f474d0`, e o walk para ali
+nomeando o endereço. Nada disso é boot, menu, renderização ou gameplay.
+
+- [relatório da guarda](./test-logs/boot-entry-20261108/report-cpp-batch-2-guard.md)
+- [manifesto do lote 2](./test-logs/boot-entry-20261108/generated-cpp-batch-1/manifest.json)
+
+### Terceiro passo — o limite medido em `0x0138e640`
+
+O walk para em `0x0138e640` porque `0x00f474d0` não tem corpo. Medindo o que esse
+corpo exige (Ghidra headless, `prepare_cpp_initializer_batch.py --roots`):
+
+| conjunto | corpos | instruções |
+| --- | --- | --- |
+| closure de `0x0138e640` | **1 525** | **130 269** |
+| ramo de erro (`0x00f47430` → `0x009289e0` → `0x00927a50`) | 1 526 | ~130 000 |
+| caminho feliz estático até `0x009274d0` (2 rodadas) | 7 | 413 |
+
+`0x00f474d0` pede o registro global de objetos (`0x00935c80`), a fábrica
+`0x00f47480` — que aloca 0x530 bytes e chama o construtor `0x00927860` (100
+instruções) → `0x009274d0` (135) — e o desmonte `0x00f47430`. Detalhe que a
+análise estática não vê: a fábrica só é chamada **por ponteiro** (`CALL ECX`
+dentro de `0x00935c80`), então nenhuma caminhada de chamadas diretas a encontra;
+foi preciso ler o sítio de chamada em `0x00f474d0`. Somando essa aresta, o
+caminho feliz cai no mesmo fecho de ~1 500 corpos.
+
+Ou seja: o sétimo inicializador da tabela já **constrói um subsistema de engine**.
+O modelo de lote limitado — que levou os seis primeiros (CRT e runtime) até o
+aparelho — termina aqui. Nada foi traduzido neste passo, nenhum stub foi criado e
+o walk continua parando exatamente onde deve:
+
+```
+PASS crt_cpp_walk ... initializers=6 walk=stopped_at_0x0138e640 guard=single_instance
+PASS arm64_build / x86_vs_arm64 / arm64_device_run serial=PJMZAEJRX4YLFIDI
+```
+
+- [relatório do limite](./test-logs/boot-entry-20261108/report-cpp-batch-3-boundary.md)
+- [medição do ramo de erro](./test-logs/boot-entry-20261108/cpp-batch-2/summary.json)
+- [medição do caminho feliz](./test-logs/boot-entry-20261108/cpp-batch-2-happy/summary.json)
+
+### Quarto passo — lotes medidos, e o que o lifter ainda não cobre
+
+O modelo de lote passou a ser: sementes explícitas na ordem da linha de comando
+(`--engine-body`, porque um corpo alcançado só por ponteiro não aparece em
+nenhuma caminhada de chamadas diretas), orçamento de corpos (`--bodies`),
+despacho com falha fechada para o que ficou fora (`--allow-unresolved`) e lista
+`pending_bodies` dizendo onde a execução pode parar.
+
+**Formas de instrução que faltavam** (todas com teste, 93 no total):
+
+| forma | observação |
+| --- | --- |
+| `XCHG r32, r32` | sem flags |
+| `IMUL` 1, 2 e 3 operandos | produto em 64 bits, CF/OF por extensão |
+| `CDQ` | `EDX = sign(EAX)` |
+| `IDIV r/m32` | `EDX:EAX` com sinal, `divide_error` em zero/estouro |
+| `CMOVcc r32, r/m32` | reusa a tabela de condições dos `Jcc` |
+| `[REG*scale + disp]` | memória indexada **sem base** (tabela de despacho) |
+| `JMP` para fora do corpo | passa a ser *tail call* mesmo sem `CALL_TERMINATOR` |
+
+**Dois bloqueios medidos**, ambos reproduzíveis:
+
+1. O construtor chama `memset(obj+0x30, 0, 0x400)` por uma cadeia de saltos
+   terminais na CRT estática (`0x011e073e → 0x00401714 → 0x00401899 → 0x00401923
+   → … → 0x0040726c`), e `0x0040726c` é modelado hoje como um bloco de **2048
+   instruções** com export truncado — a fronteira precisa ser re-medida.
+2. `0x00692372` é `JMP dword ptr [EAX*0x4 + 0x6923e0]`: tabela de saltos
+   (`switch`), capacidade que o lift ainda não tem.
+
+O estágio publicado **não** mudou: o walk continua parando em `0x0138e640`, e a
+suíte inteira foi re-executada depois das mudanças de lifter — 8/8 estágios em
+x86, ARM64, igualdade e aparelho.
+
+- [relatório do passo](./test-logs/boot-entry-20261108/report-cpp-batch-4-lifter-and-limits.md)
+- [closure medida até aqui](./test-logs/boot-entry-20261108/cpp-batch-2/closure-union.json)
+
+### Quinto passo — fronteiras de função, tabelas de salto
+
+Dois bloqueios do passo anterior foram fechados, e o mapa do caminho mudou.
+
+**Fronteira de função na medição.** A descida recursiva do script Ghidra seguia
+todo salto, então um despachante engolia a função para onde saltava e o corpo
+saía com 2048 instruções e export truncado. Regra nova: salto **incondicional**
+para outra função termina o corpo (é *tail call*); salto **condicional** continua
+sendo seguido, porque o compilador funde caudas idênticas em funções vizinhas —
+a primeira versão da regra bloqueava isso e a própria medição mostrou
+(`0x0040193c`).
+
+| corpo | antes | depois |
+| --- | --- | --- |
+| `0x0040726c` | 2048 instruções, truncado | **375 instruções, exato** |
+| cadeia do preenchimento de memória do construtor (`0x011e073e`) | morria no blob | **14 corpos / 559 instruções / 0 truncados** |
+
+**Tabela de saltos.** `JMP dword ptr [EAX*0x4 + 0x6923e0]` agora vira despacho
+computado: o slot é lido da memória do guest e o destino é `switch` sobre os
+rótulos que o provedor resolveu; um slot fora deles **falha fechado** com o
+endereço visível, sem destino inventado.
+
+**O que a medição corrigida revelou:** o preenchimento de memória do construtor
+não morre mais num blob — ele segue para a **biblioteca de ponto flutuante da
+CRT**, que exige `FLD` de 32 e 80 bits, `FLD1`, `FABS`, `XORPS` com memória e
+`MOVSS` com `XMM0`. É o próximo conjunto de formas a implementar, junto com nova
+medição de `0x00407280`, `0x00441440` e `0x004c73f0`, que continuam truncados.
+
+O estágio publicado segue parando em `0x0138e640`; a suíte inteira (8/8, com
+aparelho) e os 95 testes Python passam depois das mudanças.
+
+- [relatório do passo](./test-logs/boot-entry-20261108/report-cpp-batch-5-boundaries-and-tables.md)
+- [cadeia de preenchimento medida](./test-logs/boot-entry-20261108/cpp-batch-2-chain/summary.json)
+
+### Sexto passo — float da CRT, despacho de cauda e o sétimo inicializador
+
+O conjunto de formas que a biblioteca de float da CRT pedia foi implementado, e
+com ele o lote do construtor cresceu o suficiente para atravessar o **sétimo
+inicializador C++** — o que abre o subsistema de objetos do motor.
+
+**Despacho de cauda.** `JMP` para fora do corpo e `JMP [IAT]` no fim de um corpo
+passam pelo mesmo despachante do `CALL`. Um alvo fora do lote **falha fechado
+nomeando o endereço**, e como um salto de cauda não empilha retorno o corpo
+chamado volta direto ao chamador de quem saltou. Sem isso um lote grande nem era
+gerado.
+
+**Modelo x87 com `TOP`.** A pilha virou banco de oito registradores endereçado
+por `TOP`, o que dá semântica a `FXCH`, `FADDP ST(i),ST(0)` e `FNSTSW`. Formas
+cobertas: `FLD m32/m64/ST(i)/FLD1/FLDZ`, `FILD`, `FST`/`FSTP`/`FISTP`,
+`FADD/FSUB/FMUL/FDIV/FSUBR/FDIVR` com memória e com registradores (inclusive as
+formas `…P`), `FABS`/`FCHS`/`FSQRT`, e as sete comparações com C0–C3. Limites
+declarados: valores em `double` (nenhum caminho levantado usa `tbyte`) e
+`FILD`/`FISTP` de 64 bits arredondando acima de 53 bits.
+
+**SSE escalar e inteiro:** `ADDSS/SUBSS/MULSS/DIVSS` com memória, `COMISS`/
+`UCOMISS` com memória, `MOVAPS`, `XORPS xmm,mem128`, `CVTTSS2SI r32,xmm`,
+`CVTSI2SS xmm,mem32`, `LAHF`, memória indexada em `MOVZX`/`MOVSX`.
+
+**Dois bugs que o caminho expôs:** o regex de temporários não declarava o alvo de
+`CALL [mem]` (`t<N>t`), e `InitializeCriticalSection` escrevia o layout mas não
+registrava a seção — o primeiro `EnterCriticalSection` do código de engine parava
+em "called before initialization". Ambos corrigidos.
+
+**15 shims novos** (thread, `GetSystemInfo`, `InterlockedDecrement`,
+`DuplicateHandle`, `SleepEx`, `TlsSetValue`, `VirtualAlloc`/`Free`/`Query`,
+`InitializeCriticalSectionAndSpinCount`, `memcpy`/`memmove`, `_stricmp`,
+`isalpha`), com `VirtualAlloc` separando reserva de commit.
+
+**Trilha de corpos.** Cada corpo levantado registra o próprio endereço num anel, e
+o harness imprime os 32 últimos — "onde parou" passou a ser evidência. Com ela, a
+parada ficou visível como cadeia:
+
+```
+0x0138e640 → 0x00f474d0 → 0x00935c80 → 0x00935b70 → 0x00f47480
+→ 0x00927860 → 0x011e073e → 0x00401714 … 0x00402414 → 0x004029e6
+→ 0x00402b23 → 0x00403694 → 0x004036d4 → 0x00403a95 → 0x004044f4
+→ 0x00404624  MOV CX, word ptr [EDX]  (EDX fora de toda seção)
+```
+
+Os corpos do fim são **fragmentos de thunk** (`uma instrução; JMP; CC`), e o
+efeito composto que o guest executa é inconsistente — `XOR EAX,EAX` seguido de
+`ADD EAX,0x1298f7fc` deixa EAX fora de qualquer módulo. Logo entrar ali pelo
+salto de cauda **não é o caminho verdadeiro**: a cabeça real desses thunks tem de
+ser medida, não inferida. Nada foi implementado para "fazer passar" o trecho.
+
+```
+PASS crt_cpp_walk stop=0x011e0f98 failed_at=0x00404624 executed=107
+     imports=44 initializers=7 sections=3 tls=2
+     guard=single_instance node=0x5e000010 count=2
+PASS 8/8 x86 · 8/8 ARM64 · 8/8 igualdade · 8/8 aparelho (PJMZAEJRX4YLFIDI)
+99 testes Python OK
+```
+
+- [relatório do passo](./test-logs/boot-entry-20261108/report-cpp-batch-6-float-and-thunks.md)
+- [trilha de corpos e imports](./test-logs/boot-entry-20261108/crt-cpp-walk-initializers-lift-x86.log)

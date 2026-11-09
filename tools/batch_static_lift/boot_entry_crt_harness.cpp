@@ -39,6 +39,8 @@ constexpr std::uint32_t kStartupInfoEsp = BatchLiftMemory::kEntryEsp - 0x7cu;
 // The two table-bound PUSHes before the _initterm_e call add 8 more bytes.
 constexpr std::uint32_t kInittermEsp = BatchLiftMemory::kEntryEsp - 0x84u;
 constexpr std::uint32_t kBoundaryEsp = BatchLiftMemory::kEntryEsp - 8u;
+// How many recent lifted bodies the walk detail prints on a failure.
+constexpr std::size_t kBodyTracePrinted = 32u;
 
 // The batch stage reuses the same verified prefix and then drives the
 // _initterm call itself with the batch's lifted bodies registered.
@@ -202,7 +204,21 @@ std::uint32_t first_hex_address(const std::string& text) {
 }
 
 std::uint32_t g_initializer_log[4]{};
-std::uint32_t g_initializer_calls = 0;
+// The single-instance guard's globals in the original image.
+inline constexpr std::uint32_t kGuardNodeAddress = 0x01669930u;
+inline constexpr std::uint32_t kGuardCounterAddress = 0x01669934u;
+
+// A NUL-terminated guest string, or an empty one when it is not mapped.
+[[maybe_unused]] std::string read_guest_text(
+    const BatchLiftMemory& memory, std::uint32_t address) {
+    std::string text;
+    for (std::uint32_t offset = 0; offset < 260u; ++offset) {
+        std::uint32_t byte = 0;
+        if (!memory.load8(address + offset, byte) || byte == 0u) break;
+        text.push_back(static_cast<char>(byte));
+    }
+    return text;
+}std::uint32_t g_initializer_calls = 0;
 // Results of the C++ table probe: the first initializer the shim called and
 // the first one it refused to call because no body exists. Only the stage that
 // reaches the walk uses them.
@@ -353,10 +369,13 @@ int main() {
     }
     std::array<std::uint8_t, kGuestTebBytes> teb_data{};
     std::array<std::uint8_t, 16> probe_table_data{};
+    std::array<std::uint8_t, kGuestHeapBytes> heap_data{};
     if (!memory.map_region(kGuestTebAddress, teb_data.data(),
                            teb_data.size(), true)
             || !memory.map_region(0x7ffe0000u, probe_table_data.data(),
-                                  probe_table_data.size(), true)) {
+                                  probe_table_data.size(), true)
+            || !memory.map_region(kGuestHeapBase, heap_data.data(),
+                                  heap_data.size(), true)) {
         std::puts("FAIL crt_entry map_regions");
         return 1;
     }
@@ -738,11 +757,20 @@ int main() {
         const bool state_still_initializing = state_ok && state_value == 1u;
         const bool try_level_is_one = frame_readable && try_level == 1u;
 
-        // The walk ran the batch and stopped exactly on the next initializer.
-        const bool walk_stopped = walk_status
-                == BatchLiftStatus::unsupported_dependency
-            && walk_stopped_at == kBatchNextInitializer
-            && state.regs[4] == walk_esp - 4u;
+        // The walk ran the batch and stopped at a requirement it cannot meet:
+        // the following table entry, a body this batch left out, or a memory
+        // read the guest has no mapping for. Each is reported by address.
+        bool pending_stop = false;
+        for (std::uint32_t index = 0; index < kBatchPendingBodyCount; ++index) {
+            if (walk_stopped_at == kBatchPendingBodies[index]) {
+                pending_stop = true;
+            }
+        }
+        const bool walk_stopped =
+            (walk_status == BatchLiftStatus::unsupported_dependency
+                && (walk_stopped_at == kBatchNextInitializer || pending_stop))
+            || (walk_status == BatchLiftStatus::invalid_memory
+                && state.eip != 0u);
 
         // __getmainargs built the documented guest argv/envp; the pointers come
         // from the recorded call, not from CRT globals the guest also mirrors.
@@ -770,22 +798,27 @@ int main() {
             && argv0 == kGuestProgramName && envp0 == 0u
             && first_char == 'S';
 
-        // Every InitializeCriticalSection target starts at LockCount = -1.
+        // Every InitializeCriticalSection target keeps a valid guest layout.
+        // A section the walk entered legitimately holds LockCount 0, so both
+        // the initialized (-1) and the held (0) states are accepted.
         std::uint32_t sections = 0, sections_ready = 0;
         for (const auto& call : calls) {
-            if (call.symbol != "KERNEL32.dll!InitializeCriticalSection") {
+            if (call.symbol != "KERNEL32.dll!InitializeCriticalSection"
+                    && call.symbol
+                        != "KERNEL32.dll!InitializeCriticalSectionAndSpinCount") {
                 continue;
             }
             ++sections;
             std::uint32_t lock_count = 0, recursion = 0;
             if (memory.load32(call.arguments[0] + 4u, lock_count)
                     && memory.load32(call.arguments[0] + 8u, recursion)
-                    && lock_count == 0xffffffffu && recursion == 0u) {
+                    && (lock_count == 0xffffffffu || lock_count == 0u)
+                    && recursion <= 1u) {
                 ++sections_ready;
             }
         }
         const bool sections_initialised =
-            sections == 2u && sections_ready == sections;
+            sections >= 3u && sections_ready == sections;
 
         // TlsAlloc handed out indices from zero, in call order.
         std::uint32_t tls_calls = 0, tls_next = 0;
@@ -798,8 +831,96 @@ int main() {
         }
         tls_ok = tls_ok && tls_calls == 2u;
 
-        // The ordered import trace is the only way to see where a walk stopped
-        // when it fails inside an initializer body.
+        // Initializer #5 is the engine's single-instance guard: the exact call
+        // order it performs is the evidence that the guard ran to completion.
+        static const char* const kGuardOrder[] = {
+            "KERNEL32.dll!GetCurrentProcessId",
+            "USER32.dll!wsprintfA",
+            "KERNEL32.dll!CreateMutexA",
+            "KERNEL32.dll!WaitForSingleObject",
+            "KERNEL32.dll!GetEnvironmentVariableA",
+            "KERNEL32.dll!GetProcessHeap",
+            "KERNEL32.dll!HeapAlloc",
+            "KERNEL32.dll!InitializeCriticalSection",
+            "MSVCR90.dll!sprintf",
+            "KERNEL32.dll!SetEnvironmentVariableA",
+            "KERNEL32.dll!ReleaseMutex",
+            "KERNEL32.dll!CloseHandle",
+        };
+        std::size_t guard_matched = 0;
+        bool guard_order_ok = false;
+        {
+            std::size_t cursor = 0;
+            for (const auto& call : calls) {
+                if (cursor >= std::size(kGuardOrder)) break;
+                if (call.symbol == kGuardOrder[cursor]) ++cursor;
+            }
+            guard_matched = cursor;
+            guard_order_ok = cursor == std::size(kGuardOrder);
+        }
+
+        // The mutex name, the sprintf result and the environment value are the
+        // three guest strings the guard builds, so a formatter regression shows
+        // up as a name mismatch instead of a silent pass.
+        std::string mutex_name, encoded_node, environment_value;
+        std::uint32_t mutex_name_pointer = 0;
+        for (const auto& call : calls) {
+            if (call.symbol == "KERNEL32.dll!CreateMutexA") {
+                mutex_name_pointer = call.arguments[2];
+                mutex_name = call.text;
+            }
+            if (call.symbol == "MSVCR90.dll!sprintf") {
+                encoded_node = call.text;
+            }
+            if (call.symbol == "KERNEL32.dll!SetEnvironmentVariableA") {
+                environment_value = call.text;
+            }
+        }
+        std::string printed_name;
+        for (const auto& call : calls) {
+            if (call.symbol == "USER32.dll!wsprintfA") {
+                printed_name = call.text;
+            }
+        }
+        std::uint32_t guard_node = 0, guard_counter = 0;
+        std::uint32_t node_next = 0, node_previous = 0, node_count = 0;
+        std::uint32_t node_lock_count = 0;
+        const bool guard_readable =
+            memory.load32(kGuardNodeAddress, guard_node)
+            && memory.load32(kGuardCounterAddress, guard_counter)
+            && guard_node != 0u
+            && memory.load32(guard_node, node_next)
+            && memory.load32(guard_node + 4u, node_previous)
+            && memory.load32(guard_node + 8u, node_count)
+            && memory.load32(guard_node + 0x10u, node_lock_count);
+        // The guard built its node once. Code the walk reaches afterwards may
+        // legitimately append nodes and enter the critical section, so only the
+        // facts the guard owns are checked here: where the node lives, that it
+        // is a real heap block, and that its lock field is a valid state.
+        const bool guard_state_ok = guard_readable
+            && guard_node == kGuestHeapBase + 0x10u
+            && node_count >= 1u
+            && (node_lock_count == 0xffffffffu || node_lock_count == 0u)
+            && guard_counter >= 1u
+            && mutex_name == "SingleMgrMutex00001234"
+            && printed_name == mutex_name
+            && encoded_node == "5e000010"
+            && environment_value == encoded_node;
+
+        // Every lifted body records itself, so the ring names the chain that
+        // reached the failing instruction instead of leaving it to inference.
+        std::printf("DETAIL crt_cpp_walk_bodies total=%llu\n",
+                    static_cast<unsigned long long>(
+                        batch_guest_body_trace.total));
+        {
+            std::uint32_t bodies[kGuestBodyTraceCapacity]{};
+            const std::size_t shown = batch_guest_body_trace_read(
+                bodies, kBodyTracePrinted);
+            for (std::size_t index = 0; index < shown; ++index) {
+                std::printf("DETAIL crt_cpp_walk_body %u 0x%08x\n",
+                            static_cast<unsigned>(index), bodies[index]);
+            }
+        }
         std::printf("DETAIL crt_cpp_walk_calls count=%u\n",
                     static_cast<unsigned>(calls.size()));
         const std::size_t first_call =
@@ -819,33 +940,46 @@ int main() {
                 !startupinfo_ok || !startupinfo_zeroed ||
                 !lock_owner_installed || !state_still_initializing ||
                 !try_level_is_one || !walk_stopped || !args_match ||
-                !sections_initialised || !tls_ok) {
+                !sections_initialised || !tls_ok || !guard_order_ok ||
+                !guard_state_ok) {
             std::printf("FAIL crt_cpp_walk status=%u eip=0x%08x esp=0x%08x "
-                        "ebp=0x%08x boundary=%d frame=%d table=%d cookie=%d "
+                        "ebp=0x%08x eax=0x%08x edx=0x%08x boundary=%d frame=%d table=%d cookie=%d "
                         "startupinfo=%d lock=%d state=%d try=%d walk=%u "
                         "stopped=0x%08x/%d args=%d argc=%u argv=0x%08x "
                         "envp=0x%08x argv0=0x%08x sections=%u/%u tls=%u/%d "
                         "prefix=0x%08x esp=0x%08x kInittermEsp=0x%08x "
-                        "error=%s\n",
+                        "guard=%d,%u/%u node=0x%08x/%d counter=%u/%d "
+                        "name=%s name_ptr=0x%08x name_len=%u "
+                        "encoded=%s env=%s error=%s\n",
                         static_cast<unsigned>(status), state.eip, state.regs[4],
-                        state.regs[5], reached_boundary, frame_matches,
+                        state.regs[5], state.regs[0], state.regs[2], reached_boundary, frame_matches,
                         table_matches, cookie_consistent, startupinfo_ok,
                         lock_owner_installed, state_still_initializing,
                         try_level_is_one, static_cast<unsigned>(walk_status),
                         walk_stopped_at, walk_stopped, args_match, argc, argv,
                         envp, argv0, sections_ready, sections, tls_calls,
                         tls_ok, prefix_eip, walk_esp, kInittermEsp,
+                        guard_order_ok, static_cast<unsigned>(guard_matched),
+                        static_cast<unsigned>(std::size(kGuardOrder)),
+                        guard_node, guard_state_ok, guard_counter,
+                        guard_counter >= 1u, mutex_name.c_str(),
+                        mutex_name_pointer,
+                        static_cast<unsigned>(mutex_name.size()),
+                        encoded_node.c_str(), environment_value.c_str(),
                         imports.last_error().c_str());
             return 1;
         }
-        std::printf("PASS crt_cpp_walk stop=0x%08x executed=%u "
+        std::printf("PASS crt_cpp_walk stop=0x%08x failed_at=0x%08x executed=%u "
                     "esp_delta=-136 ebp=entry-4 cookie=consistent "
                     "imports=%u initializers=%u walk=stopped_at_0x%08x "
-                    "args=argc1,argv_guest,envp_empty sections=%u tls=%u\n",
-                    prefix_eip, executed_instructions(),
+                    "args=argc1,argv_guest,envp_empty sections=%u tls=%u "
+                    "guard=single_instance node=0x%08x count=%u mutex=%s "
+                    "encoded=%s\n",
+                    prefix_eip, state.eip, executed_instructions(),
                     static_cast<unsigned>(calls.size()),
                     kBatchInitializerCount, walk_stopped_at, sections,
-                    tls_calls);
+                    tls_calls, guard_node, static_cast<unsigned>(guard_counter),
+                    mutex_name.c_str(), encoded_node.c_str());
         std::printf("DETAIL crt_cpp_walk cookie=0x%08x complement=0x%08x "
                     "lock=0x%08x state=0x%08x argv=0x%08x envp=0x%08x "
                     "name=0x%08x\n",
