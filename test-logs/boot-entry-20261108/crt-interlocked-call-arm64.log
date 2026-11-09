@@ -1,2 +1,2 @@
 PASS crt_interlocked stop=0x011e0f24 executed=93 esp_delta=-124 ebp=entry-4 ebx=0 edi=lock_reg cookie=consistent imports=7 icc=acquired previous=0 owner=stack_base lock=owner try_level=1 startupinfo=cb,ptrs_valid,reserved_null
-DETAIL crt_interlocked cookie=0xb5ba34a6 complement=0x4a45cb59 lock=0x70000400 state=0x00000000 owner=0x70000400
+DETAIL crt_interlocked cookie=0x430b43c6 complement=0xbcf4bc39 lock=0x70000400 state=0x00000000 owner=0x70000400

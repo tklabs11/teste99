@@ -122,7 +122,7 @@ A lista de fontes passou a viajar em arquivo de resposta (`@arquivo.rsp`): com
 | imports executados pelo walk | **44** (era 24 com 6 inicializadores) |
 | testes Python | **99** (eram 95) |
 
-## 9. O muro: `0x00404624`
+## 9. O muro: `0x00404624`, e o que ele não era
 
 O harness ganhou uma **trilha de corpos**: cada corpo levantado registra o próprio
 endereço num anel limitado, e o detalhe imprime os 32 últimos. Isso transformou
@@ -135,13 +135,13 @@ endereço num anel limitado, e o detalhe imprime os 32 últimos. Isso transformo
 0x00935b70  guarda de instância única (reentrada)
 0x00f47480  fábrica
 0x00927860  construtor do objeto
-0x011e073e  preenchimento de memória
+0x011e073e  ← o que os relatórios 5 e 6 chamaram de "preenchimento de memória"
 0x00401714 → 0x00401899 → 0x00401923 → 0x00401953 → 0x00402385
          → 0x00402414 → 0x004029e6 → 0x00402b23 → 0x00403694
          → 0x004036d4 → 0x00403a95 → 0x004044f4 → 0x00404624
 ```
 
-A instrução que falha:
+A instrução que falhava:
 
 ```
 0x00404624: 66 8b 8a 00 00 00 00   MOV CX, word ptr [EDX]
@@ -150,26 +150,70 @@ A instrução que falha:
 
 Os corpos do fim da cadeia têm todos a mesma forma: uma instrução, `JMP rel32`,
 e `CC` de enchimento — `XOR EAX,EAX; JMP`, `ADD EDX,0x014d02e7; JMP`,
-`ADD EAX,0x1298f7fc; JMP`, `MOV CX,[EDX]; JMP`. São **fragmentos de thunk** que o
-ligador separou, e o efeito composto que o guest executa é inconsistente:
+`ADD EAX,0x1298f7fc; JMP`, `MOV CX,[EDX]; JMP`. Ghidra confirma que cada um é
+entrada de função própria (`function_at == function_containing`), então são
+fragmentos de thunk reais, não desalinhamento.
 
-- `0x00403a95` zera EAX e `0x004044f4` soma `0x1298f7fc`, então EAX termina em
-  `0x1298f7fc`, que **não pertence a nenhum módulo** desta imagem;
-- `0x00403694` toma EDX de `[ESP+0x10]` e `0x004036d4` soma `0x014d02e7`, um
-  valor que cai dentro de `.rdata` — coerente como *bias* de ponteiro, incoerente
-  como ajuste de argumento vindo da pilha.
+**Este passo corrige a leitura do passo 5 e do passo 6.** `0x011e073e` **não** é
+preenchimento de memória: é o **stub de proteção**, já medido no Marco 7 e
+registrado no README. Evidência anterior, reaproveitada em vez de re-derivada:
 
-Como o efeito composto não pode ser o do código real, **entrar em `0x00402b23`
-pelo salto de cauda de `0x004029e6` não é o caminho verdadeiro**: a cabeça real
-desses thunks tem de ser medida, não inferida. Não foi implementado nenhum
-tratamento especial para "fazer passar" esse trecho.
+- a cadeia de saltos resolve `KERNEL32.dll!VirtualAlloc` no slot `0x013cc1c8` e
+  pede **`0xbfa43` bytes com flags `0x3000` e proteção `0x40`** — que é
+  exatamente o `PUSH 0xbfa43` em `0x004029e6` seguido do `PUSH 0` / `CALL [EAX]`
+  em `0x00402b23`;
+- a execução dos bytes originais em Unicorn (com `VirtualAlloc` como fixture)
+  alocou, **entrou no bloco gerado** e rodou **1 892 408 instruções** até parar
+  em `0x3005ed82` (`mov eax, dword ptr fs:[0x30]`), que exige um ambiente de
+  processo Windows — **o thunk não retornou**;
+- o harness nativo não conseguiu mapear a PE em `0x00400000` porque o Windows já
+  ocupava o intervalo; com realocação o `JMP` relativo de `0x011e073e` muda e
+  falta antes do corpo.
 
-Verificações feitas para descartar hipóteses fáceis: o cabeçalho da PE **não**
-tem seção ILT nem flags de ligação incremental (`characteristics 0x0102`,
-`.text` 0x60000020), e as 7 seções são as esperadas — logo não é um artefato de
-`/INCREMENTAL` visível no cabeçalho.
+Ou seja: a cadeia que o walk executava era o stub **descriptografando o próprio
+payload** dentro de um bloco RWX de ~750 KiB. Executá-la dentro do walk de
+inicializadores C++ seria um subsistema pela metade — e foi por isso que ela
+terminou em falta em `0x00404624` (`EDX` era um *bias* que só a entrada do stub
+estabelece).
 
-## 10. Estado entregue
+## 10. A fronteira declarada, e a decisão de neutralizar
+
+Em vez de tratamento especial para "fazer passar", o gerador ganhou
+`--stop-body`: um endereço declarado na linha de comando que o lote **nunca**
+levanta. Ao ser alcançado, ele entra em `engine_blockers`, o chamador despacha e
+o walk para ali nomeando o endereço.
+
+Sobre essa fronteira foi tomada a **decisão formal de neutralizar** o stub,
+registrada em
+[report.md do Marco 7](marco7-00921260/report.md#neutralização-formal-de-0x011e073e-stub-de-proteção):
+os bytes do stub continuam fora do lote, e o harness fornece uma substituição que
+honra **apenas** o contrato que o chamador pode observar, medido nos bytes do
+callsite — `f(dest, 0, 0x400)` `__cdecl` com limpeza `ADD ESP,0xC` no chamador e
+`EAX` descartado. Nenhum bloco RWX, nenhuma descriptografia, nenhum ponteiro
+publicado; o payload nunca é mapeado, então qualquer transferência posterior para
+dentro dele falha fechado nomeando o endereço. Cada chamada entra na trilha
+ordenada como `NEUTRALIZED:011e073e protection-stub-fill`.
+
+O registro separa explicitamente o que foi observado do que foi assumido: não há
+execução nativa do stub em Windows (o harness nativo não conseguiu mapear a PE em
+`0x00400000`), só emulação com fixture.
+
+Efeito medido:
+
+| | antes | depois |
+| --- | --- | --- |
+| corpos do lote | 120 | **47** |
+| instruções | 7 087 | **1 620** |
+| imports | 41 | **29** |
+| pendentes | 34 | **1** |
+| parada do walk | *falha* em `0x00404624` | **inicializador #8**, `0x01300210` |
+
+A trilha de corpos confirma: os 32 últimos corpos são
+`… → 0x00f47480 → 0x00927860`, e o sétimo inicializador **completa**. O walk
+segue e para no oitavo inicializador da tabela, que simplesmente não está
+registrado no lote — fronteira de lote, não falha de subsistema.
+
+## 11. Estado entregue
 
 ```
 PASS crt_entry            stop=0x011e0ee7 executed=56  imports=5
@@ -179,35 +223,40 @@ PASS crt_startup_lock     stop=0x011e0f43 executed=88  imports=7
 PASS crt_initterm_call    stop=0x011e0f6f executed=97  imports=7
 PASS crt_initterm_executed stop=0x011e0f85 executed=102 imports=14 initializers=3/3
 PASS crt_startup_state_initializing stop=0x011e0f98 executed=107 imports=14
-PASS crt_cpp_walk stop=0x011e0f98 failed_at=0x00404624 executed=107
-     imports=44 initializers=7 sections=3 tls=2
-     guard=single_instance node=0x5e000010 count=2 mutex=SingleMgrMutex00001234
+PASS crt_cpp_walk stop=0x011e0f98 failed_at=0x01300210 executed=107
+     imports=52 initializers=7 walk=stopped_at_0x01300210 sections=4 tls=2
+     guard=single_instance node=0x5e000010 count=3 mutex=SingleMgrMutex00001234
+     neutralized=0x011e073e/1024/2/0 buf=0x5e000088
 PASS arm64_build 8/8 · PASS x86_vs_arm64 8/8 · PASS arm64_device_run 8/8 (PJMZAEJRX4YLFIDI)
-99 testes Python OK
+101 testes Python OK
 ```
 
-`failed_at` é o endereço da instrução que não pôde ser executada; `stop` é onde o
-prefixo parou antes do walk. O guarda de instância única continua verificado: nó
-em `0x5e000010`, contador ≥ 1 e mutex `SingleMgrMutex00001234`.
+`failed_at` é o endereço que o walk exigiu e o lote não tem; `stop` é onde o
+prefixo parou antes do walk. `neutralized=` reporta endereço, tamanho do
+preenchimento, número de chamadas e quantas saíram do contrato.
 
-## 11. Próximo passo
+## 12. Próximo passo
 
-1. Medir a **cabeça** dos thunks de `0x004029e6..0x00404651` a partir do
-   chamador real, com a trilha de corpos ligada, para decidir se a cadeia é
-   alcançável por projeto ou se a medição criou entradas que não existem.
+1. Registrar o oitavo inicializador (`0x01300210`) no lote — é a nova fronteira,
+   agora de lote e não de subsistema.
 2. Fechar as formas que limitam o lote acima de 310 corpos: `MOVSD.REP`/`MOVSD`
    com `ES:EDI`/`DS:ESI` e `ADC`/`SBB` com carry.
 3. Re-medir `0x00407280`, `0x00441440` e `0x004c73f0`, que continuam truncados.
 
-## 12. Arquivos
+## 13. Arquivos
 
 Modificados: `tools/batch_static_lift/BatchStaticLift.py` (despacho de cauda,
 formas x87/SSE/inteiras, `xmmword`), `BatchStaticLiftRuntime.hpp` (modelo x87 com
-TOP/status, 27 shims, arena virtual, trilha de corpos),
-`boot_entry_crt_harness.cpp` (trilha de corpos, asserções de seção e guarda),
-`generate_initterm_guest_image.py` (IAT inteira, 4 janelas, página nula),
-`generate_cpp_initializer_batch.py`, `test_static_batch_lift.py` (99 testes),
-`tools/run_boot_crt_entry_tests.ps1` (lote 7, arquivo de resposta).
+TOP/status, 27 shims, arena virtual, trilha de corpos, registro de neutralizados),
+`boot_entry_crt_harness.cpp` (trilha de corpos, contrato do stub neutralizado,
+asserções de seção e guarda), `generate_initterm_guest_image.py` (IAT inteira,
+4 janelas, página nula), `generate_cpp_initializer_batch.py` (`--stop-body`),
+`test_static_batch_lift.py` (101 testes),
+`tools/run_boot_crt_entry_tests.ps1` (lote de 7, arquivo de resposta, fronteira
+declarada).
 
 Evidências: `crt-cpp-walk-initializers-lift-x86.log` (trilha completa de corpos e
-de imports), `run-cpp-walk-device.log`, `cpp-batch-generation.log`.
+de imports, incluindo `NEUTRALIZED:`), `run-batch-8-neutralized.log`,
+`cpp-batch-generation.log`, e o registro formal em
+`marco7-00921260/report.md`.
+

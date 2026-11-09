@@ -1,0 +1,4 @@
+C:\Users\wesll\AndroidStudioProjects\SporeAndroid\tools\batch_static_lift\boot_entry_crt_harness.cpp:994:23: error: variable 'neutralized_dest' set but not used [-Werror,-Wunused-but-set-variable]
+  994 |         std::uint32_t neutralized_dest = 0, neutralized_size = 0;
+      |                       ^
+1 error generated.

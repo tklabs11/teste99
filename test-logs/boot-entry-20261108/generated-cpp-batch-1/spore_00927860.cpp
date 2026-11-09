@@ -180,8 +180,7 @@ BatchLiftStatus spore_lift_00927860(BatchLiftMemory& memory, BatchLiftState& sta
         state.regs[4] = static_cast<std::uint32_t>(state.regs[4] - 4u);
         if (!memory.store32(state.regs[4], t20a)) return BatchLiftStatus::invalid_memory;
     // 0x00927895: e8a48e8b00 CALL
-        if (!batch_guest_call32(memory, state, 0x011e073eu, 0x0092789au)) return BatchLiftStatus::invalid_memory;
-        t21_call_status = spore_lift_011e073e(memory, state);
+        t21_call_status = state.imports == nullptr ? BatchLiftStatus::unsupported_import : state.imports->invoke_guest_call(memory, state, 0x011e073eu, 0x0092789au);
         if (t21_call_status != BatchLiftStatus::returned) return t21_call_status;
         if (state.eip != 0x0092789au) return BatchLiftStatus::invalid_control_flow;
     // 0x0092789a: 83c40c ADD

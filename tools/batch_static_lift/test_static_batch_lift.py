@@ -2145,6 +2145,32 @@ class CppBatchGeneratorTests(unittest.TestCase):
         # treat it as an engine blocker rather than reaching into engine code.
         self.assertFalse(batch.CRT_LOW <= 0x00935B70 < batch.CRT_HIGH)
 
+    def test_declared_stop_body_is_never_entered(self):
+        import generate_cpp_initializer_batch as batch
+
+        # The protection stub is a subsystem with its own entry; the batch must
+        # refuse to lift it even when a follow policy would reach it, so the
+        # walk stops and names it instead of half-executing it.
+        source = Path(batch.__file__).read_text(encoding="utf-8")
+        self.assertIn('parser.add_argument("--stop-body"', source)
+        # The check has to sit at the loop's own indentation, before any body is
+        # lifted: nesting it under the "missing body" branch would silently
+        # never run.
+        self.assertIn("\n        if address in stop_bodies:", source)
+        self.assertIn("            engine.add(address)", source)
+        self.assertLess(
+            source.index("\n        if address in stop_bodies:"),
+            source.index("        required.append(address)"),
+        )
+
+    def test_runner_declares_the_protection_stub_boundary(self):
+        runner = (Path(__file__).resolve().parents[2]
+                  / "tools" / "run_boot_crt_entry_tests.ps1")
+        text = runner.read_text(encoding="utf-8")
+        self.assertIn("--stop-body 0x011e073e", text)
+        # The boundary is explained where it is declared, not only in a report.
+        self.assertIn("protection stub measured in Marco 7", text)
+
 
 class GuestImageSlotsTests(unittest.TestCase):
     """The image exposes exactly the import slots the loader would fix up."""

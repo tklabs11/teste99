@@ -1,0 +1,4 @@
+C:\Users\wesll\AndroidStudioProjects\SporeAndroid\tools\batch_static_lift\boot_entry_crt_harness.cpp:60:17: error: function 'neutralized_protection_stub' is not needed and will not be emitted [-Werror,-Wunneeded-internal-declaration]
+   60 | BatchLiftStatus neutralized_protection_stub(
+      |                 ^~~~~~~~~~~~~~~~~~~~~~~~~~~
+1 error generated.

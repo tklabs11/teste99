@@ -42,6 +42,52 @@ constexpr std::uint32_t kBoundaryEsp = BatchLiftMemory::kEntryEsp - 8u;
 // How many recent lifted bodies the walk detail prints on a failure.
 constexpr std::size_t kBodyTracePrinted = 32u;
 
+// The neutralized protection stub. The seventh initializer's constructor calls
+// this address as f(dest, value, size) with __cdecl cleanup (the caller runs
+// ADD ESP,0xC) and discards EAX, forcing value to zero with XOR EBX,EBX right
+// before the call. That call shape is the whole contract the port keeps: the
+// bytes at `dest` are written, nothing else. The stub's own effect — asking
+// VirtualAlloc for 0xbfa43 bytes with flags 0x3000 / protection 0x40 and
+// decrypting a payload into that block — is deliberately not reproduced, and
+// the payload is never mapped, so any later transfer into it fails closed at
+// the dispatcher instead of running half a subsystem.
+constexpr std::uint32_t kProtectionStubEntry = 0x011e073eu;
+constexpr const char* kProtectionStubNote = "protection-stub-fill";
+constexpr std::uint32_t kProtectionStubFillLimit = 0x10000u;
+// The size the constructor pushes for that fill, measured at 0x004029e6.
+constexpr std::uint32_t kNeutralizedFillBytes = 0x400u;
+
+// The contract is only registered by the initializer-walk stage, so the other
+// stages compile the harness without a use for it.
+[[maybe_unused]] BatchLiftStatus neutralized_protection_stub(
+    BatchGuestRuntime& runtime, BatchLiftMemory& memory, BatchLiftState& state) {
+    const std::uint32_t arguments = state.regs[4] + 4u;
+    std::uint32_t dest = 0, value = 0, size = 0;
+    if (!memory.load32(arguments, dest)
+            || !memory.load32(arguments + 4u, value)
+            || !memory.load32(arguments + 8u, size)) {
+        return BatchLiftStatus::invalid_memory;
+    }
+    if (size > kProtectionStubFillLimit || !memory.is_writable(dest, size)) {
+        return BatchLiftStatus::invalid_memory;
+    }
+    const std::uint8_t byte = static_cast<std::uint8_t>(value);
+    for (std::uint32_t offset = 0; offset < size; ++offset) {
+        if (!memory.store8(dest + offset, byte)) {
+            return BatchLiftStatus::invalid_memory;
+        }
+    }
+    runtime.note_neutralized_call(
+        kProtectionStubEntry, kProtectionStubNote, 0u, {dest, value, size});
+    state.regs[0] = 0u;
+    // The caller cleans its own three arguments, so only the return address
+    // the dispatcher pushed is popped here.
+    if (!batch_guest_return32(memory, state, 0u)) {
+        return BatchLiftStatus::invalid_memory;
+    }
+    return BatchLiftStatus::returned;
+}
+
 // The batch stage reuses the same verified prefix and then drives the
 // _initterm call itself with the batch's lifted bodies registered.
 constexpr bool kCppWalk = kCppWalkEnabled;
@@ -420,6 +466,9 @@ int main() {
         for (const auto& body : kBatchBodyTable) {
             imports.register_guest_function(body.entry, body.body);
         }
+        imports.register_neutralized_body(
+            kProtectionStubEntry, kProtectionStubNote,
+            &neutralized_protection_stub);
         imports.reset_tls_indexes();
     }
     for (std::size_t index = 0; index < initial.size(); ++index) {
@@ -935,13 +984,42 @@ int main() {
                         calls[index].result);
         }
 
+        // The protection stub was neutralized, not executed: every recorded
+        // NEUTRALIZED entry must name it with exactly the call the constructor
+        // makes — f(object_buffer, 0, 0x400) where the buffer lives in the
+        // guest heap. The fill itself cannot be re-read here because the
+        // constructor legitimately writes into that same buffer afterwards, so
+        // the evidence is the recorded arguments: the neutralized body returns
+        // only after writing every byte, and fails closed if it cannot. The
+        // constructor may run more than once, so the count is not fixed.
+        std::uint32_t neutralized_calls = 0, neutralized_bad = 0;
+        std::uint32_t neutralized_dest = 0, neutralized_size = 0;
+        for (const auto& call : calls) {
+            if (call.symbol.rfind("NEUTRALIZED:011e073e", 0) != 0) continue;
+            ++neutralized_calls;
+            const bool contract = call.arguments.size() == 3u
+                && call.arguments[1] == 0u
+                && call.arguments[2] == kNeutralizedFillBytes
+                && call.arguments[0] >= kGuestHeapBase
+                && call.arguments[0] + kNeutralizedFillBytes
+                    <= kGuestHeapBase + kGuestHeapBytes;
+            if (!contract) {
+                ++neutralized_bad;
+                continue;
+            }
+            neutralized_dest = call.arguments[0];
+            neutralized_size = call.arguments[2];
+        }
+        const bool neutralized_ok =
+            neutralized_calls >= 1u && neutralized_bad == 0u;
+
         if (!reached_boundary || !frame_matches || !esi_is_one ||
                 !edi_is_lock || !table_matches || !cookie_consistent ||
                 !startupinfo_ok || !startupinfo_zeroed ||
                 !lock_owner_installed || !state_still_initializing ||
                 !try_level_is_one || !walk_stopped || !args_match ||
                 !sections_initialised || !tls_ok || !guard_order_ok ||
-                !guard_state_ok) {
+                !guard_state_ok || !neutralized_ok) {
             std::printf("FAIL crt_cpp_walk status=%u eip=0x%08x esp=0x%08x "
                         "ebp=0x%08x eax=0x%08x edx=0x%08x boundary=%d frame=%d table=%d cookie=%d "
                         "startupinfo=%d lock=%d state=%d try=%d walk=%u "
@@ -950,7 +1028,7 @@ int main() {
                         "prefix=0x%08x esp=0x%08x kInittermEsp=0x%08x "
                         "guard=%d,%u/%u node=0x%08x/%d counter=%u/%d "
                         "name=%s name_ptr=0x%08x name_len=%u "
-                        "encoded=%s env=%s error=%s\n",
+                        "encoded=%s env=%s neutralized=%u/%u/%u error=%s\n",
                         static_cast<unsigned>(status), state.eip, state.regs[4],
                         state.regs[5], state.regs[0], state.regs[2], reached_boundary, frame_matches,
                         table_matches, cookie_consistent, startupinfo_ok,
@@ -966,7 +1044,9 @@ int main() {
                         mutex_name_pointer,
                         static_cast<unsigned>(mutex_name.size()),
                         encoded_node.c_str(), environment_value.c_str(),
-                        imports.last_error().c_str());
+                        static_cast<unsigned>(neutralized_calls),
+                        static_cast<unsigned>(neutralized_bad),
+                        neutralized_ok, imports.last_error().c_str());
             return 1;
         }
         std::printf("PASS crt_cpp_walk stop=0x%08x failed_at=0x%08x executed=%u "
@@ -974,12 +1054,15 @@ int main() {
                     "imports=%u initializers=%u walk=stopped_at_0x%08x "
                     "args=argc1,argv_guest,envp_empty sections=%u tls=%u "
                     "guard=single_instance node=0x%08x count=%u mutex=%s "
-                    "encoded=%s\n",
+                    "encoded=%s neutralized=0x%08x/%u/%u/%u buf=0x%08x\n",
                     prefix_eip, state.eip, executed_instructions(),
                     static_cast<unsigned>(calls.size()),
                     kBatchInitializerCount, walk_stopped_at, sections,
                     tls_calls, guard_node, static_cast<unsigned>(guard_counter),
-                    mutex_name.c_str(), encoded_node.c_str());
+                    mutex_name.c_str(), encoded_node.c_str(),
+                    kProtectionStubEntry, neutralized_size,
+                    static_cast<unsigned>(neutralized_calls),
+                    static_cast<unsigned>(neutralized_bad), neutralized_dest);
         std::printf("DETAIL crt_cpp_walk cookie=0x%08x complement=0x%08x "
                     "lock=0x%08x state=0x%08x argv=0x%08x envp=0x%08x "
                     "name=0x%08x\n",

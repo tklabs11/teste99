@@ -1,2 +1,2 @@
 PASS crt_entry stop=0x011e0ee7 executed=56 esp_delta=-8 stack=0x58,0x1508ca8 callee_saved=restored cookie=consistent imports=5
-DETAIL crt_entry cookie=0xf67fe178 complement=0x09801e87
+DETAIL crt_entry cookie=0x7156377b complement=0x8ea9c884

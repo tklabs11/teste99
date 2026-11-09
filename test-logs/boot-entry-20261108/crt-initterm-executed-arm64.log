@@ -1,2 +1,2 @@
 PASS crt_initterm_executed stop=0x011e0f85 executed=102 esp_delta=-124 ebp=entry-4 eax=0 esi=1 edi=lock_reg cookie=consistent imports=14 initterm=walked initializers=3/3 app_type=2 fmode=0,0 encoded_null=consistent adjust_fdiv=propagated sse2=1 filter=0x011e1318 fpucw=0x0001027f
-DETAIL crt_initterm_executed cookie=0xf2ea67c6 complement=0x0d159839 lock=0x70000400 state=0x00000001 encoded_null=0x45660e43 adjust=0x0fc0841c
+DETAIL crt_initterm_executed cookie=0x9a1838b2 complement=0x65e7c74d lock=0x70000400 state=0x00000001 encoded_null=0x1d35979f adjust=0x0fc0841c

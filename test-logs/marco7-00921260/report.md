@@ -422,3 +422,133 @@ O [v42](generated-constructor-sixth-helper-float-call-v42/report.json) liberou s
 Reprodução: gerar com o PE e os cinco batches do comando v33, `--through-sixth-helper-branch --output test-logs/marco7-00921260/generated-constructor-sixth-helper-branch-v41` ou `--through-sixth-helper-float-call --output test-logs/marco7-00921260/generated-constructor-sixth-helper-float-call-v42`; compilar com [build x86 v41](build-m7-constructor-sixth-helper-branch-x86.cmd) ou [v42](build-m7-constructor-sixth-helper-float-call-x86.cmd), executar o binário x86 gerado, executar [script ARM64/ADB v41](run-m7-constructor-sixth-helper-branch-arm64.ps1) ou [v42](run-m7-constructor-sixth-helper-float-call-arm64.ps1) com `-DeviceSerial PJMZAEJRX4YLFIDI` e comparar com `python tools/batch_static_lift/compare_m7_constructor_entry.py <log-x86> <log-android> --boundary 0x00a2380c` ou `--boundary 0x00a23817`. [Build x86 v42](m7-sixth-helper-float-call-x86-build.log), [build ARM64 com 36 fontes](m7-sixth-helper-float-call-arm64-build.log), [58 testes Python](python-tests-sixth-helper-float-call.log), [regressão v41 recompilada](m7-sixth-helper-branch-regression-v42-x86.log), `python -m py_compile` e `git diff --check` passaram.
 
 **Próximo bloqueio:** **`0x00a23817 → FUN_00a221b0`**. Essa função já foi exercitada em outros contextos do Marco 7, mas seus argumentos e possíveis escritas sob o estado atual de `FUN_00a23780` ainda não foram comparados. O braço alternativo de `0x00a237e8` permanece fora deste caminho. O prefixo v41/v42 não foi integrado ao APK; o aparelho executou apenas o harness ARM64 isolado. Não há boot, menu ou renderização do Spore comprovados. Nenhum commit ou push foi realizado pelo agente.
+
+## Neutralização formal de `0x011e073e` (stub de proteção)
+
+Esta seção registra a **decisão formal de neutralizar** `0x011e073e` no port, com
+o contrato que a substituição honra e com a fronteira exata entre o que foi
+observado e o que foi assumido. Ela substitui, para efeito de documentação, a
+leitura dos relatórios `report-cpp-batch-5-*` e `report-cpp-batch-6-*` que
+descreviam esse endereço como "preenchimento de memória do construtor": aquela
+descrição era uma hipótese, não uma medição, e fica retirada.
+
+### 1. Por que neutralizar
+
+As medições deste mesmo relatório mostram que `0x011e073e` é o stub de proteção: a
+cadeia de saltos a partir dele resolve `KERNEL32.dll!VirtualAlloc` no slot
+`0x013cc1c8`, pede `0xbfa43` bytes com flags `0x3000` e proteção `0x40`, e
+descriptografa um payload dentro do bloco devolvido. A execução dos bytes
+originais em Unicorn, com `VirtualAlloc` como fixture, alocou, entrou no bloco
+gerado e só parou depois de **1 892 408 instruções** em `0x3005ed82`
+(`mov eax, dword ptr fs:[0x30]`), que exige um ambiente de processo Windows; o
+thunk **não retornou**.
+
+Executá-lo dentro do walk de inicializadores C++ é, portanto, executar um
+subsistema pela metade. Neutralizar é a decisão registrada: o port **não executa**
+esses bytes e assume por escrito apenas o que o chamador pode observar.
+
+### 2. O que foi observado, e onde
+
+| fato | origem | tipo |
+| --- | --- | --- |
+| bytes do callsite `0x00927888..0x0092789a` | PE SHA-256 `6aec99cb…be59b` | observação (bytes) |
+| 3 argumentos `__cdecl`, limpeza `ADD ESP,0xC` pelo chamador | mesmos bytes | observação (bytes) |
+| `value` é `0` (`XOR EBX,EBX` em `0x00927866`) | mesmos bytes | observação (bytes) |
+| `size` é `0x400` (`PUSH 0x400` em `0x00927888`) | mesmos bytes | observação (bytes) |
+| `EAX` descartado pelo chamador (`XOR EAX,EAX` em `0x0092789d`) | mesmos bytes | observação (bytes) |
+| o stub aloca e descriptografa | Unicorn com fixture de `VirtualAlloc` | observação **em emulação**, não no Windows |
+| comportamento do stub em processo Windows real | — | **não observado** |
+
+**Correção de premissa, registrada de propósito:** não existe execução nativa do
+stub em Windows. A tentativa de harness nativo não conseguiu mapear a PE em
+`0x00400000` porque o Windows já ocupava o intervalo, e com realocação o `JMP`
+relativo de `0x011e073e` muda e falta antes do corpo
+(`protection-thunk-native-attempt.log`, `protection-thunk-relocated-attempt.log`,
+`early-base-probe.log`). O que existe é emulação com fixture. Portanto **nenhuma
+"assinatura de comportamento observada em tempo real no Windows" para o stub pode
+ser afirmada aqui**: o contrato abaixo é o mínimo que o *chamador* exige, medido
+nos bytes, mais a decisão explícita de não reproduzir o resto.
+
+### 3. O contrato formal da substituição
+
+O callsite medido é:
+
+```
+0x00927860: XOR EAX,EAX            ; EAX = 0
+0x00927862: PUSH EBX               ; preserva EBX (o objeto é ESI)
+0x00927866: XOR EBX,EBX            ; EBX = 0  -> argumento `value`
+0x00927868..0x0092788d:            ; zera [ESI+0]..[ESI+0x2c]
+0x00927888: PUSH 0x400             ; argumento `size`
+0x00927890: LEA EAX,[ESI+0x30]
+0x00927893: PUSH EBX               ; argumento `value` = 0
+0x00927894: PUSH EAX               ; argumento `dest` = ESI+0x30
+0x00927895: CALL 0x011e073e        ; __cdecl
+0x0092789a: ADD ESP,0xC            ; o chamador limpa 3 argumentos
+0x0092789d: XOR EAX,EAX            ; resultado descartado
+```
+
+A substituição `neutralized_protection_stub` honra **somente** isto:
+
+1. **Assinatura:** `void f(uint32_t dest, uint32_t value, uint32_t size)`,
+   `__cdecl` — o corpo não mexe em `ESP` além de remover o endereço de retorno que
+   o despachante empilhou; a limpeza dos 12 bytes é do chamador.
+2. **Efeito:** escreve `size` bytes iguais a `value & 0xff` em
+   `[dest, dest+size)`. Nada mais é escrito.
+3. **Retorno:** `EAX = 0`, descartado pelo chamador; nenhum outro registrador é
+   prometido.
+4. **Nada do stub:** nenhum `VirtualAlloc`, nenhum bloco RWX de `0xbfa43` bytes,
+   nenhuma descriptografia de payload, nenhum ponteiro publicado em `.data`.
+
+O que o contrato **não** promete é a parte importante: o payload nunca é mapeado
+no guest. Se algum corpo posterior tentar transferir controle para dentro dele, o
+despachante **falha fechado** nomeando o endereço — a dependência real vira parede
+visível, nunca passe silencioso.
+
+### 4. Guardas de falha fechada
+
+| situação | resultado |
+| --- | --- |
+| `size` > `0x10000` | `invalid_memory` |
+| `[dest, dest+size)` não gravável no guest | `invalid_memory` |
+| argumentos fora da memória do guest | `invalid_memory` |
+| chamada registrada com `value != 0` ou `size != 0x400` | harness: `FAIL` (`neutralized_bad`) |
+| `dest` fora da janela do heap do guest | harness: `FAIL` (`neutralized_bad`) |
+| transferência de controle para o bloco do payload | `unsupported_dependency` nomeando o endereço |
+
+### 5. Onde a substituição vive, e como é auditável
+
+- `tools/batch_static_lift/boot_entry_crt_harness.cpp` —
+  `neutralized_protection_stub`, com o contrato escrito acima do código, e o
+  registro `imports.register_neutralized_body(kProtectionStubEntry,
+  "protection-stub-fill", …)`.
+- `tools/batch_static_lift/BatchStaticLiftRuntime.hpp` — `neutralized_bodies_`
+  consultado antes do corpo levantado em `invoke_guest_call`,
+  `invoke_guest_tail_call` e no shim de `_initterm`; cada chamada entra na mesma
+  trilha ordenada das importações com o símbolo
+  `NEUTRALIZED:011e073e protection-stub-fill`, então a neutralização fica visível
+  no log, nunca implícita.
+- `tools/run_boot_crt_entry_tests.ps1` — o gerador recebe
+  `--stop-body 0x011e073e`, logo **os bytes do stub não são levantados**; a
+  substituição vem do harness e a razão está escrita ao lado do argumento.
+
+### 6. Verificação
+
+```
+PASS crt_cpp_walk stop=0x011e0f98 failed_at=0x01300210 executed=107
+     imports=52 initializers=7 walk=stopped_at=0x01300210
+     sections=4 tls=2 guard=single_instance node=0x5e000010 count=3
+     neutralized=0x011e073e/1024/2/0 buf=0x5e000088
+```
+
+Leitura: o sétimo inicializador **completou**; a substituição foi chamada **2
+vezes** (o construtor roda duas vezes neste caminho), todas com `size = 1024` e
+`value = 0`, buffer em `0x5e000088` (dentro do heap do guest) e **0 chamadas fora
+do contrato**. O walk avança e para no **oitavo** inicializador da tabela
+(`0x01300210`), que não está registrado no lote — fronteira de lote comum, não
+falha de subsistema.
+
+Antes da neutralização o mesmo estágio parava em `0x011e073e` (de dentro do
+construtor, `0x00927860`); antes disso, em falta de memória em `0x00404624`.
+
+Não há boot, menu, renderização ou gameplay comprovados por esta seção. Nenhum
+commit ou push foi feito pelo agente.

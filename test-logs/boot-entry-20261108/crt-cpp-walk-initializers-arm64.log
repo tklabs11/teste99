@@ -1,19 +1,52 @@
-DETAIL crt_cpp_walk_calls count=44
-DETAIL crt_cpp_walk_call 28 KERNEL32.dll!CreateMutexA arg0=0x00000000 result=0xe0000001
-DETAIL crt_cpp_walk_call 29 KERNEL32.dll!WaitForSingleObject arg0=0xe0000001 result=0x00000000
-DETAIL crt_cpp_walk_call 30 KERNEL32.dll!GetEnvironmentVariableA arg0=0x70000130 result=0x00000000
-DETAIL crt_cpp_walk_call 31 KERNEL32.dll!GetProcessHeap arg0=0x00000000 result=0x00e0ff01
-DETAIL crt_cpp_walk_call 32 KERNEL32.dll!HeapAlloc arg0=0x00e0ff01 result=0x5e000000
-DETAIL crt_cpp_walk_call 33 KERNEL32.dll!InitializeCriticalSection arg0=0x5e00001c result=0x00000000
-DETAIL crt_cpp_walk_call 34 MSVCR90.dll!sprintf arg0=0x70000110 result=0x00000008
-DETAIL crt_cpp_walk_call 35 KERNEL32.dll!SetEnvironmentVariableA arg0=0x70000130 result=0x00000001
+DETAIL crt_cpp_walk_bodies total=49
+DETAIL crt_cpp_walk_body 0 0x013000d0
+DETAIL crt_cpp_walk_body 1 0x011e07ef
+DETAIL crt_cpp_walk_body 2 0x011e074a
+DETAIL crt_cpp_walk_body 3 0x011e11d4
+DETAIL crt_cpp_walk_body 4 0x011e1219
+DETAIL crt_cpp_walk_body 5 0x013000f0
+DETAIL crt_cpp_walk_body 6 0x013b64c0
+DETAIL crt_cpp_walk_body 7 0x011e07ef
+DETAIL crt_cpp_walk_body 8 0x011e074a
+DETAIL crt_cpp_walk_body 9 0x011e11d4
+DETAIL crt_cpp_walk_body 10 0x011e1219
+DETAIL crt_cpp_walk_body 11 0x013b64e0
+DETAIL crt_cpp_walk_body 12 0x013002d0
+DETAIL crt_cpp_walk_body 13 0x00935b70
+DETAIL crt_cpp_walk_body 14 0x00935a30
+DETAIL crt_cpp_walk_body 15 0x011e07ef
+DETAIL crt_cpp_walk_body 16 0x011e074a
+DETAIL crt_cpp_walk_body 17 0x011e11d4
+DETAIL crt_cpp_walk_body 18 0x011e1219
+DETAIL crt_cpp_walk_body 19 0x0138e640
+DETAIL crt_cpp_walk_body 20 0x00f474d0
+DETAIL crt_cpp_walk_body 21 0x00935c80
+DETAIL crt_cpp_walk_body 22 0x00935b70
+DETAIL crt_cpp_walk_body 23 0x00f47480
+DETAIL crt_cpp_walk_body 24 0x00927860
+DETAIL crt_cpp_walk_body 25 0x009274d0
+DETAIL crt_cpp_walk_body 26 0x00926100
+DETAIL crt_cpp_walk_body 27 0x00928df0
+DETAIL crt_cpp_walk_body 28 0x011e07ef
+DETAIL crt_cpp_walk_body 29 0x011e074a
+DETAIL crt_cpp_walk_body 30 0x011e11d4
+DETAIL crt_cpp_walk_body 31 0x011e1219
+DETAIL crt_cpp_walk_calls count=52
 DETAIL crt_cpp_walk_call 36 KERNEL32.dll!ReleaseMutex arg0=0xe0000001 result=0x00000001
 DETAIL crt_cpp_walk_call 37 KERNEL32.dll!CloseHandle arg0=0xe0000001 result=0x00000001
-DETAIL crt_cpp_walk_call 38 MSVCR90.dll!_decode_pointer arg0=0xbad13ee0 result=0xffffffff
+DETAIL crt_cpp_walk_call 38 MSVCR90.dll!_decode_pointer arg0=0xe14ca1bb result=0xffffffff
 DETAIL crt_cpp_walk_call 39 MSVCR90.dll!_onexit arg0=0x013c0f50 result=0x013c0f50
 DETAIL crt_cpp_walk_call 40 KERNEL32.dll!EnterCriticalSection arg0=0x5e00001c result=0x00000000
 DETAIL crt_cpp_walk_call 41 KERNEL32.dll!GetProcessHeap arg0=0x00000000 result=0x00e0ff01
 DETAIL crt_cpp_walk_call 42 KERNEL32.dll!HeapAlloc arg0=0x00e0ff01 result=0x5e000040
-DETAIL crt_cpp_walk_call 43 KERNEL32.dll!VirtualAlloc arg0=0x00000000 result=0x5d000000
-PASS crt_cpp_walk stop=0x011e0f98 failed_at=0x00404624 executed=107 esp_delta=-136 ebp=entry-4 cookie=consistent imports=44 initializers=7 walk=stopped_at_0x00000000 args=argc1,argv_guest,envp_empty sections=3 tls=2 guard=single_instance node=0x5e000010 count=2 mutex=SingleMgrMutex00001234 encoded=5e000010
-DETAIL crt_cpp_walk cookie=0xe8a5d823 complement=0x175a27dc lock=0x70000400 state=0x00000001 argv=0x015cff40 envp=0x015cff48 name=0x015cff50
+DETAIL crt_cpp_walk_call 43 NEUTRALIZED:011e073e protection-stub-fill arg0=0x5e000088 result=0x00000000
+DETAIL crt_cpp_walk_call 44 KERNEL32.dll!InitializeCriticalSectionAndSpinCount arg0=0x5e000540 result=0x00000000
+DETAIL crt_cpp_walk_call 45 KERNEL32.dll!EnterCriticalSection arg0=0x5e000540 result=0x00000000
+DETAIL crt_cpp_walk_call 46 NEUTRALIZED:011e073e protection-stub-fill arg0=0x5e000088 result=0x00000000
+DETAIL crt_cpp_walk_call 47 KERNEL32.dll!GetSystemInfo arg0=0x700000dc result=0x00000000
+DETAIL crt_cpp_walk_call 48 KERNEL32.dll!LeaveCriticalSection arg0=0x5e000540 result=0x00000000
+DETAIL crt_cpp_walk_call 49 KERNEL32.dll!LeaveCriticalSection arg0=0x5e00001c result=0x00000000
+DETAIL crt_cpp_walk_call 50 MSVCR90.dll!_decode_pointer arg0=0xe14ca1bb result=0xffffffff
+DETAIL crt_cpp_walk_call 51 MSVCR90.dll!_onexit arg0=0x013c9950 result=0x013c9950
+PASS crt_cpp_walk stop=0x011e0f98 failed_at=0x01300210 executed=107 esp_delta=-136 ebp=entry-4 cookie=consistent imports=52 initializers=7 walk=stopped_at_0x01300210 args=argc1,argv_guest,envp_empty sections=4 tls=2 guard=single_instance node=0x5e000010 count=3 mutex=SingleMgrMutex00001234 encoded=5e000010 neutralized=0x011e073e/1024/2/0 buf=0x5e000088
+DETAIL crt_cpp_walk cookie=0x41eb35e4 complement=0xbe14ca1b lock=0x70000400 state=0x00000001 argv=0x015cff40 envp=0x015cff48 name=0x015cff50

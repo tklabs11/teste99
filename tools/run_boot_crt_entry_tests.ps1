@@ -138,6 +138,13 @@ try {
     # subsystem, so the batch registers it together with the measured chain it
     # reaches. The body budget keeps the batch bounded; the callers that stay
     # outside it are the walk's own batch boundary.
+    #
+    # 0x011e073e is a declared boundary, not a lifted body: the constructor calls
+    # it, and it is the protection stub measured in Marco 7 — it resolves
+    # VirtualAlloc, asks for 0xbfa43 bytes with flags 0x3000 / 0x40 and decrypts
+    # a payload into the returned block, running over 1.8 million instructions
+    # before it needs a Windows PEB. Entering it from a CRT walk would be a
+    # half-executed subsystem, so the walk stops there and names it.
     $batchClosure = Join-Path $logsDirectory "cpp-batch-2\closure-union.json"
     $batchOutputDirectory = Join-Path $logsDirectory "generated-cpp-batch-1"
     if (Test-Path -LiteralPath $batchOutputDirectory) {
@@ -152,6 +159,7 @@ try {
         --engine-body 0xf47480 --engine-body 0x927860 `
         --engine-body 0x935c80 --engine-body 0xf47430 `
         --follow-outside --bodies $BatchBodies --allow-unresolved `
+        --stop-body 0x011e073e `
         --output $batchOutputDirectory 2>&1
     $batchLog | Tee-Object -FilePath (Join-Path $logsDirectory "cpp-batch-generation.log")
     if ($LASTEXITCODE -ne 0) { throw "C++ initializer batch generation failed" }

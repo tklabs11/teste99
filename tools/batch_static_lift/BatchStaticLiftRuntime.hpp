@@ -1275,6 +1275,34 @@ public:
     // indices.
     void reset_tls_indexes() { tls_indexes_ = 0u; }
 
+    // A neutralized body replaces PE bytes the port does not lift, so the
+    // contract it upholds has to be written down and checked by the harness.
+    // The callback owns the whole call: it reads its own arguments, performs
+    // only the effects the contract names, and returns through the caller's
+    // return address like any other callee.
+    using NeutralizedBody = BatchLiftStatus (*)(
+        BatchGuestRuntime&, BatchLiftMemory&, BatchLiftState&);
+
+    void register_neutralized_body(
+        std::uint32_t entry, const char* note, NeutralizedBody body) {
+        neutralized_bodies_[entry] = {std::string(note), body};
+    }
+
+    // Records a neutralized call in the same ordered trace as the imports, so a
+    // neutralization is never invisible in a run.
+    void note_neutralized_call(
+        std::uint32_t entry,
+        const char* note,
+        std::uint32_t result,
+        std::initializer_list<std::uint32_t> arguments) {
+        BatchGuestImportCall call{};
+        call.symbol = std::string("NEUTRALIZED:") + hex32(entry) + " " + note;
+        call.iat_address = entry;
+        call.arguments.assign(arguments.begin(), arguments.end());
+        call.result = result;
+        calls_.push_back(std::move(call));
+    }
+
     // Apply the loader's import-address fixup to the mapped import slots: each
     // slot keeps the address of a guest trampoline that resolves to its symbol,
     // so reading a slot as data yields something that can be called.
@@ -1315,8 +1343,24 @@ public:
             }
             return BatchLiftStatus::returned;
         }
+        const auto neutralized = neutralized_bodies_.find(target);
+        if (neutralized != neutralized_bodies_.end()) {
+            if (!batch_guest_call32(memory, state, target, return_address)) {
+                return BatchLiftStatus::invalid_memory;
+            }
+            const BatchLiftStatus status =
+                neutralized->second.body(*this, memory, state);
+            if (status != BatchLiftStatus::returned) return status;
+            if (state.eip != return_address) {
+                return BatchLiftStatus::invalid_control_flow;
+            }
+            return BatchLiftStatus::returned;
+        }
         const auto body = guest_functions_.find(target);
         if (body == guest_functions_.end()) {
+            // Name the boundary the way the walk reports it: the address that
+            // has no lifted body is left in EIP.
+            state.eip = target;
             last_error_ =
                 "no lifted body for indirect call target 0x" + hex32(target);
             return BatchLiftStatus::unsupported_dependency;
@@ -1343,8 +1387,15 @@ public:
             return invoke_import(
                 memory, state, trampoline->second.c_str(), target);
         }
+        const auto neutralized = neutralized_bodies_.find(target);
+        if (neutralized != neutralized_bodies_.end()) {
+            // A neutralized body keeps the caller's return address on the
+            // stack, so no extra frame is pushed here either.
+            return neutralized->second.body(*this, memory, state);
+        }
         const auto body = guest_functions_.find(target);
         if (body == guest_functions_.end()) {
+            state.eip = target;
             last_error_ =
                 "no lifted body for tail jump target 0x" + hex32(target);
             return BatchLiftStatus::unsupported_dependency;
@@ -3084,8 +3135,13 @@ private:
                 return BatchLiftStatus::invalid_memory;
             }
             if (target == 0u) continue;
+            const auto neutralized = neutralized_bodies_.find(target);
             const auto body = guest_functions_.find(target);
-            if (body == guest_functions_.end()) {
+            if (body == guest_functions_.end()
+                    && neutralized == neutralized_bodies_.end()) {
+                // The table entry the batch does not register is the walk's
+                // boundary, so it is left in EIP and named in the error.
+                state.eip = target;
                 last_error_ =
                     "_initterm needs a lifted body for 0x" + hex32(target);
                 return BatchLiftStatus::unsupported_dependency;
@@ -3095,7 +3151,10 @@ private:
                     memory, state, target, kBatchGuestInitializerReturn)) {
                 return BatchLiftStatus::invalid_memory;
             }
-            const BatchLiftStatus status = body->second(memory, state);
+            const BatchLiftStatus status =
+                neutralized != neutralized_bodies_.end()
+                ? neutralized->second.body(*this, memory, state)
+                : body->second(memory, state);
             if (status != BatchLiftStatus::returned) return status;
             if (state.eip != kBatchGuestInitializerReturn
                     || state.regs[4] != entry_esp) {
@@ -3720,6 +3779,13 @@ private:
     std::vector<BatchGuestImportCall> calls_;
     std::string last_error_;
     std::unordered_map<std::uint32_t, GuestFunction> guest_functions_;
+    // PE bodies the port deliberately does not lift, each paired with the
+    // written contract its neutralized implementation upholds.
+    struct NeutralizedBodyEntry {
+        std::string note;
+        NeutralizedBody body;
+    };
+    std::unordered_map<std::uint32_t, NeutralizedBodyEntry> neutralized_bodies_;
     // Loader-fixup labels written into the mapped import slots, keyed by the
     // trampoline address the slot now holds.
     std::unordered_map<std::uint32_t, std::string> import_trampolines_;

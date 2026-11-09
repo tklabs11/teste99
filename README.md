@@ -4920,11 +4920,50 @@ parada ficou visível como cadeia:
 → 0x00404624  MOV CX, word ptr [EDX]  (EDX fora de toda seção)
 ```
 
-Os corpos do fim são **fragmentos de thunk** (`uma instrução; JMP; CC`), e o
-efeito composto que o guest executa é inconsistente — `XOR EAX,EAX` seguido de
-`ADD EAX,0x1298f7fc` deixa EAX fora de qualquer módulo. Logo entrar ali pelo
-salto de cauda **não é o caminho verdadeiro**: a cabeça real desses thunks tem de
-ser medida, não inferida. Nada foi implementado para "fazer passar" o trecho.
+**A leitura dessa cadeia foi corrigida no mesmo passo.** `0x011e073e` não é
+preenchimento de memória: é o **stub de proteção** já medido no Marco 7 — ele
+resolve `VirtualAlloc` no slot `0x013cc1c8`, pede `0xbfa43` bytes com flags
+`0x3000` e proteção `0x40` (o `PUSH 0xbfa43` em `0x004029e6` seguido do
+`PUSH 0` / `CALL [EAX]` em `0x00402b23`), e os bytes originais rodaram
+**1 892 408 instruções** até precisar de `fs:[0x30]`. A cadeia que o walk
+executava era o stub **descriptografando o próprio payload** num bloco RWX, e por
+isso terminava em falta: `EDX` é um *bias* que só a entrada do stub estabelece.
+
+**Decisão: neutralizar.** O stub não é executado pelo port. O contrato assumido é
+só o que o chamador pode observar, medido nos bytes: `f(dest, value, size)`
+`__cdecl` com limpeza `ADD ESP,0xC` no chamador, `value = 0`
+(`XOR EBX,EBX`), `size = 0x400` (`PUSH 0x400`) e `EAX` descartado. A substituição
+escreve `size` bytes em `dest` e **nada mais**: nenhum bloco RWX, nenhuma
+descriptografia, nenhum ponteiro publicado. O payload nunca é mapeado, então
+qualquer transferência posterior para dentro dele **falha fechado** nomeando o
+endereço.
+
+Não existe execução nativa do stub em Windows (o harness nativo não conseguiu
+mapear a PE em `0x00400000`), então o registro no
+[relatório do Marco 7](./test-logs/marco7-00921260/report.md#neutralização-formal-de-0x011e073e-stub-de-proteção)
+separa explicitamente o que foi observado do que foi assumido.
+
+`--stop-body 0x011e073e` mantém os bytes fora do lote e a substituição vem do
+harness, registrada na trilha como `NEUTRALIZED:011e073e protection-stub-fill`.
+
+| | antes | depois |
+| --- | --- | --- |
+| corpos do lote | 120 | **47** |
+| instruções | 7 087 | **1 620** |
+| pendentes | 34 | **1** |
+| parada do walk | *falha* em `0x00404624` | inicializador **#8**, `0x01300210` |
+
+```
+PASS crt_cpp_walk stop=0x011e0f98 failed_at=0x01300210 executed=107
+     imports=52 initializers=7 walk=stopped_at_0x01300210 sections=4 tls=2
+     guard=single_instance node=0x5e000010 count=3
+     neutralized=0x011e073e/1024/2/0 buf=0x5e000088
+PASS 8/8 x86 · 8/8 ARM64 · 8/8 igualdade · 8/8 aparelho (PJMZAEJRX4YLFIDI)
+101 testes Python OK
+```
+
+O sétimo inicializador **completa**; a substituição é chamada 2 vezes, ambas
+dentro do contrato (`size = 1024`, `value = 0`, buffer no heap do guest).
 
 ```
 PASS crt_cpp_walk stop=0x011e0f98 failed_at=0x00404624 executed=107

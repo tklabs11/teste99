@@ -139,6 +139,10 @@ def main():
     parser.add_argument("--follow-outside", action="store_true",
                         help="follow every direct target, so --bodies alone "
                              "bounds the batch")
+    parser.add_argument("--stop-body", action="append", default=[],
+                        type=lambda value: int(value, 0),
+                        help="a subsystem entry the batch never enters: the "
+                             "walk stops before it and names it (repeatable)")
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
 
@@ -154,6 +158,7 @@ def main():
     required, engine, missing, seen, thunks = [], set(), [], set(), {}
     unresolved = set()
     engine_roots = set(args.engine_body)
+    stop_bodies = set(args.stop_body)
     # An engine body the batch must include can be reachable only through a
     # function pointer, so it is seeded rather than discovered. The command line
     # order is the priority order when --bodies caps the batch.
@@ -166,6 +171,12 @@ def main():
         function = bodies.get(address)
         if function is None:
             missing.append(address)
+            continue
+        if address in stop_bodies:
+            # A declared subsystem entry: its own code governs how it starts, so
+            # the batch never enters it. The walk stops here and the address is
+            # reported, which is a boundary instead of a half-run subsystem.
+            engine.add(address)
             continue
         symbol = thunk_symbol(function, iat)
         if symbol is not None:

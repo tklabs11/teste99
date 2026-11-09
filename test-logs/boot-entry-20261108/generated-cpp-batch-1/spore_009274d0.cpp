@@ -275,8 +275,7 @@ BatchLiftStatus spore_lift_009274d0(BatchLiftMemory& memory, BatchLiftState& sta
         t37 = state.regs[0];
         if (!memory.store32(static_cast<std::uint32_t>(state.regs[6] + 0x0000002cu), t37)) return BatchLiftStatus::invalid_memory;
     // 0x00927545: e8f4918b00 CALL
-        if (!batch_guest_call32(memory, state, 0x011e073eu, 0x0092754au)) return BatchLiftStatus::invalid_memory;
-        t38_call_status = spore_lift_011e073e(memory, state);
+        t38_call_status = state.imports == nullptr ? BatchLiftStatus::unsupported_import : state.imports->invoke_guest_call(memory, state, 0x011e073eu, 0x0092754au);
         if (t38_call_status != BatchLiftStatus::returned) return t38_call_status;
         if (state.eip != 0x0092754au) return BatchLiftStatus::invalid_control_flow;
     // 0x0092754a: 83c40c ADD
