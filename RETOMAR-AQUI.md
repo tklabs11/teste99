@@ -475,3 +475,24 @@ ferramentas e recompile o que for nosso.
 O `PASS` é um retrato determinístico. Depois de reinstalar tudo e rodar a suíte, a
 linha tem que ser **byte a byte igual** à da seção 1. Se for, os resultados anteriores
 não estavam contaminados; se não for, o que mudou é a diferença a investigar.
+
+### Varredura do disco D: (feita em 2026-11-12)
+
+- **1 970 executáveis** (`.exe/.dll/.scr/.cpl/.ocx/.sys/.com`) varridos um a um com
+  `MpCmdRun -DisableRemediation`: **7 sinalizados**, todos em `.venv` de Python
+  (`lyric_studio` e `samanta`): `t64.exe`, `f2py.exe`, `hf.exe`, `idna.exe`,
+  `onnxruntime_test.exe`, `pyav.exe` → `Trojan:Win32/Wacatac.*!ml` e `Sabsik.FL.A!ml`.
+- **1 963 não sinalizados**, incluindo `D:\SPOREFILES`, `D:\SteamLibrary`,
+  `D:\SporeAndroid`, `D:\varios projects`, `D:\arquivos nvme`, `D:\mtstore`,
+  `D:\tktech`, `D:\documents`.
+- **Mas**: 4 arquivos do D: que já foram detectados como Expiro/Floxif no histórico
+  (`D:\documents\DavyjonesAI\...\electron.exe`, `D:\documents\ml\backend\.venv\Scripts\python.exe`,
+  `D:\tktech\iphonexr\venv\...\t32.exe` e `w32.exe`) **continuam existindo e hoje não
+  são sinalizados**. Ou seja: **um passe só com ML não é prova de limpeza**.
+- Existe um **cofre do Avast** em `D:\$AV_ASW\$VAULT` com 11 itens em quarentena de
+  **02/11 02:32–03:04** (~900 MB, `.dat` cifrados e inertes). Confirma a data do
+  evento; deve ser **apagado**, não copiado.
+
+**Conclusão: formatar só o C: não basta.** Um `.exe` infectado que sobreviva no D: e
+seja executado depois re-infecta tudo. Apague/refaça o D: também, ou no mínimo apague
+todo `.venv`, `node_modules`, `dist`, `build` e o `$AV_ASW`, e rode a varredura de novo.
