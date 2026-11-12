@@ -1,0 +1,40 @@
+{
+ "functions": [
+  {
+   "function": {
+    "entry": "0x00ff0420",
+    "name": "decoded_00ff0420",
+    "body_address_count": 4,
+    "instructions": [
+     {
+      "address": "0x00ff0420",
+      "bytes": "8b4114",
+      "length": 3,
+      "mnemonic": "MOV",
+      "operands": [
+       "EAX",
+       "dword ptr [ECX + 0x14]"
+      ],
+      "flow": "FALL_THROUGH",
+      "flows_to": [],
+      "references": []
+     },
+     {
+      "address": "0x00ff0423",
+      "bytes": "c3",
+      "length": 1,
+      "mnemonic": "RET",
+      "operands": [],
+      "flow": "TERMINATOR",
+      "flows_to": [],
+      "references": []
+     }
+    ],
+    "instruction_count_exported": 2,
+    "instructions_truncated": false,
+    "references_truncated": false,
+    "span": "0xff0420..0xff0423"
+   }
+  }
+ ]
+}

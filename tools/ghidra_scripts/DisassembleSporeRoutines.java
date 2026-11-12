@@ -21,8 +21,8 @@ import ghidra.program.model.listing.Instruction;
 import ghidra.program.model.symbol.Reference;
 
 public class DisassembleSporeRoutines extends GhidraScript {
-    private static final int MAX_INSTRUCTIONS = 2_048;
-    private static final long MAX_SPAN = 0x4000L;
+    private static final int MAX_INSTRUCTIONS = 16_384;
+    private static final long MAX_SPAN = 0x8000L;
 
     @Override
     protected void run() throws Exception {

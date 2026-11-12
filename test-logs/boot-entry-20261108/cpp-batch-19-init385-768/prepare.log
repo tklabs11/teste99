@@ -1,0 +1,6 @@
+rodada 1: corpos=384 acumulado=384 novos=22
+rodada 2: corpos=22 acumulado=406 novos=3
+rodada 3: corpos=3 acumulado=409 novos=11
+rodada 4: corpos=11 acumulado=420 novos=1
+rodada 5: corpos=1 acumulado=421 novos=0
+closure do lote 2: 421 corpos, 5366 instruções, 1 imports, 1 alvos canonicalizados, 0 exports truncados

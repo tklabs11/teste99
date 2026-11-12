@@ -1,2 +1,2 @@
 PASS crt_initterm_call stop=0x011e0f6f executed=97 esp_delta=-132 ebp=entry-4 ebx=0 esi=1 edi=lock_reg cookie=consistent imports=7 icc=acquired owner=stack_base lock=owner state=1 try_level=1 table=0x13eb09c..0x13eb0ac startupinfo=cb,ptrs_valid,reserved_null
-DETAIL crt_initterm_call cookie=0xf2d1ffb1 complement=0x0d2e004e lock=0x00760000 state=0x00000001 table=013eb09c,013eb0ac
+DETAIL crt_initterm_call cookie=0x793d09ea complement=0x86c2f615 lock=0x00d00000 state=0x00000001 table=013eb09c,013eb0ac

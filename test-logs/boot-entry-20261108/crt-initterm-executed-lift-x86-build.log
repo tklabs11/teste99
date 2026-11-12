@@ -1,4 +1,5 @@
 boot_entry_crt_harness.cpp
+C:\Users\wesll\AndroidStudioProjects\SporeAndroid\tools\batch_static_lift\boot_entry_crt_harness.cpp(466): warning C4996: 'getenv': This function or variable may be unsafe. Consider using _dupenv_s instead. To disable deprecation, use _CRT_SECURE_NO_WARNINGS. See online help for details.
 spore_011e11a0.cpp
 spore_011e1548_prefix.cpp
 C:\Users\wesll\AndroidStudioProjects\SporeAndroid\test-logs\boot-entry-20261108\generated-cookie-cookie-prefix\spore_011e1548_prefix.cpp(250): warning C4102: 'L_011e15da': rótulo não referenciado

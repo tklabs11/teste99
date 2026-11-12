@@ -4,12 +4,33 @@ param(
     [string]$BatchDirectory = "C:\SporeAnalysis\spore_batch_all_parts",
     [string]$DeviceSerial = "",
     [string[]]$Stage = @("seh-call-boundary", "startupinfo-call", "interlocked-call", "startup-lock", "initterm-call", "initterm-executed", "startup-state-initializing", "cpp-walk-initializers"),
-    [int]$BatchInitializers = 7,
-    [int]$BatchBodies = 120,
+    [int]$BatchInitializers = 768,
+    # The batch must cover every seeded body plus its closure. With the class
+    # tables seeded the batch needs 1044 at 768 initializers, so the cap sits
+    # well above that rather than exactly on it: a cap that equals the
+    # requirement hides growth instead of showing it.
+    [int]$BatchBodies = 1400,
     [switch]$BuildOnly
 )
 
 $ErrorActionPreference = "Stop"
+
+# Real-time scanning can hold a just-written log file for a moment. Tee-Object has
+# no retry, so a locked log stalls the whole run; this writes with the same retry
+# the build and device steps already use.
+function Write-LogText {
+    param([string]$Path, [string]$Text)
+    for ($attempt = 0; $attempt -lt 40; $attempt++) {
+        try {
+            Set-Content -LiteralPath $Path -Value $Text -ErrorAction Stop
+            return
+        } catch {
+            Start-Sleep -Milliseconds 250
+        }
+    }
+    throw "could not write $Path"
+}
+
 $toolsDirectory = $PSScriptRoot
 $repoRoot = Split-Path $toolsDirectory -Parent
 $backendDirectory = Join-Path $toolsDirectory "batch_static_lift"
@@ -121,7 +142,8 @@ try {
         --extra-batch (Join-Path $logsDirectory "crt_dep_routines2.json") `
         --extra-batch (Join-Path $logsDirectory "crt_dep_functions.json") `
         --output $closureDirectory 2>&1
-    $closureLog | Tee-Object -FilePath (Join-Path $logsDirectory "initterm-closure-generation.log")
+    $closureLog | Write-Output
+    Write-LogText (Join-Path $logsDirectory "initterm-closure-generation.log") ($closureLog | Out-String)
     if ($LASTEXITCODE -ne 0) { throw "CRT initializer closure generation failed" }
     $closureManifest = Get-Content -LiteralPath `
         (Join-Path $closureDirectory "manifest.json") -Raw | ConvertFrom-Json
@@ -158,10 +180,17 @@ try {
         --engine-body 0x138e640 --engine-body 0xf474d0 `
         --engine-body 0xf47480 --engine-body 0x927860 `
         --engine-body 0x935c80 --engine-body 0xf47430 `
+        --engine-body 0x925730 --engine-body 0x925bc0 --engine-body 0x925050 `
+        --engine-body 0x925770 --engine-body 0x697c40 --engine-body 0x93c3e0 `
+        --engine-body 0x9248f0 --engine-body 0xff0420 `
+        --engine-body 0x68f9b0 --engine-body 0x93a650 `
+        --engine-body-file (Join-Path $logsDirectory "cpp-batch-2\engine-bodies-registry.txt") `
+        --engine-body-file (Join-Path $logsDirectory "cpp-batch-2\engine-bodies-tables.txt") `
         --follow-outside --bodies $BatchBodies --allow-unresolved `
         --stop-body 0x011e073e `
         --output $batchOutputDirectory 2>&1
-    $batchLog | Tee-Object -FilePath (Join-Path $logsDirectory "cpp-batch-generation.log")
+    $batchLog | Write-Output
+    Write-LogText (Join-Path $logsDirectory "cpp-batch-generation.log") ($batchLog | Out-String)
     if ($LASTEXITCODE -ne 0) { throw "C++ initializer batch generation failed" }
     $batchSources = @(
         Get-ChildItem -LiteralPath $batchOutputDirectory -Filter *.cpp |
@@ -176,7 +205,8 @@ try {
     $imageLog = & $python $imageGenerator --reference $ReferencePe `
         --candidate $CandidatePe --closure $closureDirectory `
         $batchOutputDirectory --output $imageDirectory 2>&1
-    $imageLog | Tee-Object -FilePath (Join-Path $logsDirectory "initterm-guest-image.log")
+    $imageLog | Write-Output
+    Write-LogText (Join-Path $logsDirectory "initterm-guest-image.log") ($imageLog | Out-String)
     if ($LASTEXITCODE -ne 0) { throw "Guest image generation failed" }
 
     foreach ($stageName in $Stage) {
@@ -187,7 +217,8 @@ try {
         $generated = & $python $generator --reference $ReferencePe `
             --candidate $CandidatePe --batch $batch --output $crtDirectory `
             --stage $stageName 2>&1
-        $generated | Tee-Object -FilePath (Join-Path $logsDirectory "crt-$stageName-generation.log")
+        $generated | Write-Output
+        Write-LogText (Join-Path $logsDirectory "crt-$stageName-generation.log") ($generated | Out-String)
         if ($LASTEXITCODE -ne 0) { throw "CRT prefix generation failed for $stageName" }
 
         $generatedSources = @(
@@ -330,7 +361,7 @@ try {
         Write-Output "$liftPass"
 
         $arm64Executable = Join-Path $buildDirectory "crt-$stageName-lift-arm64"
-        $clangArguments = @(
+        $arm64Arguments = @(
             '--target=aarch64-linux-android29', '-std=c++17', '-O2', '-Wall',
             '-Wextra', '-Werror', '-Wno-unused-label',
             "-I$backendDirectory", "-I$entryTailDirectory",
@@ -338,6 +369,17 @@ try {
             "-I$imageDirectory", "-I$batchOutputDirectory", "-I$crtDirectory",
             $liftHarness
         ) + $generatedSources + @('-o', $arm64Executable)
+        # The batch reached the point where the source list alone exceeds the
+        # Windows command line, so the arguments go through a response file the
+        # way the x86 build already does.
+        $arm64ResponseFile = Join-Path $buildDirectory "crt-$stageName-arm64.rsp"
+        # clang treats a backslash in a response file as an escape, so every
+        # separator is doubled; cl reads the same file without that rule.
+        $arm64Arguments | ForEach-Object {
+            $escaped = $_.Replace('\', '\\')
+            if ($escaped -match '\s') { '"' + $escaped + '"' } else { $escaped }
+        } | Set-Content -LiteralPath $arm64ResponseFile -Encoding ASCII
+        $clangArguments = @("@$arm64ResponseFile")
         # Real-time scanning can hold a just-written output file for a moment;
         # the retry does not change what is compiled.
         $clangOutput = @()

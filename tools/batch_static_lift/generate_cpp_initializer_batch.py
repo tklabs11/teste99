@@ -116,6 +116,18 @@ def call_sites_to(function):
     return sites
 
 
+def next_initializer_literal(targets, count):
+    """The first initializer the batch does not register, as C++ literal text.
+
+    Zero means the batch covers the table's end: there is no next entry to name,
+    and the walk's own end-of-table check is what stops it.
+    """
+
+    if count < len(targets):
+        return f"0x{targets[count]:08x}u"
+    return "0x00000000u"
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--reference", type=Path, required=True)
@@ -127,6 +139,10 @@ def main():
     parser.add_argument("--engine-body", action="append", default=[],
                         type=lambda value: int(value, 0),
                         help="engine body to lift and follow (repeatable)")
+    parser.add_argument("--engine-body-file", type=Path, action="append",
+                        default=[],
+                        help="file of engine bodies to lift, one address per "
+                             "line; '#' starts a comment")
     parser.add_argument("--bodies", type=int, default=0,
                         help="lift at most this many bodies, closest first")
     parser.add_argument("--allow-unresolved", action="store_true",
@@ -154,15 +170,27 @@ def main():
     bodies = body_map(json.loads(args.closure.read_text(encoding="utf-8")))
     targets = table_targets(reference)
     roots = targets[:args.initializers]
+    # A batch that reaches the end of the table has no next initializer, and
+    # saying so explicitly is what lets the whole table be generated at once.
+    next_initializer = next_initializer_literal(targets, len(roots))
 
     required, engine, missing, seen, thunks = [], set(), [], set(), {}
     unresolved = set()
-    engine_roots = set(args.engine_body)
+    # A file keeps a long list of seeded bodies reviewable; the inline arguments
+    # stay the short, hand-picked prefix that sets the priority order.
+    file_seeded = []
+    for listing in args.engine_body_file:
+        for line in listing.read_text(encoding="utf-8").splitlines():
+            line = line.split("#", 1)[0].strip()
+            if line:
+                file_seeded.append(int(line, 0))
+    seeds = list(args.engine_body) + file_seeded
+    engine_roots = set(seeds)
     stop_bodies = set(args.stop_body)
     # An engine body the batch must include can be reachable only through a
     # function pointer, so it is seeded rather than discovered. The command line
     # order is the priority order when --bodies caps the batch.
-    pending = list(args.engine_body) + list(roots)
+    pending = list(seeds) + list(roots)
     while pending:
         address = pending.pop(0)
         if address in seen:
@@ -213,9 +241,13 @@ def main():
         lifter.validate_function_bytes(bodies[address], candidate)
 
     # A direct CALL or JMP that lands inside a body being lifted is local
-    # control flow, not a request for another body.
+    # control flow, not a request for another body. The same applies to what the
+    # discovery queue left in `missing`: a jump that stays inside a lifted body
+    # was never a body to lift, and reporting it as one sends the next
+    # measurement after a block that is already in the closure.
     local = lifted_instruction_addresses(required, bodies)
     engine = {target for target in engine if target not in local}
+    missing = [target for target in missing if target not in local]
     # Direct calls a lifted body makes to an address it does not lift: the
     # dispatcher resolves them at runtime, and one of them is where the walk
     # will stop.
@@ -283,9 +315,9 @@ def main():
         f"{len(roots)}u;",
         "",
         "// The first table initializer this batch does not register: the walk",
-        "// must stop exactly there.",
+        "// must stop exactly there. Zero means the batch covers the table's end.",
         f"inline constexpr std::uint32_t kBatchNextInitializer = "
-        f"0x{targets[len(roots)]:08x}u;",
+        f"{next_initializer};",
         "",
         "// The first engine body the batch needs, and every lifted body entry.",
         f"inline constexpr std::uint32_t kBatchEngineBlocker = {blocker};",
@@ -316,7 +348,7 @@ def main():
         "instructions": sum(len(bodies[address]["instructions"])
                             for address in entries),
         "imports": symbols,
-        "next_initializer": f"0x{targets[len(roots)]:08x}",
+        "next_initializer": next_initializer.replace("u", ""),
         "engine_blockers": [f"0x{value:08x}" for value in sorted(engine)],
         "pending_bodies": [f"0x{value:08x}" for value in pending_bodies],
         "missing_bodies": [f"0x{value:08x}" for value in sorted(missing)],

@@ -1,0 +1,46 @@
+translated 10 routines (193 instructions), 10 imports, 2 thunk call sites
+lote gerado: 384 inicializadores, 660 corpos, 17811 instruções, 55 imports, pendentes 1, bloqueio de engine ['0x011e073e']
+generated guest image: 62 regions (47 from the PE, 15 zero-filled), 139644 bytes, 774 closure addresses covered, app_type_flag=0
+generated stage seh-call-boundary: 2 CRT prefix records to 0x011e0ee7 (2 executed), seh_prolog=False, lock_block=False
+PASS crt_entry stop=0x011e0ee7 executed=56 esp_delta=-8 stack=0x58,0x1508ca8 callee_saved=restored cookie=consistent imports=5
+PASS arm64_build stage=seh-call-boundary target=aarch64-linux-android29
+PASS x86_vs_arm64 PASS crt_entry stop=0x011e0ee7 executed=56 esp_delta=-8 stack=0x58,0x1508ca8 callee_saved=restored cookie=consistent imports=5
+PASS arm64_device_run stage=seh-call-boundary serial=PJMZAEJRX4YLFIDI
+generated stage startupinfo-call: 9 CRT prefix records to 0x011e0efe (9 executed), seh_prolog=True, lock_block=False
+PASS crt_startupinfo stop=0x011e0efe executed=84 esp_delta=-124 ebp=entry-4 ebx=0 callee_saved=restored cookie=consistent imports=6 startupinfo=cb,ptrs_valid,reserved_null
+PASS arm64_build stage=startupinfo-call target=aarch64-linux-android29
+PASS x86_vs_arm64 PASS crt_startupinfo stop=0x011e0efe executed=84 esp_delta=-124 ebp=entry-4 ebx=0 callee_saved=restored cookie=consistent imports=6 startupinfo=cb,ptrs_valid,reserved_null
+PASS arm64_device_run stage=startupinfo-call serial=PJMZAEJRX4YLFIDI
+generated stage interlocked-call: 18 CRT prefix records to 0x011e0f24 (18 executed), seh_prolog=True, lock_block=True
+PASS crt_interlocked stop=0x011e0f24 executed=93 esp_delta=-124 ebp=entry-4 ebx=0 edi=lock_reg cookie=consistent imports=7 icc=acquired previous=0 owner=stack_base lock=owner try_level=1 startupinfo=cb,ptrs_valid,reserved_null
+PASS arm64_build stage=interlocked-call target=aarch64-linux-android29
+PASS x86_vs_arm64 PASS crt_interlocked stop=0x011e0f24 executed=93 esp_delta=-124 ebp=entry-4 ebx=0 edi=lock_reg cookie=consistent imports=7 icc=acquired previous=0 owner=stack_base lock=owner try_level=1 startupinfo=cb,ptrs_valid,reserved_null
+PASS arm64_device_run stage=interlocked-call serial=PJMZAEJRX4YLFIDI
+generated stage startup-lock: 31 CRT prefix records to 0x011e0f43 (13 executed), seh_prolog=True, lock_block=True
+PASS crt_startup_lock stop=0x011e0f43 executed=88 esp_delta=-124 ebp=entry-4 ebx=0 esi=1 edi=lock_reg cookie=consistent imports=7 icc=acquired owner=stack_base lock=owner state=0 try_level=1 startupinfo=cb,ptrs_valid,reserved_null
+PASS arm64_build stage=startup-lock target=aarch64-linux-android29
+PASS x86_vs_arm64 PASS crt_startup_lock stop=0x011e0f43 executed=88 esp_delta=-124 ebp=entry-4 ebx=0 esi=1 edi=lock_reg cookie=consistent imports=7 icc=acquired owner=stack_base lock=owner state=0 try_level=1 startupinfo=cb,ptrs_valid,reserved_null
+PASS arm64_device_run stage=startup-lock serial=PJMZAEJRX4YLFIDI
+generated stage initterm-call: 44 CRT prefix records to 0x011e0f6f (22 executed), seh_prolog=True, lock_block=True
+PASS crt_initterm_call stop=0x011e0f6f executed=97 esp_delta=-132 ebp=entry-4 ebx=0 esi=1 edi=lock_reg cookie=consistent imports=7 icc=acquired owner=stack_base lock=owner state=1 try_level=1 table=0x13eb09c..0x13eb0ac startupinfo=cb,ptrs_valid,reserved_null
+PASS arm64_build stage=initterm-call target=aarch64-linux-android29
+PASS x86_vs_arm64 PASS crt_initterm_call stop=0x011e0f6f executed=97 esp_delta=-132 ebp=entry-4 ebx=0 esi=1 edi=lock_reg cookie=consistent imports=7 icc=acquired owner=stack_base lock=owner state=1 try_level=1 table=0x13eb09c..0x13eb0ac startupinfo=cb,ptrs_valid,reserved_null
+PASS arm64_device_run stage=initterm-call serial=PJMZAEJRX4YLFIDI
+generated stage initterm-executed: 51 CRT prefix records to 0x011e0f85 (27 executed), seh_prolog=False, lock_block=True
+SKIP original_x86_real_win32 stage=initterm-executed reason=the_real_crt_walk_initializes_the_process
+PASS crt_initterm_executed stop=0x011e0f85 executed=102 esp_delta=-124 ebp=entry-4 eax=0 esi=1 edi=lock_reg cookie=consistent imports=14 initterm=walked initializers=3/3 app_type=2 fmode=0,0 encoded_null=consistent adjust_fdiv=propagated sse2=1 filter=0x011e1318 fpucw=0x0001027f
+PASS arm64_build stage=initterm-executed target=aarch64-linux-android29
+PASS x86_vs_arm64 PASS crt_initterm_executed stop=0x011e0f85 executed=102 esp_delta=-124 ebp=entry-4 eax=0 esi=1 edi=lock_reg cookie=consistent imports=14 initterm=walked initializers=3/3 app_type=2 fmode=0,0 encoded_null=consistent adjust_fdiv=propagated sse2=1 filter=0x011e1318 fpucw=0x0001027f
+PASS arm64_device_run stage=initterm-executed serial=PJMZAEJRX4YLFIDI
+generated stage startup-state-initializing: 56 CRT prefix records to 0x011e0f98 (32 executed), seh_prolog=False, lock_block=True
+SKIP original_x86_real_win32 stage=startup-state-initializing reason=the_real_crt_walk_initializes_the_process
+PASS crt_startup_state_initializing stop=0x011e0f98 executed=107 esp_delta=-132 ebp=entry-4 eax=1 esi=1 edi=lock_reg cookie=consistent imports=14 initterm_e=walked state=initializing cmp=equal table=0x013cc80c..0x013eb098 app_type=2 fpucw=0x0001027f
+PASS arm64_build stage=startup-state-initializing target=aarch64-linux-android29
+PASS x86_vs_arm64 PASS crt_startup_state_initializing stop=0x011e0f98 executed=107 esp_delta=-132 ebp=entry-4 eax=1 esi=1 edi=lock_reg cookie=consistent imports=14 initterm_e=walked state=initializing cmp=equal table=0x013cc80c..0x013eb098 app_type=2 fpucw=0x0001027f
+PASS arm64_device_run stage=startup-state-initializing serial=PJMZAEJRX4YLFIDI
+generated stage cpp-walk-initializers: 56 CRT prefix records to 0x011e0f98 (32 executed), seh_prolog=False, lock_block=True
+SKIP original_x86_real_win32 stage=cpp-walk-initializers reason=the_real_crt_walk_initializes_the_process
+PASS crt_cpp_walk stop=0x011e0f98 failed_at=0x0121fac0 executed=107 esp_delta=-136 ebp=entry-4 cookie=consistent imports=5322 initializers=384 ran=384 last_ran=0x0121fab0 walk=stopped_at_0x0121fac0 args=argc1,argv_guest,envp_empty sections=8 tls=2 guard=single_instance node=0x5e000010 count=9 mutex=SingleMgrMutex00001234 encoded=5e000010 neutralized=0x011e073e/244/3/0 buf=0x01668994 n_sizes=2 fault=none@0x00000000/0 pc=0x00000000 near=0x00000000+0x0
+PASS arm64_build stage=cpp-walk-initializers target=aarch64-linux-android29
+PASS x86_vs_arm64 PASS crt_cpp_walk stop=0x011e0f98 failed_at=0x0121fac0 executed=107 esp_delta=-136 ebp=entry-4 cookie=consistent imports=5322 initializers=384 ran=384 last_ran=0x0121fab0 walk=stopped_at_0x0121fac0 args=argc1,argv_guest,envp_empty sections=8 tls=2 guard=single_instance node=0x5e000010 count=9 mutex=SingleMgrMutex00001234 encoded=5e000010 neutralized=0x011e073e/244/3/0 buf=0x01668994 n_sizes=2 fault=none@0x00000000/0 pc=0x00000000 near=0x00000000+0x0
+PASS arm64_device_run stage=cpp-walk-initializers serial=PJMZAEJRX4YLFIDI

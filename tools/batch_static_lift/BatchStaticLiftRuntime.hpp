@@ -8,6 +8,7 @@
 #include <condition_variable>
 #include <cstring>
 #include <cmath>
+#include <deque>
 #include <limits>
 #include <memory>
 #include <mutex>
@@ -62,6 +63,11 @@ inline BatchGuestBodyTraceState batch_guest_body_trace{};
 inline void batch_guest_note_body(std::uint32_t entry) {
     batch_guest_body_trace.note(entry);
 }
+
+// The guest instruction that owns the next memory access. The lifter emits an
+// assignment before every instruction that touches memory, so a fault names the
+// instruction that made the access instead of only the address it reached.
+inline std::uint32_t batch_guest_pc = 0u;
 
 // Fills `out` (oldest first) and returns how many entries were written.
 inline std::size_t batch_guest_body_trace_read(std::uint32_t* out,
@@ -131,6 +137,12 @@ struct BatchLiftState {
     std::uint32_t fs_base = 0;
     BatchGuestImportDispatcher* imports = nullptr;
     std::uint32_t last_error = 0;
+    // Reads of RDTSC in this run, so the modelled counter advances once per
+    // read instead of following the host clock.
+    std::uint64_t rdtsc_reads = 0;
+    // The same idea for the two Win32 time sources the guest exposes.
+    std::uint64_t tick_reads = 0;
+    std::uint64_t qpc_reads = 0;
 };
 
 inline bool batch_even_parity(std::uint8_t value) {
@@ -214,6 +226,35 @@ inline void batch_set_sbb_flags(
     if (signed_result < signed_min || signed_result > signed_max) state.eflags |= 0x800u;
 }
 
+// ADC adds the incoming carry, so the addend the flag formulas see is
+// right + carry rather than right.
+inline void batch_set_adc_flags(
+    BatchLiftState& state,
+    std::uint32_t left,
+    std::uint32_t right,
+    std::uint32_t carry,
+    std::uint32_t result,
+    unsigned width) {
+    const std::uint32_t mask = batch_mask(width);
+    const std::uint32_t sign = std::uint32_t{1} << (width - 1u);
+    left &= mask;
+    right &= mask;
+    result &= mask;
+    const std::uint32_t addend =
+        static_cast<std::uint32_t>((right + carry) & mask);
+    state.eflags &= ~0x8d5u;
+    if (static_cast<std::uint64_t>(left) + right + carry > mask) {
+        state.eflags |= 0x001u;
+    }
+    if (batch_even_parity(static_cast<std::uint8_t>(result))) state.eflags |= 0x004u;
+    if (((left ^ right ^ result) & 0x010u) != 0u) state.eflags |= 0x010u;
+    if (result == 0u) state.eflags |= 0x040u;
+    if ((result & sign) != 0u) state.eflags |= 0x080u;
+    if (((~(left ^ addend) & (left ^ result)) & sign) != 0u) {
+        state.eflags |= 0x800u;
+    }
+}
+
 inline void batch_set_logic_flags(
     BatchLiftState& state,
     std::uint32_t result,
@@ -229,6 +270,89 @@ inline void batch_set_logic_flags(
 // SHL semantics: CF is the last bit shifted out, SF/ZF/PF come from the
 // result. OF is defined only for a count of one; for larger counts the x86
 // manual leaves it undefined, so it is preserved instead of invented.
+// SHRD semantics: the count is masked to five bits (four for a 16-bit
+// operand) and a zero count leaves both the destination and every flag alone.
+// CF is the last bit shifted out of the destination, SF/ZF/PF come from the
+// result, and OF is defined only for a count of one.
+inline std::uint32_t batch_guest_shrd(
+    BatchLiftState& state,
+    std::uint32_t destination,
+    std::uint32_t source,
+    std::uint32_t count,
+    unsigned width) {
+    const unsigned mask = width == 32u ? 31u : 15u;
+    const unsigned shift = static_cast<unsigned>(count) & mask;
+    const std::uint32_t limit = batch_mask(width);
+    const std::uint32_t value = destination & limit;
+    if (shift == 0u) return value;
+    const std::uint32_t moved = (value >> shift)
+        | ((source & limit) << (width - shift));
+    const std::uint32_t result = moved & limit;
+    state.eflags &= ~0x8c5u;
+    if (((value >> (shift - 1u)) & 1u) != 0u) state.eflags |= 0x001u;
+    if (batch_even_parity(static_cast<std::uint8_t>(result))) {
+        state.eflags |= 0x004u;
+    }
+    if (result == 0u) state.eflags |= 0x040u;
+    const std::uint32_t sign = std::uint32_t{1} << (width - 1u);
+    if ((result & sign) != 0u) state.eflags |= 0x080u;
+    if (shift == 1u && (((value ^ result) & sign) != 0u)) {
+        state.eflags |= 0x800u;
+    }
+    return result;
+}
+
+// Rotates touch only CF and OF: SF/ZF/PF keep the value they had. CF is the last
+// bit moved and OF is defined only for a single-bit count, so a larger count
+// clears it instead of inventing a value.
+inline std::uint32_t batch_guest_rol(
+    BatchLiftState& state, std::uint32_t value, std::uint32_t count) {
+    const unsigned shift = static_cast<unsigned>(count) & 31u;
+    if (shift == 0u) return value;
+    const std::uint32_t result =
+        (value << shift) | (value >> (32u - shift));
+    state.eflags &= ~0x801u;
+    if ((result & 1u) != 0u) state.eflags |= 0x001u;
+    if (shift == 1u && (((result >> 31u) ^ (result & 1u)) & 1u) != 0u) {
+        state.eflags |= 0x800u;
+    }
+    return result;
+}
+
+inline std::uint32_t batch_guest_ror(
+    BatchLiftState& state, std::uint32_t value, std::uint32_t count) {
+    const unsigned shift = static_cast<unsigned>(count) & 31u;
+    if (shift == 0u) return value;
+    const std::uint32_t result =
+        (value >> shift) | (value << (32u - shift));
+    state.eflags &= ~0x801u;
+    if ((result & 0x80000000u) != 0u) state.eflags |= 0x001u;
+    if (shift == 1u
+            && (((result >> 31u) ^ ((result >> 30u) & 1u)) & 1u) != 0u) {
+        state.eflags |= 0x800u;
+    }
+    return result;
+}
+
+inline std::uint32_t batch_guest_rcr(
+    BatchLiftState& state, std::uint32_t value, std::uint32_t count) {
+    const unsigned shift = static_cast<unsigned>(count) & 31u;
+    if (shift == 0u) return value;
+    std::uint32_t carry = (state.eflags & 0x001u) != 0u ? 1u : 0u;
+    std::uint32_t result = value;
+    for (unsigned step = 0; step < shift; ++step) {
+        const std::uint32_t next = result & 1u;
+        result = (result >> 1u) | (carry << 31u);
+        carry = next;
+    }
+    state.eflags &= ~0x801u;
+    if (carry != 0u) state.eflags |= 0x001u;
+    if (shift == 1u && (((result >> 31u) ^ carry) & 1u) != 0u) {
+        state.eflags |= 0x800u;
+    }
+    return result;
+}
+
 inline void batch_set_shl_flags(
     BatchLiftState& state,
     std::uint32_t value,
@@ -311,14 +435,19 @@ inline void batch_set_neg_flags(
 
 class BatchLiftMemory {
 public:
-    static constexpr std::uint32_t kStackBase = 0x70000000u;
+    // The guest stack. ESP starts 0x200 below the top so the entry frame has a
+    // real thread's megabyte underneath it: the walk now descends into engine
+    // code, and a fixture with a few hundred bytes reported the first deep call
+    // as a fault. The top is unchanged, so the CRT lock's owner id and every
+    // frame address in the harness keep their value.
+    static constexpr std::uint32_t kStackBase = 0x6ff00400u;
     static constexpr std::uint32_t kEntryEsp = 0x70000200u;
     static constexpr std::uint32_t kReturnSentinel = 0xf00dcafeu;
-    static constexpr std::size_t kStackBytes = 0x400;
+    static constexpr std::size_t kStackBytes = 0x00100000u;
 
-    BatchLiftMemory() {
-        regions_[0] = {kStackBase, kStackBytes, stack_.data(), true};
-        region_count_ = 1;
+    BatchLiftMemory()
+        : stack_(std::make_unique<std::uint8_t[]>(kStackBytes)) {
+        regions_.push_back({kStackBase, kStackBytes, stack_.get(), true});
         store32(kEntryEsp, kReturnSentinel);
     }
 
@@ -328,15 +457,19 @@ public:
         std::size_t size,
         bool writable) {
         std::lock_guard<std::mutex> lock(memory_mutex_);
-        if (data == nullptr || size == 0 || region_count_ >= regions_.size()) return false;
+        if (data == nullptr || size == 0) return false;
         const std::uint64_t end = static_cast<std::uint64_t>(base) + size;
         if (end > (std::uint64_t{1} << 32u)) return false;
-        for (std::size_t index = 0; index < region_count_; ++index) {
+        for (std::size_t index = 0; index < regions_.size(); ++index) {
             const std::uint64_t old_start = regions_[index].base;
             const std::uint64_t old_end = old_start + regions_[index].size;
             if (static_cast<std::uint64_t>(base) < old_end && old_start < end) return false;
         }
-        regions_[region_count_++] = {base, size, data, writable};
+        // A deque grows without moving what is already stored, so the pointers
+        // find_region hands out stay valid; a fixed array caps the map at one
+        // region per image window plus the TEB, the probe table and the heap,
+        // and a VirtualAlloc commit past that cap returns null to the guest.
+        regions_.push_back({base, size, data, writable});
         return true;
     }
 
@@ -349,6 +482,33 @@ public:
     bool is_readable(std::uint32_t address, std::size_t size) const {
         std::lock_guard<std::mutex> lock(memory_mutex_);
         return find_region(address, size) != nullptr;
+    }
+
+    // The first access that could not be served, so a failing walk names the
+    // address instead of only the status. Only the first one is kept: it is the
+    // one that caused the stop.
+    struct FaultInfo {
+        std::uint32_t address = 0;
+        std::uint32_t size = 0;
+        std::uint32_t pc = 0;
+        // The closest mapped region at or below the address, so a log names the
+        // class of the miss instead of only the address: the guest was inside
+        // the image when it stepped off the end of a window, or it was nowhere
+        // near one.
+        std::uint32_t near_base = 0;
+        std::uint32_t near_size = 0;
+        bool write = false;
+        bool valid = false;
+    };
+
+    FaultInfo first_fault() const {
+        std::lock_guard<std::mutex> lock(memory_mutex_);
+        return first_fault_;
+    }
+
+    void clear_fault() {
+        std::lock_guard<std::mutex> lock(memory_mutex_);
+        first_fault_ = FaultInfo{};
     }
 
     // The mapped region that contains an address, for VirtualQuery.
@@ -366,7 +526,7 @@ public:
     bool load8(std::uint32_t address, std::uint32_t& value) const {
         std::lock_guard<std::mutex> lock(memory_mutex_);
         const Region* region = find_region(address, 1);
-        if (region == nullptr) return false;
+        if (region == nullptr) { note_fault(address, 1, false); return false; }
         value = region->data[address - region->base];
         return true;
     }
@@ -374,7 +534,7 @@ public:
     bool load16(std::uint32_t address, std::uint32_t& value) const {
         std::lock_guard<std::mutex> lock(memory_mutex_);
         const Region* region = find_region(address, 2);
-        if (region == nullptr) return false;
+        if (region == nullptr) { note_fault(address, 2, false); return false; }
         const std::size_t offset = address - region->base;
         value = static_cast<std::uint32_t>(region->data[offset]) |
             (static_cast<std::uint32_t>(region->data[offset + 1]) << 8u);
@@ -384,7 +544,7 @@ public:
     bool load32(std::uint32_t address, std::uint32_t& value) const {
         std::lock_guard<std::mutex> lock(memory_mutex_);
         const Region* region = find_region(address, 4);
-        if (region == nullptr) return false;
+        if (region == nullptr) { note_fault(address, 4, false); return false; }
         const std::size_t offset = address - region->base;
         value = static_cast<std::uint32_t>(region->data[offset]) |
             (static_cast<std::uint32_t>(region->data[offset + 1]) << 8u) |
@@ -396,7 +556,7 @@ public:
     bool load64(std::uint32_t address, std::uint64_t& value) const {
         std::lock_guard<std::mutex> lock(memory_mutex_);
         const Region* region = find_region(address, 8);
-        if (region == nullptr) return false;
+        if (region == nullptr) { note_fault(address, 8, false); return false; }
         const std::size_t offset = address - region->base;
         value = 0;
         for (unsigned index = 0; index < 8; ++index) {
@@ -409,7 +569,7 @@ public:
     bool store8(std::uint32_t address, std::uint32_t value) {
         std::lock_guard<std::mutex> lock(memory_mutex_);
         Region* region = find_region(address, 1);
-        if (region == nullptr || !region->writable) return false;
+        if (region == nullptr || !region->writable) { note_fault(address, 1, true); return false; }
         region->data[address - region->base] = static_cast<std::uint8_t>(value);
         return true;
     }
@@ -417,7 +577,7 @@ public:
     bool store16(std::uint32_t address, std::uint32_t value) {
         std::lock_guard<std::mutex> lock(memory_mutex_);
         Region* region = find_region(address, 2);
-        if (region == nullptr || !region->writable) return false;
+        if (region == nullptr || !region->writable) { note_fault(address, 2, true); return false; }
         const std::size_t offset = address - region->base;
         region->data[offset] = static_cast<std::uint8_t>(value);
         region->data[offset + 1] = static_cast<std::uint8_t>(value >> 8u);
@@ -427,7 +587,7 @@ public:
     bool store32(std::uint32_t address, std::uint32_t value) {
         std::lock_guard<std::mutex> lock(memory_mutex_);
         Region* region = find_region(address, 4);
-        if (region == nullptr || !region->writable) return false;
+        if (region == nullptr || !region->writable) { note_fault(address, 4, true); return false; }
         const std::size_t offset = address - region->base;
         for (unsigned index = 0; index < 4; ++index) {
             region->data[offset + index] = static_cast<std::uint8_t>(value >> (index * 8u));
@@ -438,7 +598,7 @@ public:
     bool store64(std::uint32_t address, std::uint64_t value) {
         std::lock_guard<std::mutex> lock(memory_mutex_);
         Region* region = find_region(address, 8);
-        if (region == nullptr || !region->writable) return false;
+        if (region == nullptr || !region->writable) { note_fault(address, 8, true); return false; }
         const std::size_t offset = address - region->base;
         for (unsigned index = 0; index < 8; ++index) {
             region->data[offset + index] =
@@ -453,7 +613,7 @@ public:
         std::uint32_t& previous) {
         std::lock_guard<std::mutex> lock(memory_mutex_);
         Region* region = find_region(address, 4);
-        if (region == nullptr || !region->writable) return false;
+        if (region == nullptr || !region->writable) { note_fault(address, 4, true); return false; }
         const std::size_t offset = address - region->base;
         previous = static_cast<std::uint32_t>(region->data[offset]) |
             (static_cast<std::uint32_t>(region->data[offset + 1]) << 8u) |
@@ -475,7 +635,7 @@ private:
     };
 
     const Region* find_region(std::uint32_t address, std::size_t size) const {
-        for (std::size_t index = 0; index < region_count_; ++index) {
+        for (std::size_t index = 0; index < regions_.size(); ++index) {
             const Region& region = regions_[index];
             if (address < region.base) continue;
             const std::uint64_t offset = static_cast<std::uint64_t>(address) - region.base;
@@ -485,7 +645,7 @@ private:
     }
 
     Region* find_region(std::uint32_t address, std::size_t size) {
-        for (std::size_t index = 0; index < region_count_; ++index) {
+        for (std::size_t index = 0; index < regions_.size(); ++index) {
             Region& region = regions_[index];
             if (address < region.base) continue;
             const std::uint64_t offset = static_cast<std::uint64_t>(address) - region.base;
@@ -495,10 +655,31 @@ private:
     }
 
     // The guest map grows with the number of windows the image exposes: the
-    // stack plus one region per window, the TEB and the probe table.
-    std::array<Region, 32> regions_{};
-    std::array<std::uint8_t, kStackBytes> stack_{};
-    std::size_t region_count_ = 0;
+    // stack plus one region per window, the TEB, the probe table, the heap and
+    // every VirtualAlloc commit, so it is a deque rather than a fixed array.
+    void note_fault(std::uint32_t address, std::size_t size, bool write) const {
+        if (first_fault_.valid) return;
+        first_fault_.address = address;
+        first_fault_.size = static_cast<std::uint32_t>(size);
+        first_fault_.pc = batch_guest_pc;
+        first_fault_.write = write;
+        first_fault_.valid = true;
+        bool found = false;
+        for (std::size_t index = 0; index < regions_.size(); ++index) {
+            const Region& region = regions_[index];
+            if (region.base > address) continue;
+            if (found && region.base <= first_fault_.near_base) continue;
+            found = true;
+            first_fault_.near_base = region.base;
+            first_fault_.near_size = static_cast<std::uint32_t>(region.size);
+        }
+    }
+
+    std::deque<Region> regions_;
+    // On the heap: the object is a local in every harness, and a megabyte of
+    // stack in the fixture's own frame would be a hazard on the device.
+    std::unique_ptr<std::uint8_t[]> stack_;
+    mutable FaultInfo first_fault_{};
     mutable std::mutex memory_mutex_;
 };
 
@@ -858,6 +1039,142 @@ inline bool batch_guest_fnstsw_ax(BatchLiftState& state) {
     const std::uint32_t status = state.x87_status
         | ((state.x87_top & 7u) << 11u);
     state.regs[0] = (state.regs[0] & 0xffff0000u) | (status & 0xffffu);
+    return true;
+}
+
+// RDTSC is a deterministic guest cycle counter, not the host clock: every host
+// and the ARM64 device must read the same sequence, or a differential run would
+// compare two different machines' time bases. The counter starts at a fixed base
+// and advances by a constant step on each read, so code that measures elapsed
+// time gets a non-zero, repeatable delta. This is a fidelity limit: it is not
+// real time, and nothing in the port may treat it as wall clock.
+inline constexpr std::uint64_t kGuestRdtscBase = 0x0000100000000000ull;
+inline constexpr std::uint64_t kGuestRdtscStep = 0x40ull;
+
+inline bool batch_guest_rdtsc(BatchLiftState& state) {
+    const std::uint64_t value =
+        kGuestRdtscBase + kGuestRdtscStep * state.rdtsc_reads++;
+    state.regs[0] = static_cast<std::uint32_t>(value);
+    state.regs[2] = static_cast<std::uint32_t>(value >> 32u);
+    return true;
+}
+
+// String operations. The guest is single-threaded and models DF from EFLAGS, so
+// a copy runs either upward or downward as the program asked. A count beyond the
+// limit fails closed instead of running for an unbounded time on a corrupt ECX.
+inline constexpr std::uint32_t kGuestStringOpLimit = 1u << 20;
+
+inline std::uint32_t batch_guest_string_step(
+    const BatchLiftState& state, unsigned size) {
+    return (state.eflags & 0x400u) != 0u
+        ? static_cast<std::uint32_t>(0u - size) : size;
+}
+
+inline bool batch_guest_string_load(
+    const BatchLiftMemory& memory, std::uint32_t address, unsigned size,
+    std::uint32_t& value) {
+    switch (size) {
+    case 1u: return memory.load8(address, value);
+    case 2u: return memory.load16(address, value);
+    default: return memory.load32(address, value);
+    }
+}
+
+inline bool batch_guest_string_store(
+    BatchLiftMemory& memory, std::uint32_t address, unsigned size,
+    std::uint32_t value) {
+    switch (size) {
+    case 1u: return memory.store8(address, value);
+    case 2u: return memory.store16(address, value);
+    default: return memory.store32(address, value);
+    }
+}
+
+// REP MOVS: copy ECX elements from DS:ESI to ES:EDI.
+inline bool batch_guest_rep_movs(
+    BatchLiftMemory& memory, BatchLiftState& state, unsigned size) {
+    std::uint32_t count = state.regs[1];
+    if (count > kGuestStringOpLimit) return false;
+    const std::uint32_t step = batch_guest_string_step(state, size);
+    std::uint32_t source = state.regs[6];
+    std::uint32_t destination = state.regs[7];
+    while (count > 0u) {
+        std::uint32_t value{};
+        if (!batch_guest_string_load(memory, source, size, value)
+                || !batch_guest_string_store(memory, destination, size, value)) {
+            state.regs[1] = count;
+            state.regs[6] = source;
+            state.regs[7] = destination;
+            return false;
+        }
+        source = static_cast<std::uint32_t>(source + step);
+        destination = static_cast<std::uint32_t>(destination + step);
+        --count;
+    }
+    state.regs[1] = 0u;
+    state.regs[6] = source;
+    state.regs[7] = destination;
+    return true;
+}
+
+// REP STOS: store ECX copies of AL/AX/EAX at ES:EDI.
+inline bool batch_guest_rep_stos(
+    BatchLiftMemory& memory, BatchLiftState& state, unsigned size) {
+    std::uint32_t count = state.regs[1];
+    if (count > kGuestStringOpLimit) return false;
+    const std::uint32_t step = batch_guest_string_step(state, size);
+    const std::uint32_t value = size == 1u
+        ? (state.regs[0] & 0xffu)
+        : size == 2u ? (state.regs[0] & 0xffffu) : state.regs[0];
+    std::uint32_t destination = state.regs[7];
+    while (count > 0u) {
+        if (!batch_guest_string_store(memory, destination, size, value)) {
+            state.regs[1] = count;
+            state.regs[7] = destination;
+            return false;
+        }
+        destination = static_cast<std::uint32_t>(destination + step);
+        --count;
+    }
+    state.regs[1] = 0u;
+    state.regs[7] = destination;
+    return true;
+}
+
+// REPE/REPNE CMPS: compare DS:ESI with ES:EDI, repeating while the comparison
+// matches (REPE) or differs (REPNE).
+inline bool batch_guest_repe_cmps(
+    BatchLiftMemory& memory, BatchLiftState& state, unsigned size,
+    bool repeat_while_equal) {
+    std::uint32_t count = state.regs[1];
+    if (count > kGuestStringOpLimit) return false;
+    const std::uint32_t step = batch_guest_string_step(state, size);
+    std::uint32_t source = state.regs[6];
+    std::uint32_t destination = state.regs[7];
+    while (count > 0u) {
+        std::uint32_t left{}, right{};
+        const bool readable =
+            batch_guest_string_load(memory, source, size, left)
+            && batch_guest_string_load(memory, destination, size, right);
+        if (!readable) {
+            state.regs[1] = count;
+            state.regs[6] = source;
+            state.regs[7] = destination;
+            return false;
+        }
+        const std::uint32_t mask = batch_mask(size * 8u);
+        const std::uint32_t result =
+            static_cast<std::uint32_t>(left - right) & mask;
+        batch_set_sub_flags(state, left, right, result, size * 8u);
+        source = static_cast<std::uint32_t>(source + step);
+        destination = static_cast<std::uint32_t>(destination + step);
+        --count;
+        const bool equal = (state.eflags & 0x040u) != 0u;
+        if (count == 0u || equal != repeat_while_equal) break;
+    }
+    state.regs[1] = count;
+    state.regs[6] = source;
+    state.regs[7] = destination;
     return true;
 }
 
@@ -1238,14 +1555,28 @@ struct BatchImportSlot {
 inline constexpr std::uint32_t kGuestProcessHeapHandle = 0x00e0ff01u;
 inline constexpr std::uint32_t kGuestHeapBase = 0x5e000000u;
 inline constexpr std::uint32_t kGuestHeapBytes = 0x00001000u;
-// VirtualAlloc reserves address space in this arena and maps committed pages
-// from a fixed pool, so a reservation costs no guest memory.
-inline constexpr std::uint32_t kGuestVirtualArenaBase = 0x5d000000u;
-inline constexpr std::uint32_t kGuestVirtualArenaBytes = 0x00400000u;
-inline constexpr std::uint32_t kGuestVirtualPoolBytes = 0x00040000u;
+// VirtualAlloc hands out address space from a guest arena that costs no host
+// memory until it is committed, and every committed reservation gets its own
+// host block so a later commit can never move an earlier mapping. The arena is
+// far larger than the CRT needs because the engine reserves its own heap here:
+// the first initializer that asks for one requests 16 MB in a single call.
+inline constexpr std::uint32_t kGuestVirtualArenaBase = 0x20000000u;
+inline constexpr std::uint32_t kGuestVirtualArenaBytes = 0x10000000u;
+// Committed bytes the guest may hold at once. Reached only by a runaway
+// reservation, which fails closed instead of growing without a bound.
+inline constexpr std::uint64_t kGuestVirtualCommitLimitBytes = 0x10000000ull;
 // Sizes of the two Windows structures the guest fills in by hand.
 inline constexpr std::uint32_t kSystemInfoBytes = 36u;
 inline constexpr std::uint32_t kMemoryBasicInformationBytes = 28u;
+// QueryPerformanceFrequency reports this fixed counter rate in the guest.
+inline constexpr std::uint64_t kGuestPerformanceFrequency = 10000000ull;
+// Deterministic time the guest presents to code that measures elapsed time. A
+// read advances the counter by one step, so every host and the ARM64 device see
+// the same sequence and a differential run compares like with like. These are
+// not wall-clock values.
+inline constexpr std::uint32_t kGuestTickBase = 0x00010000u;
+inline constexpr std::uint64_t kGuestQpcBase = 0x0000000100000000ull;
+inline constexpr std::uint64_t kGuestQpcStep = 1000ull;
 
 struct BatchGuestImportCall {
     std::string symbol;
@@ -1529,6 +1860,21 @@ public:
         if (call.symbol == "KERNEL32.dll!GetCurrentThread") {
             return get_current_thread(state, calls_.back());
         }
+        if (call.symbol == "KERNEL32.dll!GetCurrentProcess") {
+            return get_current_process(state, calls_.back());
+        }
+        if (call.symbol == "KERNEL32.dll!GetPriorityClass") {
+            return get_priority_class(state, calls_.back());
+        }
+        if (call.symbol == "KERNEL32.dll!SetPriorityClass") {
+            return set_priority_class(state, calls_.back());
+        }
+        if (call.symbol == "KERNEL32.dll!SetThreadPriority") {
+            return set_thread_priority(state, calls_.back());
+        }
+        if (call.symbol == "KERNEL32.dll!QueryPerformanceFrequency") {
+            return query_performance_frequency(memory, state, calls_.back());
+        }
         if (call.symbol == "KERNEL32.dll!GetThreadPriority") {
             return get_thread_priority(state, calls_.back());
         }
@@ -1569,6 +1915,24 @@ public:
         }
         if (call.symbol == "MSVCR90.dll!isalpha") {
             return isalpha_guest(state, calls_.back());
+        }
+        if (call.symbol == "MSVCR90.dll!tolower") {
+            return tolower_guest(state, calls_.back());
+        }
+        if (call.symbol == "MSVCR90.dll!_finite") {
+            return finite_guest(state, calls_.back());
+        }
+        if (call.symbol == "MSVCR90.dll!_isnan") {
+            return isnan_guest(state, calls_.back());
+        }
+        if (call.symbol == "MSVCR90.dll!_purecall") {
+            return purecall_guest(calls_.back());
+        }
+        if (call.symbol == "KERNEL32.dll!OutputDebugStringA") {
+            return output_debug_string(memory, state, calls_.back());
+        }
+        if (call.symbol == "KERNEL32.dll!WideCharToMultiByte") {
+            return wide_char_to_multi_byte(memory, state, calls_.back());
         }
         if (call.symbol == "KERNEL32.dll!GetEnvironmentVariableA") {
             return get_environment_variable(memory, state, calls_.back());
@@ -1659,6 +2023,16 @@ public:
         return calls_;
     }
 
+    // How many table initializers ran to completion, and the last one that did.
+    // A walk that stops early still reports what it really executed.
+    std::uint32_t initializers_completed() const {
+        return initializers_completed_;
+    }
+
+    std::uint32_t last_initializer() const {
+        return last_initializer_;
+    }
+
     std::uint32_t last_error_code() const {
         return last_error_code_;
     }
@@ -1744,6 +2118,11 @@ private:
         if (symbol == "KERNEL32.dll!HeapAlloc") return 3u;
         if (symbol == "KERNEL32.dll!HeapFree") return 3u;
         if (symbol == "KERNEL32.dll!GetCurrentThread") return 0u;
+        if (symbol == "KERNEL32.dll!GetCurrentProcess") return 0u;
+        if (symbol == "KERNEL32.dll!GetPriorityClass") return 1u;
+        if (symbol == "KERNEL32.dll!SetPriorityClass") return 2u;
+        if (symbol == "KERNEL32.dll!SetThreadPriority") return 2u;
+        if (symbol == "KERNEL32.dll!QueryPerformanceFrequency") return 1u;
         if (symbol == "KERNEL32.dll!GetThreadPriority") return 1u;
         if (symbol == "KERNEL32.dll!GetSystemInfo") return 1u;
         if (symbol == "KERNEL32.dll!InterlockedDecrement") return 1u;
@@ -1762,6 +2141,15 @@ private:
         }
         if (symbol == "MSVCR90.dll!_stricmp") return 2u;
         if (symbol == "MSVCR90.dll!isalpha") return 1u;
+        if (symbol == "MSVCR90.dll!tolower") return 1u;
+        // A double argument occupies two dword slots on the x86 stack.
+        if (symbol == "MSVCR90.dll!_finite"
+                || symbol == "MSVCR90.dll!_isnan") {
+            return 2u;
+        }
+        if (symbol == "MSVCR90.dll!_purecall") return 0u;
+        if (symbol == "KERNEL32.dll!OutputDebugStringA") return 1u;
+        if (symbol == "KERNEL32.dll!WideCharToMultiByte") return 8u;
         if (symbol == "KERNEL32.dll!GetEnvironmentVariableA") return 3u;
         if (symbol == "KERNEL32.dll!SetEnvironmentVariableA") return 2u;
         if (symbol == "KERNEL32.dll!WaitForSingleObject") return 2u;
@@ -1982,9 +2370,11 @@ private:
     BatchLiftStatus get_tick_count(
         BatchLiftState& state,
         BatchGuestImportCall& call) {
-        const std::uint32_t ticks = static_cast<std::uint32_t>(
-            std::chrono::duration_cast<std::chrono::milliseconds>(
-                std::chrono::steady_clock::now().time_since_epoch()).count());
+        // Deterministic guest ticks, for the same reason as the RDTSC model: a
+        // host clock here makes an elapsed-time loop in guest code run a
+        // different number of iterations on every machine.
+        const std::uint32_t ticks = kGuestTickBase
+            + static_cast<std::uint32_t>(state.tick_reads++);
         complete_api_call(state, call, call.return_address, 0u, ticks);
         return BatchLiftStatus::returned;
     }
@@ -2000,21 +2390,12 @@ private:
                 "guest memory";
             return BatchLiftStatus::invalid_memory;
         }
-#if defined(_WIN32)
-        LARGE_INTEGER counter{};
-        if (QueryPerformanceCounter(&counter) == 0) {
-            set_guest_error(state, GetLastError(),
-                            "QueryPerformanceCounter failed");
-            complete_api_call(
-                state, call, call.return_address, 4u, 0u);
-            return BatchLiftStatus::returned;
-        }
+        // Same reason as GetTickCount: the counter is the guest's own, stepped
+        // once per read at the frequency QueryPerformanceFrequency reports, so
+        // an elapsed-time loop ends after a fixed number of iterations on every
+        // host. The value is not real time and nothing may treat it as such.
         const std::uint64_t value =
-            static_cast<std::uint64_t>(counter.QuadPart);
-#else
-        const std::uint64_t value = static_cast<std::uint64_t>(
-            std::chrono::steady_clock::now().time_since_epoch().count());
-#endif
+            kGuestQpcBase + kGuestQpcStep * state.qpc_reads++;
         if (!memory.store64(destination, value)) {
             last_error_ =
                 "QueryPerformanceCounter destination changed after validation";
@@ -2133,6 +2514,76 @@ private:
         BatchLiftMemory& memory, BatchLiftState& state,
         BatchGuestImportCall& call) {
         return initialize_critical_section_with(memory, state, call, 8u, 1u);
+    }
+
+    // HANDLE GetCurrentProcess(void): the pseudo-handle Windows returns for the
+    // calling process is a documented constant.
+    BatchLiftStatus get_current_process(
+        BatchLiftState& state, BatchGuestImportCall& call) {
+        complete_api_call(state, call, call.return_address, 0u, 0xffffffffu);
+        return BatchLiftStatus::returned;
+    }
+
+    // DWORD GetPriorityClass(HANDLE)
+    BatchLiftStatus get_priority_class(
+        BatchLiftState& state, BatchGuestImportCall& call) {
+        if (call.arguments[0] != 0xffffffffu) {
+            set_guest_error(state, 6u, "GetPriorityClass received an unknown handle");
+            complete_api_call(state, call, call.return_address, 4u, 0u);
+            return BatchLiftStatus::returned;
+        }
+        // NORMAL_PRIORITY_CLASS: the one guest process runs at normal priority,
+        // so the reported class never depends on the host scheduler.
+        complete_api_call(state, call, call.return_address, 4u, 0x20u);
+        return BatchLiftStatus::returned;
+    }
+
+    // BOOL SetPriorityClass(HANDLE, DWORD): scheduling only, and the guest has a
+    // single thread, so the request is recorded and accepted.
+    BatchLiftStatus set_priority_class(
+        BatchLiftState& state, BatchGuestImportCall& call) {
+        const bool known = call.arguments[0] == 0xffffffffu;
+        set_guest_error(state, known ? 0u : 6u,
+                        known ? "" : "SetPriorityClass received an unknown handle");
+        complete_api_call(state, call, call.return_address, 8u,
+                          known ? 1u : 0u);
+        return BatchLiftStatus::returned;
+    }
+
+    // BOOL SetThreadPriority(HANDLE, int)
+    BatchLiftStatus set_thread_priority(
+        BatchLiftState& state, BatchGuestImportCall& call) {
+        const bool known = call.arguments[0] == 0xfffffffeu
+            || call.arguments[0] == 0xffffffffu;
+        set_guest_error(state, known ? 0u : 6u,
+                        known ? "" : "SetThreadPriority received an unknown handle");
+        complete_api_call(state, call, call.return_address, 8u,
+                          known ? 1u : 0u);
+        return BatchLiftStatus::returned;
+    }
+
+    // BOOL QueryPerformanceFrequency(LARGE_INTEGER*): the guest declares a fixed
+    // 10 MHz counter so a frequency read is identical on every host. The counter
+    // value itself comes from QueryPerformanceCounter and is host-derived; code
+    // that turns it into seconds is therefore host-dependent, which is a
+    // documented limitation rather than a modelled clock.
+    BatchLiftStatus query_performance_frequency(
+        BatchLiftMemory& memory, BatchLiftState& state,
+        BatchGuestImportCall& call) {
+        const std::uint32_t destination = call.arguments[0];
+        if (!memory.is_writable(destination, 8u)) {
+            last_error_ =
+                "QueryPerformanceFrequency destination is outside writable "
+                "guest memory";
+            return BatchLiftStatus::invalid_memory;
+        }
+        if (!memory.store64(destination, kGuestPerformanceFrequency)) {
+            last_error_ =
+                "QueryPerformanceFrequency destination changed after validation";
+            return BatchLiftStatus::invalid_memory;
+        }
+        complete_api_call(state, call, call.return_address, 4u, 1u);
+        return BatchLiftStatus::returned;
     }
 
     // ulong_ptr TlsAlloc(void): the guest hands out indices from zero upward.
@@ -2733,17 +3184,23 @@ private:
         }
         if (commit) {
             const std::uint32_t rounded = (bytes + 0xfffu) & ~0xfffu;
-            const std::uint32_t offset = virtual_pool_used_;
-            if (offset > kGuestVirtualPoolBytes - rounded
-                    || !memory.map_region(
-                        base, virtual_pool_.data() + offset, rounded, true)) {
+            if (virtual_committed_ + rounded > kGuestVirtualCommitLimitBytes) {
                 set_guest_error(state, 8u,
-                    std::string("the guest virtual pool cannot map another "
-                                "region") + detail);
+                    std::string("the guest reached its committed-memory limit")
+                    + detail);
                 complete_api_call(state, call, call.return_address, 16u, 0u);
                 return BatchLiftStatus::returned;
             }
-            virtual_pool_used_ = offset + rounded;
+            auto block = std::make_unique<std::uint8_t[]>(rounded);
+            if (!memory.map_region(base, block.get(), rounded, true)) {
+                set_guest_error(state, 8u,
+                    std::string("the guest region table cannot map another "
+                                "commit") + detail);
+                complete_api_call(state, call, call.return_address, 16u, 0u);
+                return BatchLiftStatus::returned;
+            }
+            virtual_commits_.push_back(std::move(block));
+            virtual_committed_ += rounded;
         }
         virtual_arena_used_ = base - kGuestVirtualArenaBase + bytes;
         virtual_arena_used_ = (virtual_arena_used_ + 0xfffu) & ~0xfffu;
@@ -2885,6 +3342,140 @@ private:
             || (value >= 'a' && value <= 'z');
         complete_api_call(state, call, call.return_address,
                           kGuestCdeclCleanup, alpha ? 1u : 0u);
+        return BatchLiftStatus::returned;
+    }
+
+    // int tolower(int): ASCII only, which is what the C locale the guest runs
+    // under defines. A byte outside A-Z is returned unchanged.
+    BatchLiftStatus tolower_guest(
+        BatchLiftState& state, BatchGuestImportCall& call) {
+        std::uint32_t value = call.arguments[0] & 0xffu;
+        if (value >= 'A' && value <= 'Z') value += 32u;
+        complete_api_call(state, call, call.return_address,
+                          kGuestCdeclCleanup, value);
+        return BatchLiftStatus::returned;
+    }
+
+    // The two classification helpers take a double, so the two stack slots are
+    // read as one 64-bit value and inspected by bit pattern: that is what the CRT
+    // does, and it avoids depending on host floating-point behaviour.
+    static std::uint64_t double_bits(const BatchGuestImportCall& call) {
+        const std::uint64_t low = call.arguments[0];
+        const std::uint64_t high = call.arguments[1];
+        return low | (high << 32u);
+    }
+
+    // int _finite(double): nonzero when the exponent field is not all ones, so
+    // NaN and both infinities report zero.
+    BatchLiftStatus finite_guest(
+        BatchLiftState& state, BatchGuestImportCall& call) {
+        const std::uint64_t bits = double_bits(call);
+        const bool finite = ((bits >> 52u) & 0x7ffu) != 0x7ffu;
+        complete_api_call(state, call, call.return_address, 8u,
+                          finite ? 1u : 0u);
+        return BatchLiftStatus::returned;
+    }
+
+    // int _isnan(double): all-ones exponent with a non-zero mantissa.
+    BatchLiftStatus isnan_guest(
+        BatchLiftState& state, BatchGuestImportCall& call) {
+        const std::uint64_t bits = double_bits(call);
+        const bool exp_all_ones = ((bits >> 52u) & 0x7ffu) == 0x7ffu;
+        const bool mantissa = (bits & 0xfffffffffffffull) != 0u;
+        complete_api_call(state, call, call.return_address, 8u,
+                          (exp_all_ones && mantissa) ? 1u : 0u);
+        return BatchLiftStatus::returned;
+    }
+
+    // void _purecall(void): a pure virtual call terminates the process in the
+    // real CRT. The guest has no process to end, so it fails closed and says so
+    // rather than pretending the call returned.
+    BatchLiftStatus purecall_guest(BatchGuestImportCall& call) {
+        last_error_ = "_purecall: pure virtual call reached from 0x"
+            + hex32(call.return_address);
+        return BatchLiftStatus::unsupported_dependency;
+    }
+
+    // void OutputDebugStringA(LPCSTR): the guest has no debugger attached, so the
+    // call is accepted and has no effect. The pointer is validated so a bad one
+    // still fails instead of being ignored.
+    BatchLiftStatus output_debug_string(
+        BatchLiftMemory& memory, BatchLiftState& state,
+        BatchGuestImportCall& call) {
+        const std::uint32_t text = call.arguments[0];
+        if (text != 0u && !memory.is_readable(text, 1u)) {
+            last_error_ = "OutputDebugStringA received a pointer outside guest "
+                          "memory";
+            return BatchLiftStatus::invalid_memory;
+        }
+        if (text != 0u) {
+            std::string ignored;
+            if (!read_guest_string(memory, text, ignored)) {
+                last_error_ = "OutputDebugStringA string runs outside guest memory";
+                return BatchLiftStatus::invalid_memory;
+            }
+        }
+        complete_api_call(state, call, call.return_address, 4u, 0u);
+        return BatchLiftStatus::returned;
+    }
+
+    // int WideCharToMultiByte(cp, flags, src, cchWide, dst, cbMulti, defchar,
+    // used): the guest only converts its own identifiers, so a byte-per-unit
+    // conversion is exact for ASCII and falls back to the default character for
+    // anything above 0xFF. A NULL destination is the sizing call.
+    BatchLiftStatus wide_char_to_multi_byte(
+        BatchLiftMemory& memory, BatchLiftState& state,
+        BatchGuestImportCall& call) {
+        const std::uint32_t source = call.arguments[2];
+        const std::int32_t wide_length =
+            static_cast<std::int32_t>(call.arguments[3]);
+        const std::uint32_t destination = call.arguments[4];
+        const std::int32_t destination_bytes =
+            static_cast<std::int32_t>(call.arguments[5]);
+        const std::uint32_t default_char = call.arguments[6];
+        const std::uint32_t used = call.arguments[7];
+        if (source == 0u) {
+            last_error_ = "WideCharToMultiByte received a null source";
+            complete_api_call(state, call, call.return_address, 32u, 0u);
+            return BatchLiftStatus::returned;
+        }
+        std::vector<std::uint8_t> converted;
+        for (std::int32_t index = 0; ; ++index) {
+            if (wide_length >= 0 && index >= wide_length) break;
+            std::uint32_t unit{};
+            if (!memory.load16(source + static_cast<std::uint32_t>(index) * 2u,
+                               unit)) {
+                last_error_ = "WideCharToMultiByte source is outside guest "
+                              "memory";
+                return BatchLiftStatus::invalid_memory;
+            }
+            if (wide_length < 0 && unit == 0u) break;
+            converted.push_back(unit <= 0xffu
+                ? static_cast<std::uint8_t>(unit)
+                : static_cast<std::uint8_t>(default_char & 0xffu));
+        }
+        const std::uint32_t count =
+            static_cast<std::uint32_t>(converted.size());
+        if (destination != 0u && destination_bytes > 0) {
+            const std::uint32_t written =
+                static_cast<std::uint32_t>(destination_bytes) < count
+                ? static_cast<std::uint32_t>(destination_bytes) : count;
+            for (std::uint32_t index = 0; index < written; ++index) {
+                if (!memory.store8(destination + index, converted[index])) {
+                    last_error_ = "WideCharToMultiByte destination is outside "
+                                  "guest memory";
+                    return BatchLiftStatus::invalid_memory;
+                }
+            }
+            if (used != 0u && !memory.store32(used, written)) {
+                last_error_ = "WideCharToMultiByte counter is outside guest "
+                              "memory";
+                return BatchLiftStatus::invalid_memory;
+            }
+            complete_api_call(state, call, call.return_address, 32u, written);
+            return BatchLiftStatus::returned;
+        }
+        complete_api_call(state, call, call.return_address, 32u, count);
         return BatchLiftStatus::returned;
     }
 
@@ -3160,6 +3751,10 @@ private:
                     || state.regs[4] != entry_esp) {
                 return BatchLiftStatus::invalid_control_flow;
             }
+            // Counted only after the body returned and the frame came back, so
+            // the number is what actually ran and not what was attempted.
+            ++initializers_completed_;
+            last_initializer_ = target;
         }
         complete_api_call(state, call, call.return_address,
                           kGuestCdeclCleanup, 0u);
@@ -3796,10 +4391,12 @@ private:
     std::unordered_map<std::string, std::string> environment_;
     // The guest TLS allocator hands out indices from zero upward.
     std::uint32_t tls_indexes_{};
+    std::uint32_t initializers_completed_{};
+    std::uint32_t last_initializer_{};
     std::unordered_map<std::uint32_t, std::uint32_t> tls_values_;
-    // VirtualAlloc's reserve pool and the cursor inside it.
-    std::array<std::uint8_t, kGuestVirtualPoolBytes> virtual_pool_{};
-    std::uint32_t virtual_pool_used_{};
+    // VirtualAlloc's committed blocks and how many bytes they total.
+    std::vector<std::unique_ptr<std::uint8_t[]>> virtual_commits_;
+    std::uint64_t virtual_committed_{};
     std::uint32_t virtual_arena_used_{};
     std::uint32_t last_error_code_{};
     mutable std::unordered_map<std::string, std::weak_ptr<KernelObject>>

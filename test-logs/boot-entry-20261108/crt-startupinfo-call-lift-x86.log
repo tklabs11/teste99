@@ -1,2 +1,2 @@
 PASS crt_startupinfo stop=0x011e0efe executed=84 esp_delta=-124 ebp=entry-4 ebx=0 callee_saved=restored cookie=consistent imports=6 startupinfo=cb,ptrs_valid,reserved_null
-DETAIL crt_startupinfo cookie=0x53965da7 complement=0xac69a258
+DETAIL crt_startupinfo cookie=0x2bc5140d complement=0xd43aebf2

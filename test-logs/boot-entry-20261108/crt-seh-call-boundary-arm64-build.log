@@ -1,4 +1,4 @@
-C:\Users\wesll\AndroidStudioProjects\SporeAndroid\tools\batch_static_lift\boot_entry_crt_harness.cpp:60:17: error: function 'neutralized_protection_stub' is not needed and will not be emitted [-Werror,-Wunneeded-internal-declaration]
-   60 | BatchLiftStatus neutralized_protection_stub(
-      |                 ^~~~~~~~~~~~~~~~~~~~~~~~~~~
+C:\Users\wesll\AndroidStudioProjects\SporeAndroid\tools\batch_static_lift\boot_entry_crt_harness.cpp:431:6: error: function 'region_is_dropped' is not needed and will not be emitted [-Werror,-Wunneeded-internal-declaration]
+  431 | bool region_is_dropped(std::uint32_t address, std::string_view drop_list) {
+      |      ^~~~~~~~~~~~~~~~~
 1 error generated.

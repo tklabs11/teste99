@@ -1,0 +1,16 @@
+* daemon not running; starting now at tcp:5037
+* daemon started successfully
+translated 10 routines (193 instructions), 10 imports, 2 thunk call sites
+lote gerado: 384 inicializadores, 660 corpos, 17811 instruções, 55 imports, pendentes 1, bloqueio de engine ['0x011e073e']
+generated guest image: 62 regions (47 from the PE, 15 zero-filled), 139644 bytes, 774 closure addresses covered, app_type_flag=0
+generated stage cpp-walk-initializers: 56 CRT prefix records to 0x011e0f98 (32 executed), seh_prolog=False, lock_block=True
+SKIP original_x86_real_win32 stage=cpp-walk-initializers reason=the_real_crt_walk_initializes_the_process
+PASS crt_cpp_walk stop=0x011e0f98 failed_at=0x0121fac0 executed=107 esp_delta=-136 ebp=entry-4 cookie=consistent imports=5322 initializers=384 ran=384 last_ran=0x0121fab0 walk=stopped_at_0x0121fac0 args=argc1,argv_guest,envp_empty sections=8 tls=2 guard=single_instance node=0x5e000010 count=9 mutex=SingleMgrMutex00001234 encoded=5e000010 neutralized=0x011e073e/244/3/0 buf=0x01668994 n_sizes=2 fault=none@0x00000000/0 pc=0x00000000 near=0x00000000+0x0
+PASS arm64_build stage=cpp-walk-initializers target=aarch64-linux-android29
+ADB push failed for cpp-walk-initializers
+No C:\Users\wesll\AndroidStudioProjects\SporeAndroid\tools\run_boot_crt_entry_tests.ps1:413 caractere:37
++ ...  if ($push.ExitCode -ne 0) { throw "ADB push failed for $stageName" }
++                                  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : OperationStopped: (ADB push failed...lk-initializers:String) [], RuntimeException
+    + FullyQualifiedErrorId : ADB push failed for cpp-walk-initializers
+ 

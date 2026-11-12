@@ -1,0 +1,22 @@
+{
+  "batch_index": 5,
+  "batch_size": 256,
+  "table_slice": [
+    "0x01228530",
+    "0x0122bcd0"
+  ],
+  "next_table_entry": "0x0122bd30",
+  "roots": 275,
+  "initializers_in_batch": 256,
+  "helper_roots": 19,
+  "instructions": 3690,
+  "imports": [],
+  "canonicalised_targets": {},
+  "truncated_exports": [],
+  "indirect_calls": {
+    "0x00932e80": [
+      "CALL EBX",
+      "CALL EBX"
+    ]
+  }
+}

@@ -1,0 +1,40 @@
+{
+  "reference_sha256": "6aec99cb2dc7fd08851a1718e92a60f359fb3fccca3b244a890ae07e93cbe59b",
+  "faults": [
+    {
+      "status": "window",
+      "base": 21225468,
+      "size": 4,
+      "name": "rdata_0143dffc",
+      "writable": false,
+      "reason": "the word the guest reads at 0x0143dffc from 0x009221bf; the file supplies it unchanged",
+      "kind": "word",
+      "fault": {
+        "address": "0x0143dffc",
+        "size": 4,
+        "write": false,
+        "pc": "0x009221bf"
+      }
+    }
+  ],
+  "planned": [
+    {
+      "status": "window",
+      "base": 21225468,
+      "size": 4,
+      "name": "rdata_0143dffc",
+      "writable": false,
+      "reason": "the word the guest reads at 0x0143dffc from 0x009221bf; the file supplies it unchanged",
+      "kind": "word",
+      "fault": {
+        "address": "0x0143dffc",
+        "size": 4,
+        "write": false,
+        "pc": "0x009221bf"
+      }
+    }
+  ],
+  "rendered": [
+    "    (0x0143dffc, 0x04, \"rdata_0143dffc\", False,\n     \"the word the guest reads at 0x0143dffc from 0x009221bf; the file supplies it unchanged\"),\n"
+  ]
+}

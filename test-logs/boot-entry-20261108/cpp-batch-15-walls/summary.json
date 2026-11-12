@@ -1,0 +1,26 @@
+{
+  "batch_index": 1,
+  "batch_size": 2,
+  "table_slice": [
+    "0x0093a650",
+    "0x0068f9b0"
+  ],
+  "next_table_entry": null,
+  "roots": 2,
+  "initializers_in_batch": 2,
+  "helper_roots": 0,
+  "instructions": 67,
+  "imports": [],
+  "canonicalised_targets": {},
+  "truncated_exports": [],
+  "indirect_calls": {
+    "0x0093a650": [
+      "CALL EDX",
+      "CALL EAX"
+    ],
+    "0x0068f9b0": [
+      "CALL EDX",
+      "CALL EDX"
+    ]
+  }
+}

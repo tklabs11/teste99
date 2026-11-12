@@ -1,0 +1,694 @@
+{
+ "functions": [
+  {
+   "function": {
+    "entry": "0x00923700",
+    "name": "decoded_00923700",
+    "body_address_count": 50,
+    "instructions": [
+     {
+      "address": "0x00923700",
+      "bytes": "8bc1",
+      "length": 2,
+      "mnemonic": "MOV",
+      "operands": [
+       "EAX",
+       "ECX"
+      ],
+      "flow": "FALL_THROUGH",
+      "flows_to": [],
+      "references": []
+     },
+     {
+      "address": "0x00923702",
+      "bytes": "80780c00",
+      "length": 4,
+      "mnemonic": "CMP",
+      "operands": [
+       "byte ptr [EAX + 0xc]",
+       "0x0"
+      ],
+      "flow": "FALL_THROUGH",
+      "flows_to": [],
+      "references": []
+     },
+     {
+      "address": "0x00923706",
+      "bytes": "7422",
+      "length": 2,
+      "mnemonic": "JZ",
+      "operands": [
+       "0x0092372a"
+      ],
+      "flow": "CONDITIONAL_JUMP",
+      "flows_to": [
+       "0x0092372a"
+      ],
+      "references": [
+       {
+        "to": "0x0092372a",
+        "type": "CONDITIONAL_JUMP",
+        "is_call": false
+       }
+      ]
+     },
+     {
+      "address": "0x00923708",
+      "bytes": "8b4804",
+      "length": 3,
+      "mnemonic": "MOV",
+      "operands": [
+       "ECX",
+       "dword ptr [EAX + 0x4]"
+      ],
+      "flow": "FALL_THROUGH",
+      "flows_to": [],
+      "references": []
+     },
+     {
+      "address": "0x0092370b",
+      "bytes": "85c9",
+      "length": 2,
+      "mnemonic": "TEST",
+      "operands": [
+       "ECX",
+       "ECX"
+      ],
+      "flow": "FALL_THROUGH",
+      "flows_to": [],
+      "references": []
+     },
+     {
+      "address": "0x0092370d",
+      "bytes": "741b",
+      "length": 2,
+      "mnemonic": "JZ",
+      "operands": [
+       "0x0092372a"
+      ],
+      "flow": "CONDITIONAL_JUMP",
+      "flows_to": [
+       "0x0092372a"
+      ],
+      "references": [
+       {
+        "to": "0x0092372a",
+        "type": "CONDITIONAL_JUMP",
+        "is_call": false
+       }
+      ]
+     },
+     {
+      "address": "0x0092370f",
+      "bytes": "83780800",
+      "length": 4,
+      "mnemonic": "CMP",
+      "operands": [
+       "dword ptr [EAX + 0x8]",
+       "0x0"
+      ],
+      "flow": "FALL_THROUGH",
+      "flows_to": [],
+      "references": []
+     },
+     {
+      "address": "0x00923713",
+      "bytes": "7415",
+      "length": 2,
+      "mnemonic": "JZ",
+      "operands": [
+       "0x0092372a"
+      ],
+      "flow": "CONDITIONAL_JUMP",
+      "flows_to": [
+       "0x0092372a"
+      ],
+      "references": [
+       {
+        "to": "0x0092372a",
+        "type": "CONDITIONAL_JUMP",
+        "is_call": false
+       }
+      ]
+     },
+     {
+      "address": "0x00923715",
+      "bytes": "8b01",
+      "length": 2,
+      "mnemonic": "MOV",
+      "operands": [
+       "EAX",
+       "dword ptr [ECX]"
+      ],
+      "flow": "FALL_THROUGH",
+      "flows_to": [],
+      "references": []
+     },
+     {
+      "address": "0x00923717",
+      "bytes": "8b542404",
+      "length": 4,
+      "mnemonic": "MOV",
+      "operands": [
+       "EDX",
+       "dword ptr [ESP + 0x4]"
+      ],
+      "flow": "FALL_THROUGH",
+      "flows_to": [],
+      "references": [
+       {
+        "to": "0xStack[0x4]",
+        "type": "READ",
+        "is_call": false
+       }
+      ]
+     },
+     {
+      "address": "0x0092371b",
+      "bytes": "8b4014",
+      "length": 3,
+      "mnemonic": "MOV",
+      "operands": [
+       "EAX",
+       "dword ptr [EAX + 0x14]"
+      ],
+      "flow": "FALL_THROUGH",
+      "flows_to": [],
+      "references": []
+     },
+     {
+      "address": "0x0092371e",
+      "bytes": "52",
+      "length": 1,
+      "mnemonic": "PUSH",
+      "operands": [
+       "EDX"
+      ],
+      "flow": "FALL_THROUGH",
+      "flows_to": [],
+      "references": []
+     },
+     {
+      "address": "0x0092371f",
+      "bytes": "ffd0",
+      "length": 2,
+      "mnemonic": "CALL",
+      "operands": [
+       "EAX"
+      ],
+      "flow": "COMPUTED_CALL",
+      "flows_to": [],
+      "references": []
+     },
+     {
+      "address": "0x00923721",
+      "bytes": "84c0",
+      "length": 2,
+      "mnemonic": "TEST",
+      "operands": [
+       "AL",
+       "AL"
+      ],
+      "flow": "FALL_THROUGH",
+      "flows_to": [],
+      "references": []
+     },
+     {
+      "address": "0x00923723",
+      "bytes": "7505",
+      "length": 2,
+      "mnemonic": "JNZ",
+      "operands": [
+       "0x0092372a"
+      ],
+      "flow": "CONDITIONAL_JUMP",
+      "flows_to": [
+       "0x0092372a"
+      ],
+      "references": [
+       {
+        "to": "0x0092372a",
+        "type": "CONDITIONAL_JUMP",
+        "is_call": false
+       }
+      ]
+     },
+     {
+      "address": "0x00923725",
+      "bytes": "33c0",
+      "length": 2,
+      "mnemonic": "XOR",
+      "operands": [
+       "EAX",
+       "EAX"
+      ],
+      "flow": "FALL_THROUGH",
+      "flows_to": [],
+      "references": []
+     },
+     {
+      "address": "0x00923727",
+      "bytes": "c20400",
+      "length": 3,
+      "mnemonic": "RET",
+      "operands": [
+       "0x4"
+      ],
+      "flow": "TERMINATOR",
+      "flows_to": [],
+      "references": []
+     },
+     {
+      "address": "0x0092372a",
+      "bytes": "b801000000",
+      "length": 5,
+      "mnemonic": "MOV",
+      "operands": [
+       "EAX",
+       "0x1"
+      ],
+      "flow": "FALL_THROUGH",
+      "flows_to": [],
+      "references": []
+     },
+     {
+      "address": "0x0092372f",
+      "bytes": "c20400",
+      "length": 3,
+      "mnemonic": "RET",
+      "operands": [
+       "0x4"
+      ],
+      "flow": "TERMINATOR",
+      "flows_to": [],
+      "references": []
+     }
+    ],
+    "instruction_count_exported": 19,
+    "instructions_truncated": false,
+    "references_truncated": false,
+    "span": "0x923700..0x92372f"
+   }
+  },
+  {
+   "function": {
+    "entry": "0x00923740",
+    "name": "decoded_00923740",
+    "body_address_count": 50,
+    "instructions": [
+     {
+      "address": "0x00923740",
+      "bytes": "8bc1",
+      "length": 2,
+      "mnemonic": "MOV",
+      "operands": [
+       "EAX",
+       "ECX"
+      ],
+      "flow": "FALL_THROUGH",
+      "flows_to": [],
+      "references": []
+     },
+     {
+      "address": "0x00923742",
+      "bytes": "80780c00",
+      "length": 4,
+      "mnemonic": "CMP",
+      "operands": [
+       "byte ptr [EAX + 0xc]",
+       "0x0"
+      ],
+      "flow": "FALL_THROUGH",
+      "flows_to": [],
+      "references": []
+     },
+     {
+      "address": "0x00923746",
+      "bytes": "7422",
+      "length": 2,
+      "mnemonic": "JZ",
+      "operands": [
+       "0x0092376a"
+      ],
+      "flow": "CONDITIONAL_JUMP",
+      "flows_to": [
+       "0x0092376a"
+      ],
+      "references": [
+       {
+        "to": "0x0092376a",
+        "type": "CONDITIONAL_JUMP",
+        "is_call": false
+       }
+      ]
+     },
+     {
+      "address": "0x00923748",
+      "bytes": "8b4804",
+      "length": 3,
+      "mnemonic": "MOV",
+      "operands": [
+       "ECX",
+       "dword ptr [EAX + 0x4]"
+      ],
+      "flow": "FALL_THROUGH",
+      "flows_to": [],
+      "references": []
+     },
+     {
+      "address": "0x0092374b",
+      "bytes": "85c9",
+      "length": 2,
+      "mnemonic": "TEST",
+      "operands": [
+       "ECX",
+       "ECX"
+      ],
+      "flow": "FALL_THROUGH",
+      "flows_to": [],
+      "references": []
+     },
+     {
+      "address": "0x0092374d",
+      "bytes": "741b",
+      "length": 2,
+      "mnemonic": "JZ",
+      "operands": [
+       "0x0092376a"
+      ],
+      "flow": "CONDITIONAL_JUMP",
+      "flows_to": [
+       "0x0092376a"
+      ],
+      "references": [
+       {
+        "to": "0x0092376a",
+        "type": "CONDITIONAL_JUMP",
+        "is_call": false
+       }
+      ]
+     },
+     {
+      "address": "0x0092374f",
+      "bytes": "83780800",
+      "length": 4,
+      "mnemonic": "CMP",
+      "operands": [
+       "dword ptr [EAX + 0x8]",
+       "0x0"
+      ],
+      "flow": "FALL_THROUGH",
+      "flows_to": [],
+      "references": []
+     },
+     {
+      "address": "0x00923753",
+      "bytes": "7415",
+      "length": 2,
+      "mnemonic": "JZ",
+      "operands": [
+       "0x0092376a"
+      ],
+      "flow": "CONDITIONAL_JUMP",
+      "flows_to": [
+       "0x0092376a"
+      ],
+      "references": [
+       {
+        "to": "0x0092376a",
+        "type": "CONDITIONAL_JUMP",
+        "is_call": false
+       }
+      ]
+     },
+     {
+      "address": "0x00923755",
+      "bytes": "8b01",
+      "length": 2,
+      "mnemonic": "MOV",
+      "operands": [
+       "EAX",
+       "dword ptr [ECX]"
+      ],
+      "flow": "FALL_THROUGH",
+      "flows_to": [],
+      "references": []
+     },
+     {
+      "address": "0x00923757",
+      "bytes": "8b542404",
+      "length": 4,
+      "mnemonic": "MOV",
+      "operands": [
+       "EDX",
+       "dword ptr [ESP + 0x4]"
+      ],
+      "flow": "FALL_THROUGH",
+      "flows_to": [],
+      "references": [
+       {
+        "to": "0xStack[0x4]",
+        "type": "READ",
+        "is_call": false
+       }
+      ]
+     },
+     {
+      "address": "0x0092375b",
+      "bytes": "8b4010",
+      "length": 3,
+      "mnemonic": "MOV",
+      "operands": [
+       "EAX",
+       "dword ptr [EAX + 0x10]"
+      ],
+      "flow": "FALL_THROUGH",
+      "flows_to": [],
+      "references": []
+     },
+     {
+      "address": "0x0092375e",
+      "bytes": "52",
+      "length": 1,
+      "mnemonic": "PUSH",
+      "operands": [
+       "EDX"
+      ],
+      "flow": "FALL_THROUGH",
+      "flows_to": [],
+      "references": []
+     },
+     {
+      "address": "0x0092375f",
+      "bytes": "ffd0",
+      "length": 2,
+      "mnemonic": "CALL",
+      "operands": [
+       "EAX"
+      ],
+      "flow": "COMPUTED_CALL",
+      "flows_to": [],
+      "references": []
+     },
+     {
+      "address": "0x00923761",
+      "bytes": "84c0",
+      "length": 2,
+      "mnemonic": "TEST",
+      "operands": [
+       "AL",
+       "AL"
+      ],
+      "flow": "FALL_THROUGH",
+      "flows_to": [],
+      "references": []
+     },
+     {
+      "address": "0x00923763",
+      "bytes": "7505",
+      "length": 2,
+      "mnemonic": "JNZ",
+      "operands": [
+       "0x0092376a"
+      ],
+      "flow": "CONDITIONAL_JUMP",
+      "flows_to": [
+       "0x0092376a"
+      ],
+      "references": [
+       {
+        "to": "0x0092376a",
+        "type": "CONDITIONAL_JUMP",
+        "is_call": false
+       }
+      ]
+     },
+     {
+      "address": "0x00923765",
+      "bytes": "33c0",
+      "length": 2,
+      "mnemonic": "XOR",
+      "operands": [
+       "EAX",
+       "EAX"
+      ],
+      "flow": "FALL_THROUGH",
+      "flows_to": [],
+      "references": []
+     },
+     {
+      "address": "0x00923767",
+      "bytes": "c20400",
+      "length": 3,
+      "mnemonic": "RET",
+      "operands": [
+       "0x4"
+      ],
+      "flow": "TERMINATOR",
+      "flows_to": [],
+      "references": []
+     },
+     {
+      "address": "0x0092376a",
+      "bytes": "b801000000",
+      "length": 5,
+      "mnemonic": "MOV",
+      "operands": [
+       "EAX",
+       "0x1"
+      ],
+      "flow": "FALL_THROUGH",
+      "flows_to": [],
+      "references": []
+     },
+     {
+      "address": "0x0092376f",
+      "bytes": "c20400",
+      "length": 3,
+      "mnemonic": "RET",
+      "operands": [
+       "0x4"
+      ],
+      "flow": "TERMINATOR",
+      "flows_to": [],
+      "references": []
+     }
+    ],
+    "instruction_count_exported": 19,
+    "instructions_truncated": false,
+    "references_truncated": false,
+    "span": "0x923740..0x92376f"
+   }
+  },
+  {
+   "function": {
+    "entry": "0x00ab30c0",
+    "name": "decoded_00ab30c0",
+    "body_address_count": 4,
+    "instructions": [
+     {
+      "address": "0x00ab30c0",
+      "bytes": "8a410c",
+      "length": 3,
+      "mnemonic": "MOV",
+      "operands": [
+       "AL",
+       "byte ptr [ECX + 0xc]"
+      ],
+      "flow": "FALL_THROUGH",
+      "flows_to": [],
+      "references": []
+     },
+     {
+      "address": "0x00ab30c3",
+      "bytes": "c3",
+      "length": 1,
+      "mnemonic": "RET",
+      "operands": [],
+      "flow": "TERMINATOR",
+      "flows_to": [],
+      "references": []
+     }
+    ],
+    "instruction_count_exported": 2,
+    "instructions_truncated": false,
+    "references_truncated": false,
+    "span": "0xab30c0..0xab30c3"
+   }
+  },
+  {
+   "function": {
+    "entry": "0x00fcc210",
+    "name": "decoded_00fcc210",
+    "body_address_count": 4,
+    "instructions": [
+     {
+      "address": "0x00fcc210",
+      "bytes": "8b4104",
+      "length": 3,
+      "mnemonic": "MOV",
+      "operands": [
+       "EAX",
+       "dword ptr [ECX + 0x4]"
+      ],
+      "flow": "FALL_THROUGH",
+      "flows_to": [],
+      "references": []
+     },
+     {
+      "address": "0x00fcc213",
+      "bytes": "c3",
+      "length": 1,
+      "mnemonic": "RET",
+      "operands": [],
+      "flow": "TERMINATOR",
+      "flows_to": [],
+      "references": []
+     }
+    ],
+    "instruction_count_exported": 2,
+    "instructions_truncated": false,
+    "references_truncated": false,
+    "span": "0xfcc210..0xfcc213"
+   }
+  },
+  {
+   "function": {
+    "entry": "0x011e06d0",
+    "name": "decoded_011e06d0",
+    "body_address_count": 6,
+    "instructions": [
+     {
+      "address": "0x011e06d0",
+      "bytes": "ff2568c43c01",
+      "length": 6,
+      "mnemonic": "JMP",
+      "operands": [
+       "dword ptr [0x013cc468]"
+      ],
+      "flow": "COMPUTED_JUMP",
+      "flows_to": [
+       "0xEXTERNAL:00000186"
+      ],
+      "references": [
+       {
+        "to": "0x013cc468",
+        "type": "INDIRECTION",
+        "is_call": false
+       },
+       {
+        "to": "0xEXTERNAL:00000186",
+        "type": "COMPUTED_JUMP",
+        "is_call": false
+       }
+      ]
+     }
+    ],
+    "instruction_count_exported": 1,
+    "instructions_truncated": false,
+    "references_truncated": false,
+    "span": "0x11e06d0..0x11e06d0"
+   }
+  }
+ ]
+}

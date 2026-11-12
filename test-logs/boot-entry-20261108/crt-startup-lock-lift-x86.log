@@ -1,2 +1,2 @@
 PASS crt_startup_lock stop=0x011e0f43 executed=88 esp_delta=-124 ebp=entry-4 ebx=0 esi=1 edi=lock_reg cookie=consistent imports=7 icc=acquired owner=stack_base lock=owner state=0 try_level=1 startupinfo=cb,ptrs_valid,reserved_null
-DETAIL crt_startup_lock cookie=0xd3e1e4b0 complement=0x2c1e1b4f lock=0x70000400 state=0x00000000 owner=0x70000400
+DETAIL crt_startup_lock cookie=0x4ba875e5 complement=0xb4578a1a lock=0x70000400 state=0x00000000 owner=0x70000400

@@ -412,6 +412,14 @@ def emit_store(operand, value):
     raise ValueError("an immediate cannot be an instruction destination")
 
 
+# A fault has to name the instruction that caused it, so every translation step
+# that touches guest memory is preceded by the program counter it belongs to.
+def with_program_counter(address, body):
+    if not any("memory." in line for line in body):
+        return body
+    return [f"batch_guest_pc = 0x{address:08x}u;", *body]
+
+
 def resolve_operands(text_operands, infer_untyped_memory=True):
     operands = []
     for text in text_operands:
@@ -639,6 +647,46 @@ def translate_instruction(
     if mnemonic.endswith(".LOCK"):
         mnemonic = mnemonic[: -len(".LOCK")]
 
+    # Ghidra spells the repeat prefixes as a mnemonic suffix.
+    repeat_prefix = None
+    for suffix, name in (
+        (".REPNE", "repne"), (".REPE", "repe"), (".REP", "rep"),
+    ):
+        if mnemonic.endswith(suffix):
+            mnemonic = mnemonic[: -len(suffix)]
+            repeat_prefix = name
+            break
+
+    # String operations. The base mnemonics collide with SSE names, so the
+    # string path is taken only for a repeat prefix or an explicit segment
+    # operand.
+    string_forms = {
+        "MOVSB": ("movs", 1), "MOVSW": ("movs", 2), "MOVSD": ("movs", 4),
+        "STOSB": ("stos", 1), "STOSW": ("stos", 2), "STOSD": ("stos", 4),
+        "CMPSB": ("cmps", 1), "CMPSW": ("cmps", 2), "CMPSD": ("cmps", 4),
+    }
+    if mnemonic in string_forms and (
+        repeat_prefix is not None
+        or any("ES:" in str(operand) or "DS:" in str(operand)
+               for operand in operands_text)
+    ):
+        form, element = string_forms[mnemonic]
+        if form == "cmps":
+            if repeat_prefix is None:
+                raise ValueError(
+                    f"{mnemonic} without a repeat prefix is not lifted")
+            repeated = "true" if repeat_prefix == "repe" else "false"
+            return [
+                "if (!batch_guest_repe_cmps("
+                f"memory, state, {element}u, {repeated})) "
+                "return BatchLiftStatus::invalid_memory;"
+            ]
+        helper = "batch_guest_rep_movs" if form == "movs" else "batch_guest_rep_stos"
+        return [
+            f"if (!{helper}(memory, state, {element}u)) "
+            "return BatchLiftStatus::invalid_memory;"
+        ]
+
     if mnemonic in {"CALL", "CALLF"} or flow in {
         "UNCONDITIONAL_CALL", "CONDITIONAL_CALL", "COMPUTED_CALL"
     }:
@@ -813,6 +861,15 @@ def translate_instruction(
             f"t{index}_cpuid_status = batch_guest_cpuid(state);",
             f"if (t{index}_cpuid_status != BatchLiftStatus::returned) "
             f"return t{index}_cpuid_status;",
+        ]
+    if mnemonic == "RDTSC":
+        if operands_text:
+            raise ValueError(
+                f"RDTSC expects no operands; found {len(operands_text)}")
+        # The guest counter is deterministic, never the host clock.
+        return [
+            "if (!batch_guest_rdtsc(state)) "
+            "return BatchLiftStatus::invalid_control_flow;"
         ]
     if mnemonic == "XORPS":
         if len(operands_text) != 2:
@@ -1364,23 +1421,43 @@ def translate_instruction(
     elif mnemonic == "IMUL":
         if len(operands) == 1:
             # IMUL r/m32: the implicit form writes EDX:EAX.
-            if operand_width(operands[0]) != 32:
-                raise ValueError("IMUL requires a 32-bit operand")
+            width = operand_width(operands[0])
             lines += emit_load(operands[0], f"{temp}a")
-            lines += [
-                "{",
-                "const std::int64_t product = "
-                "static_cast<std::int64_t>("
-                "static_cast<std::int32_t>(state.regs[0])) * "
-                f"static_cast<std::int32_t>({temp}a);",
-                "state.regs[0] = static_cast<std::uint32_t>(product);",
-                "state.regs[2] = static_cast<std::uint32_t>("
-                "static_cast<std::uint64_t>(product) >> 32u);",
-                "state.eflags &= ~0x801u;",
-                "if (product < -2147483648ll || product > 2147483647ll) "
-                "state.eflags |= 0x801u;",
-                "}",
-            ]
+            if width == 8:
+                # IMUL r/m8: AX receives the signed product of AL and the
+                # operand, and CF/OF report that AH is not a sign extension.
+                lines += [
+                    "{",
+                    "const std::int32_t product = "
+                    "static_cast<std::int32_t>("
+                    "static_cast<std::int8_t>(state.regs[0])) * "
+                    f"static_cast<std::int32_t>("
+                    f"static_cast<std::int8_t>({temp}a));",
+                    "state.regs[0] = (state.regs[0] & 0xffff0000u) | "
+                    "(static_cast<std::uint32_t>(product) & 0xffffu);",
+                    "state.eflags &= ~0x801u;",
+                    "if (product < -128 || product > 127) "
+                    "state.eflags |= 0x801u;",
+                    "}",
+                ]
+            elif width == 32:
+                lines += [
+                    "{",
+                    "const std::int64_t product = "
+                    "static_cast<std::int64_t>("
+                    "static_cast<std::int32_t>(state.regs[0])) * "
+                    f"static_cast<std::int32_t>({temp}a);",
+                    "state.regs[0] = static_cast<std::uint32_t>(product);",
+                    "state.regs[2] = static_cast<std::uint32_t>("
+                    "static_cast<std::uint64_t>(product) >> 32u);",
+                    "state.eflags &= ~0x801u;",
+                    "if (product < -2147483648ll || product > 2147483647ll) "
+                    "state.eflags |= 0x801u;",
+                    "}",
+                ]
+            else:
+                raise ValueError(
+                    "IMUL currently supports 8- and 32-bit operands")
         else:
             if len(operands) not in {2, 3}:
                 raise ValueError(
@@ -1416,6 +1493,49 @@ def translate_instruction(
                 "state.eflags |= 0x801u;",
                 "}",
             ]
+    elif mnemonic == "MUL":
+        require(1)
+        if operand_width(operands[0]) != 32:
+            raise ValueError("MUL currently supports a 32-bit operand")
+        # MUL r/m32 is unsigned: EDX:EAX receives the 64-bit product and CF/OF
+        # report that the high half is not zero.
+        lines += emit_load(operands[0], f"{temp}a")
+        lines += [
+            "{",
+            "const std::uint64_t product = "
+            "static_cast<std::uint64_t>(state.regs[0]) * "
+            f"static_cast<std::uint64_t>({temp}a);",
+            "state.regs[0] = static_cast<std::uint32_t>(product);",
+            "state.regs[2] = static_cast<std::uint32_t>(product >> 32u);",
+            "state.eflags &= ~0x801u;",
+            "if (state.regs[2] != 0u) state.eflags |= 0x801u;",
+            "}",
+        ]
+    elif mnemonic == "SHRD":
+        require(3)
+        width = operand_width(operands[0])
+        if width not in {16, 32}:
+            raise ValueError("SHRD requires a 16- or 32-bit destination")
+        if operand_width(operands[1]) != width:
+            raise ValueError("SHRD source and destination widths differ")
+        if operands[2][0] == "immediate":
+            mask = 31 if width == 32 else 15
+            count = f"{cpp_u32(operands[2][1] & mask)}"
+        elif (operands[2][0] == "register" and operands[2][2] == 8
+                and operands[2][1] == 1):
+            count = "state.regs[1]"
+        else:
+            raise ValueError("SHRD count must be an immediate or CL")
+        lines += emit_load(operands[0], f"{temp}a")
+        lines += emit_load(operands[1], f"{temp}b")
+        # Block-scoped so the helper's result cannot collide with a temp the
+        # body already declares for this instruction.
+        lines.append("{")
+        lines.append(
+            f"    const std::uint32_t result = batch_guest_shrd("
+            f"state, {temp}a, {temp}b, {count}, {width}u);")
+        lines += [f"    {line}" for line in emit_store(operands[0], "result")]
+        lines.append("}")
     elif mnemonic.startswith("CMOV"):
         require(2)
         condition = SUPPORTED_CONDITIONS.get("J" + mnemonic[len("CMOV"):])
@@ -1497,6 +1617,37 @@ def translate_instruction(
                 f"    {line}" for line in emit_store(operands[0], f"{temp}r")
             ]
             lines.append("}")
+    elif mnemonic in {"ROL", "ROR", "RCR"}:
+        require(2)
+        if operands[0][0] != "register" or operand_width(operands[0]) != 32:
+            raise ValueError(
+                f"{mnemonic} currently requires a 32-bit register destination")
+        if operands[1][0] == "immediate" and 0 <= operands[1][1] <= 31:
+            count_expression = f"{cpp_u32(operands[1][1])}"
+            constant_count = operands[1][1]
+        elif operands[1][0] == "register" and operands[1][1] == 1:
+            count_expression = "state.regs[1]"
+            constant_count = None
+        else:
+            raise ValueError(
+                f"{mnemonic} requires an immediate count 0 through 31 or CL")
+        # A zero count changes neither the destination nor the flags, and the
+        # rotate helpers mask CL the way the instruction does.
+        if constant_count != 0:
+            lines += emit_load(operands[0], f"{temp}a")
+            helper = {
+                "ROL": "batch_guest_rol",
+                "ROR": "batch_guest_ror",
+                "RCR": "batch_guest_rcr",
+            }[mnemonic]
+            lines.append("{")
+            lines.append(
+                f"    const std::uint32_t result = {helper}("
+                f"state, {temp}a, {count_expression});")
+            lines += [
+                f"    {line}" for line in emit_store(operands[0], "result")
+            ]
+            lines.append("}")
     elif mnemonic == "LEAVE":
         require(0)
         lines += [
@@ -1506,7 +1657,7 @@ def translate_instruction(
             f"state.regs[5] = {temp};",
             "state.regs[4] = static_cast<std::uint32_t>(state.regs[4] + 4u);",
         ]
-    elif mnemonic in {"ADD", "SUB", "SBB", "CMP", "TEST", "AND", "OR", "XOR", "INC", "DEC", "NEG"}:
+    elif mnemonic in {"ADD", "ADC", "SUB", "SBB", "CMP", "TEST", "AND", "OR", "XOR", "INC", "DEC", "NEG"}:
         if mnemonic in {"INC", "DEC", "NEG"}:
             require(1)
         else:
@@ -1553,18 +1704,20 @@ def translate_instruction(
             }[mnemonic]
             lines.append(f"{flag_function}(state, {temp}a, {temp}r, {op_width}u);")
             lines += emit_store(operands[0], f"{temp}r")
-        elif mnemonic in {"ADD", "SUB", "SBB", "CMP"}:
-            if mnemonic == "SBB":
+        elif mnemonic in {"ADD", "ADC", "SUB", "SBB", "CMP"}:
+            if mnemonic in {"SBB", "ADC"}:
+                carry = "borrow" if mnemonic == "SBB" else "carry"
                 lines.append(
                     f"{temp}c = (state.eflags & 0x001u) != 0u ? 1u : 0u;"
                 )
+                operator = "-" if mnemonic == "SBB" else "+"
                 lines.append(
                     f"{temp}r = static_cast<std::uint32_t>("
-                    f"{temp}a - {temp}b - {temp}c) & {mask};"
+                    f"{temp}a {operator} {temp}b {operator} {temp}c) & {mask};"
                 )
                 lines.append(
-                    f"batch_set_sbb_flags(state, {temp}a, {temp}b, "
-                    f"{temp}c, {temp}r, {op_width}u);"
+                    f"batch_set_{mnemonic.lower()}_flags(state, {temp}a, "
+                    f"{temp}b, {temp}c, {temp}r, {op_width}u);"
                 )
                 lines += emit_store(operands[0], f"{temp}r")
                 operation = None
@@ -1615,7 +1768,21 @@ def translate_instruction(
         lines += emit_store(operands[0], f"{temp}a")
     elif mnemonic == "JMP":
         require(1)
-        if operands[0][0] != "immediate":
+        if operands[0][0] == "register":
+            # JMP r32: the target is known only at runtime, and a jump pushes no
+            # return address, so the callee returns straight to this body's
+            # caller. The dispatcher resolves it, or fails closed naming it.
+            if operand_width(operands[0]) != 32:
+                raise ValueError("indirect JMP requires a 32-bit register")
+            lines += emit_load(operands[0], f"{temp}a")
+            lines += [
+                f"state.eip = {temp}a;",
+                "return state.imports == nullptr "
+                "? BatchLiftStatus::unsupported_import "
+                ": state.imports->invoke_guest_tail_call(memory, state, "
+                f"{temp}a);",
+            ]
+        elif operands[0][0] != "immediate":
             if operands[0][0] not in {
                 "absolute_memory", "memory", "indexed_memory",
             } or operand_width(operands[0]) != 32:
@@ -1903,7 +2070,8 @@ def translate_function(
                     direct_import_aliases,
                     allow_unresolved_calls,
                 )
-            translated.append((instruction, body))
+            translated.append(
+                (instruction, with_program_counter(address, body)))
             diagnostics.append({
                 "address": instruction["address"],
                 "mnemonic": instruction["mnemonic"].upper(),
@@ -2143,7 +2311,8 @@ def translate_function_prefix(
                 next_address,
                 exported_function_entries,
             )
-            translated.append((instruction, body))
+            translated.append(
+                (instruction, with_program_counter(address, body)))
             diagnostics.append({
                 "address": instruction["address"],
                 "mnemonic": instruction["mnemonic"].upper(),

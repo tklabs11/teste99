@@ -8,6 +8,7 @@ BatchLiftStatus spore_lift_013000f0(BatchLiftMemory& memory, BatchLiftState& sta
     std::uint32_t t3 = 0;
 
     // 0x013000f0: 833d38df5401ff CMP
+        batch_guest_pc = 0x013000f0u;
         if (!memory.load32(0x0154df38u, t0a)) return BatchLiftStatus::invalid_memory;
         t0b = 0xffffffffu;
         t0r = static_cast<std::uint32_t>(t0a - t0b) & 0xffffffffu;
@@ -19,6 +20,7 @@ BatchLiftStatus spore_lift_013000f0(BatchLiftMemory& memory, BatchLiftState& sta
         if (t2_call_status != BatchLiftStatus::returned) return t2_call_status;
         if (state.eip != 0x013000ffu) return BatchLiftStatus::invalid_control_flow;
     // 0x013000ff: a338df5401 MOV
+        batch_guest_pc = 0x013000ffu;
         t3 = state.regs[0];
         if (!memory.store32(0x0154df38u, t3)) return BatchLiftStatus::invalid_memory;
     // 0x01300104: c3 RET

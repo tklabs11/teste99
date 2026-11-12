@@ -1103,6 +1103,117 @@ class StaticBatchLiftTests(unittest.TestCase):
         self.assertIn("memory.store32", source)
         self.assertEqual([item["status"] for item in diagnostics], ["translated"] * 4)
 
+    def test_adc_propagates_the_incoming_carry(self):
+        body = function([
+            instruction(0x401000, "83d000", "ADC", ("EAX", "0x0")),
+            instruction(0x401003, "83d200", "ADC", ("EDX", "0x0")),
+            instruction(0x401006, "c3", "RET", flow="TERMINAL"),
+        ])
+
+        source, _ = lifter.translate_function(body)
+
+        # A multi-word add reads CF before it writes the flags, so the carry is
+        # captured first and the flag helper takes it as an operand.
+        self.assertIn("t0c = (state.eflags & 0x001u) != 0u ? 1u : 0u;", source)
+        self.assertIn("batch_set_adc_flags(state, t0a, t0b, t0c, t0r, 32u)",
+                      source)
+        self.assertIn("batch_set_adc_flags(state, t1a, t1b, t1c, t1r, 32u)",
+                      source)
+
+    def test_rdtsc_reads_the_deterministic_guest_counter(self):
+        body = function([
+            instruction(0x401000, "0f31", "RDTSC"),
+            instruction(0x401002, "c3", "RET", flow="TERMINAL"),
+        ])
+
+        source, _ = lifter.translate_function(body)
+
+        # Never the host clock: the guest model is what keeps a differential run
+        # comparable across machines.
+        self.assertIn("batch_guest_rdtsc(state)", source)
+        self.assertNotIn("__rdtsc", source)
+
+    def test_repeat_string_forms_are_translated(self):
+        body = function([
+            instruction(0x401000, "f3a5", "MOVSD.REP", ("ES:EDI", "ESI")),
+            instruction(0x401002, "f3aa", "STOSB.REP", ("ES:EDI",)),
+            instruction(0x401004, "f2a7", "CMPSD.REPNE", ("ES:EDI", "ESI")),
+            instruction(0x401006, "c3", "RET", flow="TERMINAL"),
+        ])
+
+        source, _ = lifter.translate_function(body)
+
+        # The element size comes from the mnemonic, and REPNE keeps comparing
+        # while the elements differ.
+        self.assertIn("batch_guest_rep_movs(memory, state, 4u)", source)
+        self.assertIn("batch_guest_rep_stos(memory, state, 1u)", source)
+        self.assertIn("batch_guest_repe_cmps(memory, state, 4u, false)", source)
+
+    def test_string_form_needs_the_segment_operand_without_a_prefix(self):
+        # MOVSD alone is an SSE move, so a bare string mnemonic is only lifted
+        # when the operand says it is a string operation.
+        body = function([
+            instruction(0x401000, "a5", "MOVSD", ("ES:EDI", "ESI")),
+            instruction(0x401001, "c3", "RET", flow="TERMINAL"),
+        ])
+        source, _ = lifter.translate_function(body)
+        self.assertIn("batch_guest_rep_movs(memory, state, 4u)", source)
+
+    def test_unsigned_multiply_double_shift_and_rotates_are_translated(self):
+        body = function([
+            instruction(0x401000, "f7e6", "MUL", ("ESI",)),
+            instruction(0x401002, "f6ea", "IMUL", ("DL",)),
+            instruction(0x401004, "0fa5d0", "SHRD", ("EAX", "EDX", "CL")),
+            instruction(0x401007, "d3d8", "RCR", ("EAX", "CL")),
+            instruction(0x401009, "c3", "RET", flow="TERMINAL"),
+        ])
+
+        source, _ = lifter.translate_function(body)
+
+        # MUL r/m32 writes EDX:EAX and reports the high half in CF/OF.
+        self.assertIn("static_cast<std::uint64_t>(state.regs[0]) *", source)
+        self.assertIn("if (state.regs[2] != 0u) state.eflags |= 0x801u;", source)
+        # IMUL r/m8 works on AL and writes AX.
+        self.assertIn("static_cast<std::int8_t>(state.regs[0])", source)
+        self.assertIn("(state.regs[0] & 0xffff0000u) |", source)
+        # SHRD and RCR need the count at runtime, so they use the helpers.
+        self.assertIn("batch_guest_shrd(state,", source)
+        self.assertIn("batch_guest_rcr(state,", source)
+
+    def test_register_jump_is_a_tail_dispatch(self):
+        body = function([
+            instruction(0x401000, "ffe0", "JMP", ("EAX",), flow="COMPUTED_JUMP"),
+        ])
+
+        source, _ = lifter.translate_function(body)
+
+        # A jump pushes no return address, so the callee must return to this
+        # body's caller; the dispatcher names the target when it cannot run it.
+        self.assertIn("state.eip = t0a;", source)
+        self.assertIn("invoke_guest_tail_call(memory, state, t0a)", source)
+
+    def test_program_counter_precedes_memory_access_only(self):
+        # A fault has to name its instruction, so each memory access carries the
+        # program counter of the instruction that makes it. Register-only forms
+        # stay unchanged, so the emitted code does not grow without a reason.
+        body = function([
+            instruction(0x401000, "8b03", "MOV", ("EAX", "dword ptr [EBX]")),
+            instruction(0x401002, "8bc3", "MOV", ("EAX", "EBX")),
+            instruction(0x401004, "c3", "RET", flow="TERMINAL"),
+        ])
+
+        source, _ = lifter.translate_function(body)
+        lines = source.splitlines()
+
+        def owns_program_counter(address):
+            index = next(
+                position for position, line in enumerate(lines)
+                if line.strip().startswith(f"// 0x{address:08x}:"))
+            return lines[index + 1].strip().startswith("batch_guest_pc")
+
+        self.assertTrue(owns_program_counter(0x401000))
+        self.assertFalse(owns_program_counter(0x401002))
+
     def test_conditional_branch_uses_exported_static_target(self):
         body = function([
             instruction(0x401000, "39d8", "CMP", ("EAX", "EBX")),
@@ -2108,6 +2219,20 @@ class StaticBatchLiftTests(unittest.TestCase):
 class CppBatchGeneratorTests(unittest.TestCase):
     """The batch generator decides what the walk may enter."""
 
+    def test_a_batch_at_the_table_end_has_no_next_initializer(self):
+        # The whole table must be generatable: naming the next entry cannot read
+        # past the array when the batch covers every slot.
+        import generate_cpp_initializer_batch as batch
+
+        targets = [0x00924790, 0x009248F0, 0x00925050]
+
+        self.assertEqual(
+            batch.next_initializer_literal(targets, 0), "0x00924790u")
+        self.assertEqual(
+            batch.next_initializer_literal(targets, 2), "0x00925050u")
+        self.assertEqual(
+            batch.next_initializer_literal(targets, 3), "0x00000000u")
+
     def test_direct_calls_separate_engine_targets_from_local_jumps(self):
         import generate_cpp_initializer_batch as batch
 
@@ -2170,6 +2295,199 @@ class CppBatchGeneratorTests(unittest.TestCase):
         self.assertIn("--stop-body 0x011e073e", text)
         # The boundary is explained where it is declared, not only in a report.
         self.assertIn("protection stub measured in Marco 7", text)
+
+
+class PointerTableTests(unittest.TestCase):
+    """Table runs come from the file, so a measured batch can name them."""
+
+    def test_runs_are_maximal_and_ignore_non_code_words(self):
+        import find_pointer_tables as tables
+
+        code = [(0x00401000, 0x00500000)]
+        words = [
+            0x76656c70,  # text, outside every code span
+            0x00401234,  # code
+            0x00402000,  # code
+            0x00000000,
+            0x00403000,  # code
+        ]
+
+        runs = tables.pointer_runs(words, 0x01400000, code)
+
+        self.assertEqual(len(runs), 2)
+        self.assertEqual(runs[0][0], 0x01400004)
+        self.assertEqual(runs[0][1], 0x0140000C)
+        self.assertEqual(runs[0][2], [0x00401234, 0x00402000])
+        self.assertEqual(runs[1][2], [0x00403000])
+
+    def test_code_spans_only_use_the_executable_section(self):
+        import find_pointer_tables as tables
+
+        sections = [
+            (".text", 0x1000, 0x2000, 0x400, 0x2000),
+            (".rdata", 0x3000, 0x1000, 0x2400, 0x1000),
+        ]
+
+        self.assertEqual(tables.code_spans(sections, 0x00400000),
+                         [(0x00401000, 0x00403000)])
+
+
+class DataFaultPlannerTests(unittest.TestCase):
+    """A logged fault becomes exactly the window the image is missing."""
+
+    @staticmethod
+    def synthetic_pe():
+        """A PE tuple with one section whose tail is BSS.
+
+        ``parse_pe`` returns ``(image, image_base, sections)``; a planner test must
+        not need the real executable, so the same shape is built by hand.
+        """
+
+        image = bytes(0x4000)
+        sections = [(".data", 0x1000, 0x3000, 0x1000, 0x1000)]
+        return image, 0x00400000, sections
+
+    def test_a_bss_access_is_planned_as_a_whole_page(self):
+        # The file holds no bytes in BSS, so no byte can bound the window. The
+        # loader's page is the bound that comes from the platform, not a guess.
+        import resolve_data_faults as faults
+
+        plan = faults.plan_window(
+            self.synthetic_pe(), [],
+            {"address": 0x00402500, "size": 4, "write": True, "pc": 0})
+
+        self.assertEqual(plan["status"], "window")
+        self.assertEqual(plan["kind"], "bss_page")
+        self.assertEqual(plan["base"], 0x00402000)
+        self.assertEqual(plan["size"], 0x1000)
+        self.assertTrue(plan["writable"])
+        self.assertIn("writes", plan["reason"])
+
+    def test_a_read_window_does_not_say_writes(self):
+        import resolve_data_faults as faults
+
+        plan = faults.plan_window(
+            self.synthetic_pe(), [],
+            {"address": 0x00402500, "size": 4, "write": False, "pc": 0x00401000})
+
+        self.assertIn("reads", plan["reason"])
+        self.assertIn("from 0x00401000", plan["reason"])
+
+    def test_a_covered_access_is_not_planned_again(self):
+        import resolve_data_faults as faults
+
+        windows = [(0x00402000, 0x1000, "data_page_00402000", True, "x")]
+        plan = faults.plan_window(
+            self.synthetic_pe(), windows,
+            {"address": 0x00402500, "size": 4, "write": True, "pc": 0})
+
+        self.assertEqual(plan["status"], "covered")
+        self.assertEqual(plan["window"], "data_page_00402000")
+
+    def test_faults_are_read_from_a_log_in_order(self):
+        import resolve_data_faults as faults
+        import tempfile
+
+        log = ("PASS crt_cpp_walk stop=0x011e0f98 fault=read@0x0143dd9c/4 "
+               "pc=0x00697cae near=0x013cc000+0x800\n"
+               "PASS again fault=write@0x00000008/4 pc=0x00935cc9\n")
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "stage.log"
+            path.write_text(log, encoding="utf-8")
+            parsed = faults.parse_faults([path])
+
+        self.assertEqual(len(parsed), 2)
+        self.assertEqual(parsed[0]["address"], 0x0143DD9C)
+        self.assertFalse(parsed[0]["write"])
+        self.assertEqual(parsed[0]["pc"], 0x00697CAE)
+        self.assertTrue(parsed[1]["write"])
+        self.assertEqual(parsed[1]["address"], 0x00000008)
+
+    def test_string_bounds_include_the_terminator_only(self):
+        import resolve_data_faults as faults
+
+        data = b"\x00\x00DefaultFilter\x00\x00\x00Debug/Trace\x00"
+
+        start, end = faults.string_bounds(data, 4)
+
+        self.assertEqual(data[start:end], b"DefaultFilter\x00")
+
+    def test_string_bounds_refuse_a_binary_byte(self):
+        import resolve_data_faults as faults
+
+        self.assertIsNone(faults.string_bounds(b"\x01\x02\x03\x04", 0))
+
+    def test_a_covering_window_is_not_planned_twice(self):
+        import resolve_data_faults as faults
+
+        windows = [(0x0143E050, 0x24, "engine_object_vtable", False, "x")]
+
+        self.assertEqual(
+            faults.covering_window(windows, 0x0143E070, 4),
+            "engine_object_vtable")
+        # An access that crosses the end of the window needs a new one.
+        self.assertIsNone(faults.covering_window(windows, 0x0143E072, 4))
+
+    def test_apply_inserts_a_valid_entry_and_keeps_python(self):
+        import ast
+        import resolve_data_faults as faults
+        import tempfile
+
+        source = ('WINDOWS = [\n'
+                  '    (0x00400000, 0x400, "pe_headers", False,\n'
+                  '     "first"),\n'
+                  ']\n'
+                  'AFTER = 1\n')
+        window = {
+            "base": 0x0143E0E4, "size": 0x30, "name": "rdata_0143e0e4",
+            "writable": False,
+            "reason": "the 12-entry run of code pointers",
+        }
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "generator.py"
+            path.write_text(source, encoding="utf-8")
+            faults.apply_windows(path, [window])
+            updated = path.read_text(encoding="utf-8")
+            faults.apply_windows(path, [])
+            again = path.read_text(encoding="utf-8")
+
+        ast.parse(updated)
+        self.assertIn("0x0143e0e4, 0x30, \"rdata_0143e0e4\"", updated)
+        self.assertIn("AFTER = 1", updated)
+        # The list stays closed and the module keeps its shape.
+        self.assertEqual(updated, again)
+        self.assertEqual(updated.count("0x0143e0e4"), 1)
+
+
+class GuestImageHexTransportTests(unittest.TestCase):
+    """The image travels as hex text, so the text must decode to the same bytes."""
+
+    def test_hex_literals_round_trip_to_the_blob(self):
+        import generate_initterm_guest_image as image
+
+        blob = bytes(range(256)) * 3
+        literals = image.hex_literal_lines(blob)
+        decoded = bytes.fromhex("".join(line.strip().strip('"')
+                                        for line in literals))
+        self.assertEqual(decoded, blob)
+
+    def test_every_line_stays_inside_the_requested_width(self):
+        import generate_initterm_guest_image as image
+
+        literals = image.hex_literal_lines(b"\xab" * 500, width=120)
+        self.assertTrue(all(len(line.strip().strip('"')) <= 120
+                            for line in literals))
+        # 500 bytes is 1000 characters, so the last line is the only short one.
+        self.assertEqual(len(literals), 9)
+
+    def test_the_alphabet_is_the_one_the_cpp_decoder_accepts(self):
+        import generate_initterm_guest_image as image
+
+        # hex_nibble() in boot_entry_crt_harness.cpp rejects anything outside
+        # 0-9a-f, so uppercase output would fail closed on the guest side.
+        text = "".join(line.strip().strip('"')
+                       for line in image.hex_literal_lines(bytes(range(256))))
+        self.assertEqual(set(text), set("0123456789abcdef"))
 
 
 class GuestImageSlotsTests(unittest.TestCase):

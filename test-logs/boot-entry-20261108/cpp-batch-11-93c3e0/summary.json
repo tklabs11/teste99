@@ -1,0 +1,17 @@
+{
+  "batch_index": 1,
+  "batch_size": 1,
+  "table_slice": [
+    "0x0093c3e0",
+    "0x0093c3e0"
+  ],
+  "next_table_entry": null,
+  "roots": 1,
+  "initializers_in_batch": 1,
+  "helper_roots": 0,
+  "instructions": 3,
+  "imports": [],
+  "canonicalised_targets": {},
+  "truncated_exports": [],
+  "indirect_calls": {}
+}

@@ -1,0 +1,34 @@
+{
+  "batch_index": 4,
+  "batch_size": 256,
+  "table_slice": [
+    "0x01224e20",
+    "0x012284d0"
+  ],
+  "next_table_entry": "0x01228530",
+  "roots": 285,
+  "initializers_in_batch": 256,
+  "helper_roots": 29,
+  "instructions": 3787,
+  "imports": [
+    "MSVCR90.dll!_onexit"
+  ],
+  "canonicalised_targets": {
+    "0x011e07e0": "0x011e074a"
+  },
+  "truncated_exports": [],
+  "indirect_calls": {
+    "0x00932e80": [
+      "CALL EBX",
+      "CALL EBX"
+    ],
+    "0x011e074a": [
+      "CALL ESI",
+      "CALL ESI",
+      "CALL ESI",
+      "CALL ESI",
+      "CALL ESI",
+      "CALL ESI"
+    ]
+  }
+}

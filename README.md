@@ -4975,3 +4975,657 @@ PASS 8/8 x86 · 8/8 ARM64 · 8/8 igualdade · 8/8 aparelho (PJMZAEJRX4YLFIDI)
 
 - [relatório do passo](./test-logs/boot-entry-20261108/report-cpp-batch-6-float-and-thunks.md)
 - [trilha de corpos e imports](./test-logs/boot-entry-20261108/crt-cpp-walk-initializers-lift-x86.log)
+
+### Sétimo passo — 48 inicializadores, `ADC` e tempo determinístico
+
+O lote subiu de **7 para 48 inicializadores C++** da tabela real. Três coisas
+apareceram no caminho.
+
+**`ADC` com carry** entrou no lifter (`SBB` já existia): o `CF` é lido antes de
+escrever as flags e as fórmulas de `AF`/`OF` usam `right + carry`. Era o que
+faltava para o auxiliar de conversão `float`→`int64` da CRT (`0x011e0846`).
+
+**`RDTSC` não pode vir do host.** Virou `batch_guest_rdtsc`, um contador do guest
+com base e passo fixos.
+
+**E o relógio todo teve de mudar.** Com 48 inicializadores o walk entrou num laço
+de espera, e a primeira execução mostrou a divergência:
+
+```
+x86 lift:  imports=180843
+ARM64:     imports=1251      (mesma parada, mesmo estado do guarda)
+```
+
+`QueryPerformanceCounter` e `GetTickCount` liam o relógio do host, então o número
+de iterações era propriedade da máquina. Agora os dois são do guest (bases e
+passos fixos, `QueryPerformanceFrequency` = 10 MHz), e `imports=5087` é
+**idêntico** no x86 e no ARM64. `GetSystemTimeAsFileTime` continua do host: é
+data, não intervalo, e já era comparado dentro de janela declarada.
+
+**Imagem do guest: 39 regiões / 6 400 bytes / 178 endereços.** O scanner passou a
+ver endereços passados como argumento aos helpers (`MOVSS` load, `FLD`/`FSTP`,
+comparações x87, formas SSE com memória, conversões) — antes ele só reconhecia
+`memory.load32(0x…)`, e foi por isso que `0x01485718` só apareceu como falta em
+execução. A regra nova usa **lista explícita** de helpers, porque "qualquer
+`batch_guest_*`" daria falso positivo em nota de corpo e em alvo de despacho
+(endereços de **código**).
+
+**Diagnóstico novo:** `BatchLiftMemory` guarda a primeira leitura/escrita não
+servida e o `FAIL` imprime `fault=read@0x01485718/4`. Sem isso, uma falta no meio
+de 287 instruções só dizia `invalid_memory`.
+
+```
+PASS crt_cpp_walk stop=0x011e0f98 failed_at=0x00925730 executed=107
+     imports=5087 initializers=48 walk=stopped_at_0x00925730 sections=4 tls=2
+     guard=single_instance node=0x5e000010 count=4
+     neutralized=0x011e073e/1024/2/0 buf=0x5e000088
+PASS 8/8 x86 · 8/8 ARM64 · 8/8 igualdade · 8/8 aparelho (PJMZAEJRX4YLFIDI)
+103 testes Python OK
+```
+
+`0x00925730` é uma chamada **indireta** cujo corpo ainda não foi medido: não está
+na closure de 1 813 corpos, e é a próxima raiz a medir com o script Ghidra.
+
+- [relatório do passo](./test-logs/boot-entry-20261108/report-cpp-batch-7-init48.md)
+
+### Oitavo passo — medir `0x00925730`, formas de string, teto de export
+
+A ordem combinada foi seguida inteira.
+
+**1. `0x00925730` medido.** 60 rodadas Ghidra a partir dessa raiz dão **1 805
+corpos / 158 479 instruções / 3 057 alvos canonicalizados**. A closure *medida* é
+grande, mas o lote não: com a raiz como semente e orçamento de 320 corpos, ele
+fica em **117 corpos / 4 326 instruções** — o subsistema entra por 5 corpos.
+`tools/batch_static_lift/merge_closures.py` une medições por `entry`, preferindo o
+registro não truncado; a união foi de 1 813 para **2 195 corpos / 178 701
+instruções / 0 truncados**.
+
+**2. Formas de string.** Ghidra escreve o prefixo como sufixo (`MOVSD.REP`,
+`CMPSB.REPE`). Agora há modelo para `MOVSB/MOVSW/MOVSD`, `STOSB/STOSW/STOSD` e
+`CMPSB/CMPSW/CMPSD`, com **DF lido de EFLAGS** (a cópia pode descer) e limite de
+`1 << 20` elementos que falha fechado em vez de rodar sem fim. A colisão com o
+`MOVSD` escalar do SSE é resolvida por operando: só é string com prefixo de
+repetição ou `ES:`/`DS:` explícito. Com isso o gerador fecha **64, 96 e 128**
+inicializadores (antes falhava em 64).
+
+**3. Os três truncados não eram fronteira: era o meu teto.** Cada um tinha
+exatamente 2 048 instruções. O `DescribeSporeAddresses` mostrou funções reais e
+grandes (`0x00407280` = 9 754 bytes, `0x00441440` = 23 468, `0x004c73f0` =
+12 341), e a truncagem vinha de `MAX_INSTRUCTIONS = 2_048` / `MAX_SPAN = 0x4000`
+no script Ghidra. Elevados para 16 384 e 0x8000, a re-medição deu **2 182**,
+**5 316** e **2 444** instruções, **sem truncagem**.
+
+**Onde o walk para:** passou de `0x00925730` e entrou no subsistema de objetos
+(`0x00927be0 → 0x009267a0 → 0x009272c0 → 0x00926c20`). A parada é uma falta real,
+agora com endereço: `fault=write@0x00000008/4` — `MOV [ESI+8], EDI` com `ESI = 0`,
+vindo do retorno de uma chamada indireta. O código espera um **singleton** que
+outra etapa do boot preenche; a janela `0x01668ec0` está zerada porque o
+`SizeOfRawData` de `.data` termina antes dela, o que é o comportamento do loader e
+está provado pela tabela de seções. Quem escreve ali é a próxima medição — não uma
+suposição.
+
+```
+PASS crt_cpp_walk stop=0x011e0f98 failed_at=0x00935cc7 executed=107
+     imports=5091 initializers=48 fault=write@0x00000008/4
+     guard=single_instance node=0x5e000010 count=4
+     neutralized=0x011e073e/1024/2/0 buf=0x5e000088
+PASS 8/8 x86 · 8/8 ARM64 · 8/8 igualdade · 8/8 aparelho (PJMZAEJRX4YLFIDI)
+105 testes Python OK
+```
+
+- [relatório do passo](./test-logs/boot-entry-20261108/report-cpp-batch-8-order.md)
+
+### Nono passo — o muro de memória era o meu `VirtualAlloc`, não um singleton
+
+O passo anterior registrou `fault=write@0x00000008/4` e eu atribuí a falta a um
+singleton não inicializado. **Estava errado**, e o próprio instrumento novo
+mostra isso com endereço.
+
+**A falta passou a nomear a instrução.** O lifter agora emite
+`batch_guest_pc = 0x...;` antes de cada instrução que toca memória (instruções
+que só mexem em registrador não ganham a linha, então o código não cresce sem
+razão), o runtime guarda esse valor em `FaultInfo::pc` e o harness imprime `pc=`
+tanto no `FAIL` quanto no `PASS`. A trilha de corpos registra o que foi *entrado*,
+não onde se falhou: `pc=0x00935cc9` está em `0x00935c80`, e não em `0x00926c20`
+como eu havia escrito.
+
+A instrução é a inserção numa lista encadeada por uma **fábrica chamada por
+ponteiro** (`CALL ECX`, `MOV ESI,EAX`, `MOV [ESI+8],EDI`), e o código original
+**não testa o retorno** da fábrica.
+
+**Por que a fábrica devolveu zero:** o detalhe de chamadas passou a imprimir todos
+os argumentos:
+
+```
+VirtualAlloc args=0x00000000,0x01000000,0x00002000,0x00000004 result=0x00000000
+VirtualAlloc args=0x00000000,0x01000000,0x00003000,0x00000004 result=0x00000000
+last_error code=87
+```
+
+16 MB de reserva contra uma arena de 4 MB: o shim devolvia 0 com
+`ERROR_INVALID_PARAMETER`, e o código do jogo escrevia no ponteiro nulo. A falha
+era **do meu ambiente**. É o mesmo tamanho que o stub de proteção pede, o que faz
+sentido — é o heap desse subsistema.
+
+O shim foi corrigido em três pontos: arena de 256 MB em `0x20000000` (a antiga
+`0x5d000000`+4 MB encostava no heap do guest e nos trampolins), **cada commit com
+o seu próprio bloco** (um `vector` que crescesse invalidaria ponteiros já
+mapeados) e um limite total de commit de 256 MB que falha fechado. Resultado:
+`fault=none`, `imports` 5091 → 5108, `sections` 4 → **5**, e o walk atravessou a
+fábrica.
+
+**O muro seguinte foi dado, não código:** `read@0x0143e050` — uma leitura
+calculada (o campo 0 do objeto alocado aponta para lá), invisível para a
+varredura de endereços absolutos. Os bytes originais mostram nove ponteiros de
+`.text` seguidos de `"EATE…"`: é uma **vtable**, agora mapeada como janela
+`engine_object_vtable` somente-leitura de 0x24 bytes. Nada ali é sintetizado — um
+ponteiro de método inventado viraria execução de endereço arbitrário.
+
+Medições deste passo, todas com 0 exports truncados:
+
+| raiz | corpos | instruções | pendentes no fim |
+| --- | --- | --- | --- |
+| `0x00925bc0` | 1 896 | 174 094 | 1 (limite de rodadas) |
+| 9 métodos da vtable | 1 905 | 174 406 | **0** (convergiu) |
+| `0x00925770` | 1 519 | 135 780 | 39 (limite de rodadas) |
+
+A união medida foi de 2 195 para **2 218 corpos / 179 458 instruções**. O lote
+subiu para **128 corpos / 4 642 instruções / 37 imports** e a imagem para 41
+regiões.
+
+`0x00925770` rendeu o maior salto: o walk entrou numa **inicializadora de seção**
+e `sections` foi de 5 para **7**. Depois disso, outra tabela de métodos calculada
+(`0x01408324`, slot 5 da tabela em `0x01408310`) exigiu a janela
+`engine_class_vtable` — uma sequência contígua de 23 ponteiros de `.text` entre
+texto ASCII e a string `"Debug/EA…"`, limites observados nos bytes.
+
+```
+PASS crt_entry … crt_startup_state_initializing   (7 estágios, imports 5→14)
+PASS crt_cpp_walk stop=0x011e0f98 failed_at=0x00697c40 executed=107
+     imports=5116 initializers=48 sections=7 tls=2
+     guard=single_instance node=0x5e000010 count=8
+     neutralized=0x011e073e/1024/2/0 buf=0x5e000088 fault=none
+PASS 8/8 x86 · 8/8 ARM64 · 8/8 igualdade · 8/8 aparelho (PJMZAEJRX4YLFIDI)
+106 testes Python OK
+```
+
+Com a arena corrigida o subsistema andou de verdade: `sections` 4 → 5 → 7,
+`imports` 5091 → 5116, contador do guard 4 → 8, e nenhuma falta de memória. O
+novo muro é `0x00697c40`, o método que o slot 5 chamou — um corpo fora do lote.
+
+O padrão ficou claro: este subsistema é **denso em alvos indiretos** e cada
+iteração custa uma medição Ghidra de 15 a 20 minutos. O próximo passo é medir a
+faixa `0x00925000..0x00927000` de uma vez em vez de correr atrás de um alvo por
+vez.
+
+- [relatório do passo](./test-logs/boot-entry-20261108/report-cpp-batch-9-vtable.md)
+
+### Décimo passo — tabelas lidas do arquivo, e uma pilha de 1 KB
+
+O muro do passo anterior era de **dados**: uma tabela em `.rdata` que o guest lê
+por ponteiro calculado. Este passo atacou a causa em vez do sintoma.
+
+**Ferramenta nova.** `find_pointer_tables.py` lê o PE e reporta *runs maximais de
+ponteiros de código* por seção, com `--into` para filtrar por faixa. Para a faixa
+do subsistema de objetos existem exatamente **duas** tabelas: `0x0143e050` (9
+slots, todos já medidos) e `0x0143e0e4` (12 slots, nenhum medido). Os 12 foram
+medidos numa rodada só — **1 631 corpos / 147 230 instruções**. A varredura
+completa mostra a escala do que se evitou: `.rdata` tem 5 619 runs e 95 366
+ponteiros.
+
+**O bug mais grave deste passo era meu, outra vez.** O walk passou a falhar em
+`write@0x6ffffffc` — 4 bytes *abaixo* da base da pilha. A pilha guest tinha
+`kStackBytes = 0x400`: **1 KB, com 512 bytes abaixo do frame de entrada**. Agora
+tem 1 MiB (`0x6ff00400`), mantendo o topo em `0x70000400` para não mudar o id de
+dono do lock do CRT nem nenhuma moldura que o harness confere, e o buffer foi para
+o heap porque o objeto é local no `main` de cada harness.
+
+**Cinco janelas de dados**, todas com limites observados no arquivo: nomes de
+classe, 93 ponteiros de método do registro, uma **tabela de salto de 8 entradas
+dentro de `.text`** (tipo novo: código lendo a própria seção de código como dado),
+um descritor com sentinela `-1` e quatro métodos, e quatro palavras de `.reg` do
+registro.
+
+**Duas correções de asserção, uma delas uma exigência errada.** O `frame_matches`
+comparava o EBP **vivo** com `entry-4`, válido só enquanto o walk parava na
+própria moldura; agora compara o EBP do prefixo, capturado no ponto certo. E a
+checagem de seção crítica recusava `LockCount=1, RecursionCount=2` — que é
+exatamente uma seção adquirida e reentrada, `LockCount == RecursionCount - 1`. A
+regra passou a ser o invariante do Windows (livre: `-1`/`0`; em uso:
+`RecursionCount >= 1` e `LockCount == RecursionCount - 1`) em vez de uma foto do
+estado.
+
+```
+PASS crt_cpp_walk stop=0x011e0f98 failed_at=0x00ff0420 executed=107
+     imports=5134 initializers=48 sections=7 tls=2
+     guard=single_instance node=0x5e000010 count=8
+     neutralized=0x011e073e/1024/2/0 buf=0x5e000088 fault=none
+PASS 8/8 x86 · 8/8 ARM64 · 8/8 igualdade · 8/8 aparelho (PJMZAEJRX4YLFIDI)
+108 testes Python OK
+```
+
+Lote: **154 corpos / 6 544 instruções / 41 imports**; imagem com 46 regiões;
+união medida em **2 247 corpos / 181 085 instruções**. `imports` foi de 5116 para
+**5134** e o walk atravessou quatro muros de dados sem nenhuma falta de memória.
+
+O muro atual, `0x00ff0420`, é diferente: um alvo de chamada indireta que **não
+está no lote** — código, não dado. E o padrão geral virou uma decisão de
+arquitetura que deixo registrada: cada falta de tabela custa hoje ~20 min de
+suite. As saídas (blob binário de `.rdata`, continuar por janelas, ou o runtime
+sugerir o run candidato na falta) mudam o modelo da imagem, então não escolhi
+sozinho.
+
+- [relatório do passo](./test-logs/boot-entry-20261108/report-cpp-batch-10-tables.md)
+
+### Décimo primeiro passo — a falta vira janela em um comando (opção 3)
+
+Escolhida a opção 3. Com uma correção de premissa: o runtime **não** pode nomear
+uma tabela do PE — ele roda no aparelho, sem a PE em disco. O que ele pode, e
+agora faz, é classificar a falta. A linha passou a trazer a **região mapeada mais
+próxima**:
+
+```
+fault=read@0x0143dd9c/4 pc=0x00697cae near=0x01408240+0xb0
+```
+
+`near=0x00000000+0x0` significa que o guest estava fora de tudo (ponteiro nulo). O
+caso acima significa "saiu de uma janela conhecida por 0x5C bytes" — é dado do
+arquivo faltando, não código.
+
+**E o gerador fecha o resto.** `resolve_data_faults.py` lê os `fault=` de um log,
+confere se uma janela já serve o acesso (`covered`, sem duplicar), e senão lê os
+bytes do PE e decide pela evidência: run maximal de ponteiros de código (com o
+registro de onde o run termina — padding `int3`, palavra zero, texto), string
+imprimível até o terminador, ou a palavra alinhada. `--apply` insere só aquela
+entrada no gerador, de forma idempotente.
+
+**Validação pelos fatos já existentes:** rodada contra as seis faltas dos passos
+anteriores, a ferramenta reporta as seis como `covered` — confirmando que as
+janelas que eu havia calculado à mão tinham os limites certos — e, para a tabela
+de 12 ponteiros que eu havia removido por não estar em uso, deriva exatamente
+`0x0143e0e4/0x30`, que é o tamanho que eu havia medido manualmente.
+
+```
+PASS crt_cpp_walk stop=0x011e0f98 failed_at=0x00ff0420 executed=107
+     imports=5134 initializers=48 sections=7 tls=2
+     guard=single_instance node=0x5e000010 count=8
+     neutralized=0x011e073e/1024/2/0 buf=0x5e000088
+     fault=none@0x00000000/0 pc=0x00000000 near=0x00000000+0x0
+PASS 8/8 x86 · 8/8 ARM64 · 8/8 igualdade · 8/8 aparelho (PJMZAEJRX4YLFIDI)
+113 testes Python OK
+```
+
+O ciclo de agora em diante é: rodar, ler `fault=/pc=/near=`, um comando de
+`--apply`, rodar de novo — sem investigação manual de tabela. O `--apply` fica
+**manual** de propósito: a lista de janelas é a base de todos os estágios
+validados, e mutação automática durante o build esconderia o que mudou.
+
+Honestidade sobre o `near=`: o campo está compilado e impresso, mas nesta execução
+`fault=none`, então o valor zero não mede o caso interessante — ele será
+observado de verdade na próxima falta. O muro atual, `0x00ff0420`, é **código**
+fora do lote, não dado.
+
+- [relatório do passo](./test-logs/boot-entry-20261108/report-cpp-batch-11-faults.md)
+
+### Décimo segundo passo — cinco formas de instrução, e o build ARM64 no limite
+
+Semear os 51 métodos da tabela de registro expôs o que faltava no tradutor. Antes
+disso, eles foram medidos numa rodada só: **598 corpos / 42 155 instruções**. A
+união medida chegou a **2 336 corpos / 184 481 instruções**, e o lote saltou de
+155 para **256 corpos / 11 636 instruções / 54 imports**.
+
+**Cinco formas de instrução**, todas faltando em código real, nenhuma aproximada:
+`JMP r32` (despacho de cauda — um salto não empilha retorno, então o destino volta
+direto ao chamador do corpo), `MUL r/m32` (não assinado, `EDX:EAX` e CF/OF quando a
+metade alta não é zero), `IMUL r/m8` (`AX = AL × DL` assinado), `SHRD` com
+contagem mascarada e CF/OF do último bit, e `RCR` (rotação **através** do carry,
+bit a bit). `ROL`/`ROR` entraram junto por serem a mesma família.
+
+**Um erro de compilação que valeu corrigir:** o corpo já declara `t4r` para o
+índice 4, e eu declarava `const std::uint32_t t4r` — `C2373`. As formas novas
+passaram a emitir bloco próprio com `result` de escopo local, então não há colisão
+possível.
+
+**Dois limites de ferramenta, não de código.** Com 256 fontes, o build ARM64
+estourou a linha de comando do Windows ("O nome do arquivo ou a extensão é muito
+grande") e passou a usar arquivo de resposta. Aí apareceu a armadilha: o parser de
+arquivo de resposta do `clang` trata `\` como escape e **comeu todos os
+separadores** dos caminhos (`C:UserswesllAndroidStudio…`). Os separadores agora vão
+dobrados. O `cl` da Microsoft não aplica essa regra — é por isso que o x86
+funcionava com o mesmo tipo de arquivo, e o runner diz isso para ninguém
+"unificar" os dois e quebrar um.
+
+```
+PASS crt_cpp_walk stop=0x011e0f98 failed_at=0x0068f9b0 executed=107
+     imports=5141 initializers=48 sections=7 tls=2
+     guard=single_instance node=0x5e000010 count=8
+     neutralized=0x011e073e/1024/2/0 buf=0x5e000088
+     fault=none@0x00000000/0 pc=0x00000000 near=0x00000000+0x0
+PASS 8/8 x86 · 8/8 ARM64 · 8/8 igualdade · 8/8 aparelho (PJMZAEJRX4YLFIDI)
+115 testes Python OK
+```
+
+`imports` do walk: 5134 → **5141**, sem nenhuma falta de memória. O muro atual é
+`0x0068f9b0`, alvo indireto fora do lote — e o padrão se mantém: método de tabela,
+pequeno, medido em minutos.
+
+- [relatório do passo](./test-logs/boot-entry-20261108/report-cpp-batch-12-instructions.md)
+
+### A curva do custo da tabela — linear, e o achatamento tinha outra causa
+
+Antes de tratar 31 266 inicializadores como sentença, medi o custo. O gerador
+aceita `--initializers N` e cada execução leva **2 segundos**, então a curva foi até
+a tabela inteira, com orçamento de corpos aberto (`--bodies 20000`) para não medir o
+meu limite em vez do binário.
+
+| N | corpos | instruções | não medidos | Δ |
+| --- | --- | --- | --- | --- |
+| 48 | 254 | 11 509 | 131 | — |
+| 96 | 323 | 12 985 | 131 | +69 para +48 inicializadores |
+| 192 | 419 | 13 997 | 131 | +96 para +96 |
+| 384 | 483 | 14 868 | 259 | +64 para +192 |
+| 768 | 483 | 14 868 | 643 | **+0** |
+| 12 288 | 483 | 14 868 | 12 163 | **+0** |
+| 31 266 | 451 | 12 752 | 31 126 | **+0** |
+
+O congelamento a partir de 384 **não** é o custo saturando. A coluna que entrega a
+causa é a última: de 384 para cima, `não medidos = N − 125` exatamente, e na tabela
+inteira `31 126 = 31 266 − 140`. Ou seja, **140 dos 31 266 inicializadores (0,45%)
+estão na closure medida** — o resto não pode ser levantado e é despachado, que é o
+comportamento correto. O teto é a **minha cobertura de medição**, não o binário.
+
+E o custo por inicializador medido é **1 corpo**: 96→192 deu +96 corpos para +96
+inicializadores; 192→384 deu +64 para os 64 medidos. A média de instruções por
+corpo **cai** (45,3 → 30,8) e os imports ficaram parados em **54** da curva de 96
+até a tabela inteira — assinatura de helpers compartilhados. **Não existe explosão
+combinatória.**
+
+O que passa a ser o custo real são três limites de ferramenta: cobertura de
+medição (~31 mil corpos a medir, horas de Ghidra em lotes), **volume de código
+gerado** (~965 mil instruções, e hoje é um `.cpp` por corpo — a lista de fontes já
+estourou a linha de comando do Windows em 256) e tempo de compilação.
+
+Um achado acionável: o conjunto "131 corpos não medidos" é **o mesmo** de 48 a 192
+inicializadores. Medir esses 131 destrava o trecho 48→192 sem medir inicializador
+novo.
+
+**Bug encontrado no caminho:** gerar a tabela inteira estourava com `IndexError` —
+o gerador escrevia `targets[len(roots)]` para "o próximo inicializador", índice que
+não existe no fim da tabela. Agora há um "não há próximo" explícito (`0x00000000`)
+no cabeçalho e no manifesto, com teste unitário. Sem isso, o lote da tabela inteira
+era impossível de gerar.
+
+- [relatório da curva](./test-logs/boot-entry-20261108/report-cpp-batch-14-curve.md)
+
+### Quantos inicializadores o Android executa de fato: **11**
+
+Pergunta do autor do projeto, e a resposta corrige um número que eu vinha
+repetindo errado. Todos os relatórios anteriores dizem `initializers=48` — mas esse
+é o que o lote **registra** (`kBatchInitializerCount`), não o que **rodou**. Eu
+apresentei registro como execução.
+
+O runtime agora conta o que acontece: incrementa `initializers_completed_` **só
+depois** de o corpo retornar e a moldura voltar ao lugar, e o harness imprime
+`ran=` e `last_ran=` nas duas linhas:
+
+```
+PASS crt_cpp_walk failed_at=0x00fcc210 imports=5141 initializers=48
+     ran=11 last_ran=0x01300150 sections=7 tls=2 fault=none
+PASS x86_vs_arm64   (a mesma linha)
+PASS arm64_device_run serial=PJMZAEJRX4YLFIDI
+```
+
+**11 inicializadores**, de `0x011e0e95` até `0x01300150`. O 12º (`0x01300180`)
+começa e não completa.
+
+**O limite não é o Android.** x86 e ARM64 produzem a mesma linha, e o aparelho
+também. O teto é a minha **cobertura de medição**: não há nada na plataforma
+impedindo os 11; há código não levantado impedindo o 12º.
+
+**E os "131 corpos" não eram corpos.** Antes de medir, verifiquei: todos os 131
+endereços da lista `missing_bodies` estão **dentro de corpos já medidos** — são
+saltos internos (`0x00454d00: JMP 0x00454d3b`, dentro de `0x00454cb0`). O gerador
+filtrava saltos locais em `engine` e `pending_bodies` e esquecia `missing`, que era
+exatamente a lista que eu ia mandar medir. Corrigido, caiu de **131 para 1**
+(`0x0093a650`). Medi-lo teria sido trabalho jogado fora.
+
+Medido de verdade: 2 corpos (`0x0068f9b0`, `0x0093a650`), 67 instruções, 0 imports
+novos. União em **2 337 corpos / 184 523 instruções**. O muro andou de `0x0068f9b0`
+para `0x00fcc210` e `ran` continuou 11: o 12º inicializador é uma cadeia longa de
+chamadas indiretas — a tabela do registro de classes —, e cada elo não levantado
+para o walk. Fechar o 12º exige levantar essa cadeia, não um corpo.
+
+- [relatório da contagem](./test-logs/boot-entry-20261108/report-cpp-batch-15-ran.md)
+
+### O laço fechado: 11 → **13** inicializadores
+
+Com a opção 3 em produção, o ciclo `falta → planejar → aplicar → reexecutar` rodou
+três vezes seguidas e cada volta moveu o muro:
+
+| etapa | `ran` | `sections` | `imports` | muro |
+| --- | --- | --- | --- | --- |
+| linha de base | 11 | 7 | 5 141 | `0x00fcc210` (corpo) |
+| tabelas de classe semeadas | 11 | 7 | 5 192 | `0x009250b0` (corpo) |
+| + bloco de dados `0x0143dff4` | **12** | 7 | 5 216 | `0x01668950` (dado) |
+| + página BSS `0x01668000` | **13** | **8** | 5 219 | `0x0143da50` (dado) |
+
+**O lote está completo pela primeira vez**: `faltando=0`, `pendentes=1` (só o stub
+neutralizado), 295 corpos. Para isso foi preciso semear os **alvos indiretos das
+tabelas de classe** (90 únicos, 88 medidos) — que o gerador não pode descobrir,
+porque só o guest sabe qual slot lê.
+
+**Dois falsos positivos meus**: `0x00657461` e `0x00736c65` são ASCII (`"ate"`,
+`"sle"`) que caem dentro de `.text`. O detector de ponteiros **não distingue** texto
+de ponteiro — limite registrado, palavras riscadas com o motivo no arquivo.
+
+**Três correções na ferramenta, encontradas usando-a em produção:** bloco de dados
+não existia como classe (uma leitura gerava janela de 4 bytes — um passo por falta);
+em BSS não há bytes do arquivo para delimitar nada, então agora o plano é a **página
+inteira**, granularidade do próprio loader; e `apply_windows` substitui janelas
+contidas — só quando os dois lados são BSS, para nunca apagar bytes de arquivo. Um
+quarto bug apareceu no conserto: o regex de remoção casava `0x4` e o arquivo escreve
+`0x04`, então uma janela sobrevivia.
+
+```
+PASS 32, FAIL 0, SKIP 3 — 8 estágios em x86, ARM64 e aparelho
+PASS crt_cpp_walk failed_at=0x009212c0 imports=5219 initializers=48 ran=13
+     last_ran=0x013001b0 sections=8 tls=2 guard count=9
+     fault=read@0x0143da50/4 pc=0x009212e4 near=0x0140f338+0x8
+119 testes Python OK
+```
+
+Custo por muro, medido: **1 comando + 1 execução (~10 min)** para falta de dado;
+medição Ghidra + semear + execução para falta de corpo. Esse é o gargalo real agora.
+
+- [relatório do laço](./test-logs/boot-entry-20261108/report-cpp-batch-16-loop.md)
+
+### De 13 a **192** inicializadores no mesmo dia
+
+O laço `falta → planejar → aplicar → reexecutar` foi levado até onde ele leva, e o
+limite deixou de ser dado: agora é medição de código.
+
+| passo | registrados | **`ran`** | muro |
+| --- | --- | --- | --- |
+| início | 48 | 13 | `0x0143da50` (dado) |
+| bloco de dados | 48 | 13 | `0x0121aee0` (corpo) |
+| contrato do stub corrigido | 48 | **48** | lote esgotado |
+| 96 registrados | 96 | **85** | `0x013eb198` (dado) |
+| 6 shims de import | 96 | 85 | muro virou string |
+| tabela de strings | 96 | **96** | lote esgotado |
+| 192 registrados + 27 janelas | 192 | **147** | `0x013eb248` (dado) |
+| bloco + página BSS | 192 | **192** | lote esgotado |
+
+`ran` é contado pelo runtime: só entra quem **completou** (corpo retornou e a moldura
+voltou ao lugar). Estado final: **192 de 192**, com x86, ARM64 e aparelho idênticos,
+suíte 32 PASS / 0 FAIL / 3 SKIP.
+
+**Três dos saltos foram o mesmo achado:** o lote estava *esgotado*. Todos os
+inicializadores registrados completavam e o walk parava no `kBatchNextInitializer` —
+a fronteira declarada de propósito. Ou seja: o teto é sempre o primeiro corpo não
+levantado, nunca o CRT.
+
+**O guest chama import por ponteiro, não por nome.** O muro `MSVCR90.dll!tolower`
+não aparecia em nenhum corpo gerado: `eip=0x5f000b50` → trampolim 181 → IAT
+`0x013cc2ec`. O guest leu o slot da IAT **como dado** e chamou. Seis shims entraram
+com semântica exata (`tolower`, `_finite`, `_isnan`, `_purecall`,
+`OutputDebugStringA`, `WideCharToMultiByte`) — com o detalhe de que `_finite`/`_isnan`
+recebem 8 bytes, logo **2 slots** de argumento; errar isso desalinha o `ESP` de toda
+chamada seguinte. Outros seis ficaram como **fronteira declarada** (`CreateThread`,
+`_ecvt`, `_fcvt`, `_gmtime64`, `_localtime64`, `_time64`, `strftime`): exigem modelo
+novo e nenhum foi alcançado.
+
+**Seis defeitos reais na ferramenta**, todos encontrados usando-a: log em UTF-16 que
+o leitor não entendia; mensagem quebrada entre o endereço e o nome do corpo (parse
+passou a ser do texto inteiro); classe de caracteres sem `s`,`p`,`o`,`r` que parava na
+segunda entrada de uma lista; janela de leitura curta que reportava a string 1 byte
+menor do que o guest precisa; uma janela por string numa tabela adjacente (agora
+cresce sobre toda palavra de texto/NUL); e sobreposição/nome repetido (a janela nova
+absorve o que toca, mas só quando o tipo de dado é o mesmo — misturar falha alto).
+
+**Terceira asserção corrigida do mesmo tipo:** `neutralized=3/1/0` porque eu fixava
+`size == 0x400` e destino no heap, e apareceu `f(0x01668994, 0, 0xF4)` em `.data`. O
+stub sempre esteve certo; o teste é que estava amarrado a uma observação só. Agora
+valida a forma e reporta `n_sizes=2`.
+
+Lote: **458 corpos, 15 147 instruções, 55 imports, 0 não medidos**. Imagem: 51
+janelas (a página BSS de `0x015d1000` absorveu 26 sozinha).
+
+O muro atual, `0x0121ceb0`, é o `kBatchNextInitializer` — lote esgotado outra vez.
+Subir para 384 exige **medir 128 corpos**, então o próximo passo deixa de ser
+automático.
+
+- [relatório do dia](./test-logs/boot-entry-20261108/report-cpp-batch-17-ran192.md)
+
+### De 192 a **384** inicializadores, e a imagem que virou texto
+
+**Os 128 corpos que faltavam eram os próprios inicializadores.** O lote de 384 fechava
+em 522 corpos e faltavam exatamente 128 — e todos os 128 eram os inicializadores
+257–384, não código alcançado por eles. Uma única medição Ghidra com esses 128 como
+raízes convergiu em **5 rodadas** e devolveu 165 corpos, sem nenhum alvo novo fora do
+conjunto esperado.
+
+**Dois muros de dado depois disso**, e o segundo mudou o desenho: uma leitura em
+`0x013ccc0c` mostrou um inicializador lendo a tabela **além** da janela de
+`cpp_initializer_head` (slot 256). A janela passou a cobrir a tabela inteira até
+`initializer_table`, e foi aí que o header saiu de 143 KB para **1 MB**.
+
+```
+PASS crt_cpp_walk failed_at=0x0121fac0 executed=107 imports=5322
+     initializers=384 ran=384 last_ran=0x0121fab0
+     sections=8 tls=2 guard=single_instance count=9
+     neutralized=0x011e073e/244/3/0 n_sizes=2 fault=none
+PASS x86_vs_arm64 (linha idêntica) · PASS arm64_device_run
+```
+
+Lote: **660 corpos, 17 811 instruções, 55 imports, 0 não medidos, 1 pendente**
+(`0x011e073e`). União medida: 2 489 corpos / 186 745 instruções / 0 truncados.
+
+**O transporte da imagem era o gargalo, não o guest.** A imagem ia como array C++
+(`0xXXu,`), ~7,6 caracteres por byte; com 139 644 bytes de imagem o header tinha
+**1 063 891 bytes** e cada stage levava ~25 min compilando-o duas vezes. `.incbin` não
+existe no MSVC; base64 economiza mais mas exige tabela e decodificador. Hex custa 2
+caracteres por byte e é auto-verificável: se o texto não tem exatamente `2 × bytes`,
+o guest falha alto.
+
+| formato | header | chars/byte |
+| --- | --- | --- |
+| array de bytes | 1 063 891 | ~7,6 |
+| texto hex | **326 161** | ~2,3 |
+
+`3,26×` menor, e a metade x86 do stage caiu de **20m56s** para **16m03s** (duas
+medições únicas, não um benchmark). A linha `PASS` saiu **byte a byte idêntica** à da
+imagem de 1 MB — o transporte é invisível para o comportamento.
+
+**Um bug meu que só o clang viu:** nos stages que não mapeiam a imagem, o
+`if constexpr` descarta o ramo, então `decode_guest_image` ficava sem chamador —
+`-Wunneeded-internal-declaration` + `-Werror` derrubou o build ARM64 no primeiro
+stage. O `cl` do x86 não tem esse aviso. Resolvido com `[[maybe_unused]]` e o motivo
+escrito no código.
+
+```
+PASS 32   FAIL 0   SKIP 3   — 8 estágios em x86, ARM64 e aparelho
+PASS arm64_device_run stage=cpp-walk-initializers serial=PJMZAEJRX4YLFIDI
+```
+
+**122 testes** Python (3 novos), entre eles o que amarra os dois lados: o alfabeto
+emitido é exatamente `0-9a-f`, porque o `hex_nibble` do C++ recusa maiúsculas.
+
+Continua sendo **384 de 31 266** inicializadores (1,2%). Sem boot, menu, render ou
+gameplay.
+
+- [relatório do transporte hex](./test-logs/boot-entry-20261108/report-cpp-batch-18-hex.md)
+
+### De 384 a **768**, e o muro que era meu
+
+Os 384 inicializadores seguintes custaram pouco, como a leitura da tabela previa:
+**421 corpos, 5 366 instruções, 0 truncados** em 5 rodadas de Ghidra (2m30s). O lote
+de 768 saiu com **1 044 corpos / 22 509 instruções**, e é **superset estrito** do de
+384 — os 660 arquivos comparados um a um: 0 ausentes, 0 diferentes.
+
+Mas o resultado travou em `ran=9`, morrendo no inicializador **#10**, que já rodava.
+Isolando uma variável por vez:
+
+| raízes | cap | imagem | resultado |
+| --- | --- | --- | --- |
+| 384 | 900 | 62 regiões | **`ran=384`** |
+| 768 | 1400 | 124 regiões | `ran=9` |
+| **384** | **900** | **124 regiões** | **`ran=9`** |
+
+A terceira linha é a primeira com só a imagem trocada. **A imagem era a variável**, e
+o lote estava descartado (superset byte a byte).
+
+**O experimento que denunciou o tipo de causa**: um hook de diagnóstico
+(`SPORE_GUEST_IMAGE_DROP`, desligado por padrão) deixou rodar as janelas uma a uma —
+62 execuções em **1,8 s**, contra 6 builds de ~17 min:
+
+```
+derrubar TODAS as 62      -> ran=384
+derrubar NENHUMA          -> ran=9
+derrubar QUALQUER UMA     -> ran=384
+```
+
+Se fosse conteúdo de janela, só uma específica consertaria. **Qualquer uma conserta**
+⇒ o problema é o **número** de regiões, não o dado.
+
+**A conta fecha exatamente:** `BatchLiftMemory` guardava o mapa em
+`std::array<Region, 128>` — pilha (1) + janelas da imagem (124) + TEB/probe/heap (3)
+= **128**. No limite, o primeiro `VirtualAlloc` do guest não tinha onde entrar; o
+runtime devolveu **0** como o Windows faria, e o guest, que não confere
+`GetLastError`, gravou em `[0+8]`:
+
+```
+CALL ECX          ; ponteiro de função
+MOV ESI, EAX      ; EAX = 0
+MOV [ESI+8], EDI  ; fault=write@0x00000008/4
+```
+
+Conserto: `std::array<Region, 128>` → `std::deque<Region>` (não move o que já está
+guardado, então os ponteiros de `find_region` seguem válidos). Com a imagem de 124
+regiões e nada derrubado, o `ran=384` voltou — o verde não dependia mais da imagem
+pequena.
+
+Depois disso o walk andou e parou em **cinco janelas pequenas demais**, todas do mesmo
+tipo (leitura/escrita de 8 ou 4 bytes que começa dentro da janela e termina alguns
+bytes depois do fim): `423 → 466 → 551 → 679 → 688 → 768`. Cada uma foi uma linha de
+log e um `resolve_data_faults.py --log <log> --apply`; a de `0x015d2058` escolheu a
+**página de 4 KiB**, que absorveu 42 janelas de uma vez (123 → 81 regiões).
+
+**O ciclo de iteração caiu de 28 min para 6 s**: o header da imagem é incluído por
+**um único arquivo** (`boot_entry_crt_harness.cpp`), então cada repetição é regerar a
+imagem, recompilar um objeto e religar.
+
+```
+PASS crt_cpp_walk failed_at=0x01224e20 initializers=768 ran=768
+     last_ran=0x01224dc0 fault=none imports=5479 sections=8 count=9
+     walk=stopped_at_0x01224e20
+PASS x86_vs_arm64 (linha idêntica) · PASS arm64_device_run serial=PJMZAEJRX4YLFIDI
+PASS 32   FAIL 0   SKIP 3   — 8 estágios
+```
+
+`fault=none` e `stopped_at_0x01224e20` = **inicializador #769**: não houve muro, o
+lote acabou. Duas execuções seguidas dão a linha idêntica.
+
+Continua sendo **768 de 31 266 = 2,5%**. Sem boot, menu, render ou gameplay.
+
+- [relatório do desbloqueio](./test-logs/boot-entry-20261108/report-cpp-batch-20-deque-768.md)
+- [relatório do bloqueio (a investigação)](./test-logs/boot-entry-20261108/report-cpp-batch-19-ran768-blocked.md)

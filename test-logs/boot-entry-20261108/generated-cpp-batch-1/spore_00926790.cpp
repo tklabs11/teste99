@@ -7,6 +7,7 @@ BatchLiftStatus spore_lift_00926790(BatchLiftMemory& memory, BatchLiftState& sta
     std::uint32_t t1a = 0, t1b = 0, t1r = 0;
 
     // 0x00926790: 8b442404 MOV
+        batch_guest_pc = 0x00926790u;
         if (!memory.load32(static_cast<std::uint32_t>(state.regs[4] + 0x00000004u), t0)) return BatchLiftStatus::invalid_memory;
         state.regs[0] = t0;
     // 0x00926794: 83c008 ADD

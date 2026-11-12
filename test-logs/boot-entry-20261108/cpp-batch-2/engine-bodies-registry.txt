@@ -1,0 +1,69 @@
+# The 62 unique method pointers of the class-registry table run at
+# 0x0143dcc4..0x0143de38, read from the file by find_pointer_tables.py.
+# Seeded so the walk can follow the chain each initializer needs; the
+# addresses are only usable because they are already in the closure.
+# 0x00657461 was dropped: it is the ASCII word <ate> followed by a zero that
+# happens to fall inside .text, so the pointer-run detector read it as a code
+# pointer. The detector cannot tell text from a pointer; this one is not code.
+# Order is table order, which is also priority order for --bodies.
+0x0068f9b0
+0x00697eb0
+0x00697ec0
+0x00697ed0
+0x007f30d0
+0x00923380
+0x009233b0
+0x009233f0
+0x00923410
+0x00923440
+0x00923460
+0x00923470
+0x00923490
+0x009234a0
+0x009234e0
+0x009234f0
+0x00923680
+0x009236c0
+0x009236d0
+0x00923700
+0x00923740
+0x00923780
+0x009237c0
+0x00923840
+0x009238b0
+0x009238f0
+0x00923930
+0x00923990
+0x00923a60
+0x00923aa0
+0x00923c90
+0x00923db0
+0x00923fe0
+0x00924010
+0x00924110
+0x00924130
+0x00924150
+0x009241f0
+0x00924270
+0x009242b0
+0x009242f0
+0x00924350
+0x00924390
+0x00924450
+0x00924490
+0x00924570
+0x009245b0
+0x009246c0
+0x00924790
+0x009248f0
+0x00924a50
+0x00924a80
+0x00924cf0
+0x00924d10
+0x00924d90
+0x0093b6c0
+0x0093c3e0
+0x00ab30c0
+0x00fcc210
+0x00ff0420
+0x011e06d0

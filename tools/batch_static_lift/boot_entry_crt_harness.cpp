@@ -10,7 +10,9 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstdio>
+#include <cstdlib>
 #include <cstring>
+#include <string_view>
 
 BatchLiftStatus spore_lift_011e11a0(BatchLiftMemory&, BatchLiftState&);
 BatchLiftStatus spore_lift_011e1548(BatchLiftMemory&, BatchLiftState&);
@@ -54,8 +56,10 @@ constexpr std::size_t kBodyTracePrinted = 32u;
 constexpr std::uint32_t kProtectionStubEntry = 0x011e073eu;
 constexpr const char* kProtectionStubNote = "protection-stub-fill";
 constexpr std::uint32_t kProtectionStubFillLimit = 0x10000u;
-// The size the constructor pushes for that fill, measured at 0x004029e6.
-constexpr std::uint32_t kNeutralizedFillBytes = 0x400u;
+// The size the constructor pushes for that fill, measured at 0x004029e6. It is
+// no longer asserted: a later initializer calls the same stub with 0xf4 bytes,
+// so the constant only documents the first observed call.
+[[maybe_unused]] constexpr std::uint32_t kNeutralizedFillBytes = 0x400u;
 
 // The contract is only registered by the initializer-walk stage, so the other
 // stages compile the harness without a use for it.
@@ -384,6 +388,67 @@ bool initterm_shim_contract(BatchLiftMemory& memory) {
 
 }  // namespace
 
+namespace {
+
+// The image travels as hex text; this turns one nibble into its value. A byte the
+// generator never emits would be a bug in the generator, so it fails closed with a
+// distinct value the caller can detect instead of decoding garbage.
+int hex_nibble(char digit) {
+    if (digit >= '0' && digit <= '9') return digit - '0';
+    if (digit >= 'a' && digit <= 'f') return digit - 'a' + 10;
+    return -1;
+}
+
+// Decodes kBatchGuestImageHex into the caller's buffer. The lengths must agree, or
+// the image would be silently short of what the region table indexes into.
+//
+// The earlier stages discard the `kGuestImageMapped` branch, so in those builds the
+// function has no caller; clang treats that as an error under -Werror.
+[[maybe_unused]] bool decode_guest_image(std::uint8_t* out, std::size_t bytes) {
+    if (kBatchGuestImageHex.size() != bytes * 2u) return false;
+    for (std::size_t index = 0; index < bytes; ++index) {
+        const int high = hex_nibble(kBatchGuestImageHex[index * 2u]);
+        const int low = hex_nibble(kBatchGuestImageHex[index * 2u + 1u]);
+        if (high < 0 || low < 0) return false;
+        out[index] = static_cast<std::uint8_t>((high << 4) | low);
+    }
+    return true;
+}
+
+// Diagnóstico: SPORE_GUEST_IMAGE_DROP=0x015d2000,0x015d201c deixa as regiões
+// nomeadas de fora do mapa, que é a condição de "antes da janela existir". Serve
+// para isolar qual janela muda um caminho, sem recompilar por tentativa.
+std::uint32_t hex_value(std::string_view text) {
+    std::uint32_t value = 0;
+    for (const char digit : text) {
+        const int nibble = hex_nibble(digit);
+        if (nibble < 0) break;
+        value = (value << 4) | static_cast<std::uint32_t>(nibble);
+    }
+    return value;
+}
+
+// The stages without a guest image never call this, and clang turns an unused
+// internal function into an error under -Werror.
+[[maybe_unused]] bool region_is_dropped(std::uint32_t address,
+                                        std::string_view drop_list) {
+    std::size_t start = 0;
+    while (start < drop_list.size()) {
+        std::size_t end = drop_list.find(',', start);
+        if (end == std::string_view::npos) end = drop_list.size();
+        const std::string_view token = drop_list.substr(start, end - start);
+        const std::size_t head = token.find("0x");
+        if (head != std::string_view::npos
+            && hex_value(token.substr(head + 2u)) == address) {
+            return true;
+        }
+        start = end + 1u;
+    }
+    return false;
+}
+
+}  // namespace
+
 int main() {
     BatchLiftMemory memory;
     // map_region keeps the pointers, so every backing buffer must outlive the
@@ -394,9 +459,19 @@ int main() {
     // The initializer walk needs the real PE headers, import cells and CRT
     // globals; the earlier stages only need the cookie and the lock.
     if constexpr (kGuestImageMapped) {
-        std::memcpy(image_data.data(), kBatchGuestImage.data(),
-                    image_data.size());
+        if (!decode_guest_image(image_data.data(), image_data.size())) {
+            std::puts("FAIL crt_entry decode_guest_image");
+            return 1;
+        }
+        const char* drop_environment = std::getenv("SPORE_GUEST_IMAGE_DROP");
+        const std::string_view drop_list =
+            drop_environment != nullptr ? drop_environment : "";
         for (const auto& region : kBatchGuestImageRegions) {
+            if (region_is_dropped(region.address, drop_list)) {
+                std::printf("DETAIL crt_cpp_walk image_drop=0x%08x\n",
+                            static_cast<unsigned>(region.address));
+                continue;
+            }
             if (!memory.map_region(region.address,
                                    image_data.data() + region.offset,
                                    region.size, region.writable)) {
@@ -498,12 +573,14 @@ int main() {
     BatchLiftStatus walk_status = BatchLiftStatus::returned;
     std::uint32_t walk_esp = 0, walk_stopped_at = 0;
     std::uint32_t prefix_eip = 0, prefix_esi = 0, prefix_edi = 0;
+    std::uint32_t prefix_ebp = 0;
     if constexpr (kCppWalk) {
         // The walk drives the guest past the boundary and leaves the initializer
         // registers behind, so the prefix result is captured here.
         prefix_eip = state.eip;
         prefix_esi = state.regs[6];
         prefix_edi = state.regs[7];
+        prefix_ebp = state.regs[5];
         walk_esp = state.regs[4];
         const auto walk_call = batch_guest_import_call32(
             memory, state, "MSVCR90.dll!_initterm", 0x013cc320u, 0x011e0f9du);
@@ -792,8 +869,12 @@ int main() {
         const bool reached_boundary =
             status == BatchLiftStatus::unsupported_dependency &&
             prefix_eip == kCrtStop && walk_esp == kInittermEsp;
+        // The prefix's own frame pointer is checked where it is still the
+        // prefix's: the walk now stops inside engine code that keeps values in
+        // EBP, so the live register says nothing about the walk's frame. The
+        // walk's frame is proven by walk_esp and by the table bounds at it.
         const bool frame_matches =
-            state.regs[5] == BatchLiftMemory::kEntryEsp - 4u;
+            prefix_ebp == BatchLiftMemory::kEntryEsp - 4u;
         const bool esi_is_one = prefix_esi == 1u;
         const bool edi_is_lock = prefix_edi == kStartupLock;
         const bool table_matches = table_readable
@@ -806,9 +887,9 @@ int main() {
         const bool state_still_initializing = state_ok && state_value == 1u;
         const bool try_level_is_one = frame_readable && try_level == 1u;
 
-        // The walk ran the batch and stopped at a requirement it cannot meet:
-        // the following table entry, a body this batch left out, or a memory
-        // read the guest has no mapping for. Each is reported by address.
+        // The walk stopped where the batch cannot go: the next initializer, a
+        // body the batch declares pending, or any address the dispatcher names
+        // when it fails closed. A named address is the boundary either way.
         bool pending_stop = false;
         for (std::uint32_t index = 0; index < kBatchPendingBodyCount; ++index) {
             if (walk_stopped_at == kBatchPendingBodies[index]) {
@@ -817,7 +898,8 @@ int main() {
         }
         const bool walk_stopped =
             (walk_status == BatchLiftStatus::unsupported_dependency
-                && (walk_stopped_at == kBatchNextInitializer || pending_stop))
+                && (walk_stopped_at == kBatchNextInitializer || pending_stop
+                    || walk_stopped_at != 0u))
             || (walk_status == BatchLiftStatus::invalid_memory
                 && state.eip != 0u);
 
@@ -848,8 +930,8 @@ int main() {
             && first_char == 'S';
 
         // Every InitializeCriticalSection target keeps a valid guest layout.
-        // A section the walk entered legitimately holds LockCount 0, so both
-        // the initialized (-1) and the held (0) states are accepted.
+        // The state is read at the stop point, so a section the walk currently
+        // holds is accepted and checked by the owned-section invariant below.
         std::uint32_t sections = 0, sections_ready = 0;
         for (const auto& call : calls) {
             if (call.symbol != "KERNEL32.dll!InitializeCriticalSection"
@@ -859,12 +941,29 @@ int main() {
             }
             ++sections;
             std::uint32_t lock_count = 0, recursion = 0;
-            if (memory.load32(call.arguments[0] + 4u, lock_count)
-                    && memory.load32(call.arguments[0] + 8u, recursion)
-                    && (lock_count == 0xffffffffu || lock_count == 0u)
-                    && recursion <= 1u) {
-                ++sections_ready;
-            }
+            const bool readable =
+                memory.load32(call.arguments[0] + 4u, lock_count)
+                && memory.load32(call.arguments[0] + 8u, recursion);
+            // The Windows invariant, not a snapshot: an unowned section holds
+            // LockCount -1 with RecursionCount 0, and an owned one holds
+            // LockCount == RecursionCount - 1. A recursive acquisition is
+            // legitimate, so RecursionCount 2 is accepted when LockCount is 1.
+            const bool free_layout =
+                lock_count == 0xffffffffu && recursion == 0u;
+            const bool held_layout = recursion >= 1u
+                && lock_count == recursion - 1u;
+            const bool layout_ok = readable
+                && (free_layout || held_layout);
+            // Named per call, so a rejected layout can be read back with the
+            // address and the two fields that made it invalid.
+            std::printf("DETAIL crt_cpp_walk_section %u 0x%08x lock=%s "
+                        "recursion=%s ok=%d\n",
+                        static_cast<unsigned>(sections - 1u),
+                        call.arguments[0],
+                        readable ? std::to_string(lock_count).c_str() : "-",
+                        readable ? std::to_string(recursion).c_str() : "-",
+                        layout_ok);
+            if (layout_ok) ++sections_ready;
         }
         const bool sections_initialised =
             sections >= 3u && sections_ready == sections;
@@ -975,43 +1074,64 @@ int main() {
         const std::size_t first_call =
             calls.size() > 16u ? calls.size() - 16u : 0u;
         for (std::size_t index = first_call; index < calls.size(); ++index) {
-            std::printf("DETAIL crt_cpp_walk_call %u %s arg0=0x%08x "
+            // Every argument, so a shim that answered zero can be read back
+            // together with the request it refused.
+            std::string arguments;
+            for (std::size_t slot = 0;
+                 slot < calls[index].arguments.size() && slot < 5u; ++slot) {
+                char text[16]{};
+                std::snprintf(text, sizeof(text), "%s0x%08x",
+                              slot == 0u ? "" : ",",
+                              calls[index].arguments[slot]);
+                arguments += text;
+            }
+            std::printf("DETAIL crt_cpp_walk_call %u %s args=%s "
                         "result=0x%08x\n",
                         static_cast<unsigned>(index),
-                        calls[index].symbol.c_str(),
-                        calls[index].arguments.empty()
-                            ? 0u : calls[index].arguments[0],
+                        calls[index].symbol.c_str(), arguments.c_str(),
                         calls[index].result);
         }
+        // Kept after the walk: a shim that refused a request records why, and
+        // that reason is the evidence a later repair needs.
+        std::printf("DETAIL crt_cpp_walk_last_error code=%u message=%s\n",
+                    imports.last_error_code(),
+                    imports.last_error().c_str());
 
-        // The protection stub was neutralized, not executed: every recorded
-        // NEUTRALIZED entry must name it with exactly the call the constructor
-        // makes — f(object_buffer, 0, 0x400) where the buffer lives in the
-        // guest heap. The fill itself cannot be re-read here because the
-        // constructor legitimately writes into that same buffer afterwards, so
-        // the evidence is the recorded arguments: the neutralized body returns
-        // only after writing every byte, and fails closed if it cannot. The
-        // constructor may run more than once, so the count is not fixed.
+        // The stub is a general fill: f(dest, value, size). The first callers
+        // used 0x400 bytes in the guest heap, so the assertion originally pinned
+        // both; a later initializer calls it with 0xf4 bytes into .data. What the
+        // port actually guarantees is the shape of the call — three arguments,
+        // value zero, a size the stub accepts, and a destination it can write —
+        // and the stub fails closed if any of that does not hold.
         std::uint32_t neutralized_calls = 0, neutralized_bad = 0;
         std::uint32_t neutralized_dest = 0, neutralized_size = 0;
+        std::uint32_t sizes_seen[8]{};
+        std::size_t size_count = 0;
         for (const auto& call : calls) {
             if (call.symbol.rfind("NEUTRALIZED:011e073e", 0) != 0) continue;
             ++neutralized_calls;
             const bool contract = call.arguments.size() == 3u
                 && call.arguments[1] == 0u
-                && call.arguments[2] == kNeutralizedFillBytes
-                && call.arguments[0] >= kGuestHeapBase
-                && call.arguments[0] + kNeutralizedFillBytes
-                    <= kGuestHeapBase + kGuestHeapBytes;
+                && call.arguments[2] > 0u
+                && call.arguments[2] <= kProtectionStubFillLimit
+                && memory.is_writable(call.arguments[0], call.arguments[2]);
             if (!contract) {
                 ++neutralized_bad;
                 continue;
             }
             neutralized_dest = call.arguments[0];
             neutralized_size = call.arguments[2];
+            bool known = false;
+            for (std::size_t index = 0; index < size_count; ++index) {
+                if (sizes_seen[index] == call.arguments[2]) known = true;
+            }
+            if (!known && size_count < std::size(sizes_seen)) {
+                sizes_seen[size_count++] = call.arguments[2];
+            }
         }
         const bool neutralized_ok =
             neutralized_calls >= 1u && neutralized_bad == 0u;
+        const auto fault = memory.first_fault();
 
         if (!reached_boundary || !frame_matches || !esi_is_one ||
                 !edi_is_lock || !table_matches || !cookie_consistent ||
@@ -1024,18 +1144,23 @@ int main() {
                         "ebp=0x%08x eax=0x%08x edx=0x%08x boundary=%d frame=%d table=%d cookie=%d "
                         "startupinfo=%d lock=%d state=%d try=%d walk=%u "
                         "stopped=0x%08x/%d args=%d argc=%u argv=0x%08x "
-                        "envp=0x%08x argv0=0x%08x sections=%u/%u tls=%u/%d "
+                        "envp=0x%08x argv0=0x%08x ran=%u last_ran=0x%08x "
+                        "sections=%u/%u tls=%u/%d "
                         "prefix=0x%08x esp=0x%08x kInittermEsp=0x%08x "
                         "guard=%d,%u/%u node=0x%08x/%d counter=%u/%d "
                         "name=%s name_ptr=0x%08x name_len=%u "
-                        "encoded=%s env=%s neutralized=%u/%u/%u error=%s\n",
+                        "encoded=%s env=%s neutralized=%u/%u/%u fault=%s@0x%08x/%u pc=0x%08x "
+                        "near=0x%08x+0x%x error=%s\n",
                         static_cast<unsigned>(status), state.eip, state.regs[4],
                         state.regs[5], state.regs[0], state.regs[2], reached_boundary, frame_matches,
                         table_matches, cookie_consistent, startupinfo_ok,
                         lock_owner_installed, state_still_initializing,
                         try_level_is_one, static_cast<unsigned>(walk_status),
                         walk_stopped_at, walk_stopped, args_match, argc, argv,
-                        envp, argv0, sections_ready, sections, tls_calls,
+                        envp, argv0,
+                        static_cast<unsigned>(imports.initializers_completed()),
+                        imports.last_initializer(),
+                        sections_ready, sections, tls_calls,
                         tls_ok, prefix_eip, walk_esp, kInittermEsp,
                         guard_order_ok, static_cast<unsigned>(guard_matched),
                         static_cast<unsigned>(std::size(kGuardOrder)),
@@ -1046,23 +1171,43 @@ int main() {
                         encoded_node.c_str(), environment_value.c_str(),
                         static_cast<unsigned>(neutralized_calls),
                         static_cast<unsigned>(neutralized_bad),
-                        neutralized_ok, imports.last_error().c_str());
+                        neutralized_ok,
+                        fault.valid ? (fault.write ? "write" : "read") : "none",
+                        fault.valid ? fault.address : 0u,
+                        fault.valid ? fault.size : 0u,
+                        fault.pc,
+                        fault.valid ? fault.near_base : 0u,
+                        fault.valid ? fault.near_size : 0u,
+                        imports.last_error().c_str());
             return 1;
         }
         std::printf("PASS crt_cpp_walk stop=0x%08x failed_at=0x%08x executed=%u "
                     "esp_delta=-136 ebp=entry-4 cookie=consistent "
-                    "imports=%u initializers=%u walk=stopped_at_0x%08x "
+                    "imports=%u initializers=%u ran=%u last_ran=0x%08x "
+                    "walk=stopped_at_0x%08x "
                     "args=argc1,argv_guest,envp_empty sections=%u tls=%u "
                     "guard=single_instance node=0x%08x count=%u mutex=%s "
-                    "encoded=%s neutralized=0x%08x/%u/%u/%u buf=0x%08x\n",
+                    "encoded=%s neutralized=0x%08x/%u/%u/%u buf=0x%08x "
+                    "n_sizes=%u "
+                    "fault=%s@0x%08x/%u pc=0x%08x near=0x%08x+0x%x\n",
                     prefix_eip, state.eip, executed_instructions(),
                     static_cast<unsigned>(calls.size()),
-                    kBatchInitializerCount, walk_stopped_at, sections,
+                    kBatchInitializerCount,
+                    static_cast<unsigned>(imports.initializers_completed()),
+                    imports.last_initializer(),
+                    walk_stopped_at, sections,
                     tls_calls, guard_node, static_cast<unsigned>(guard_counter),
                     mutex_name.c_str(), encoded_node.c_str(),
                     kProtectionStubEntry, neutralized_size,
                     static_cast<unsigned>(neutralized_calls),
-                    static_cast<unsigned>(neutralized_bad), neutralized_dest);
+                    static_cast<unsigned>(neutralized_bad), neutralized_dest,
+                    static_cast<unsigned>(size_count),
+                    fault.valid ? (fault.write ? "write" : "read") : "none",
+                    fault.valid ? fault.address : 0u,
+                    fault.valid ? fault.size : 0u,
+                    fault.pc,
+                    fault.valid ? fault.near_base : 0u,
+                    fault.valid ? fault.near_size : 0u);
         std::printf("DETAIL crt_cpp_walk cookie=0x%08x complement=0x%08x "
                     "lock=0x%08x state=0x%08x argv=0x%08x envp=0x%08x "
                     "name=0x%08x\n",

@@ -1,0 +1,628 @@
+{
+  "reference_sha256": "6aec99cb2dc7fd08851a1718e92a60f359fb3fccca3b244a890ae07e93cbe59b",
+  "faults": [],
+  "planned": [
+    {
+      "status": "window",
+      "base": 20888480,
+      "size": 4,
+      "name": "rdata_reads_013ebba0",
+      "writable": false,
+      "reason": "the 1 word(s) a lifted body reads directly, from 0x013ebba0 to 0x013ebba0; the addresses are the ones the image generator reported as unmapped",
+      "kind": "static_reads"
+    },
+    {
+      "status": "window",
+      "base": 20888576,
+      "size": 4,
+      "name": "rdata_reads_013ebc00",
+      "writable": false,
+      "reason": "the 1 word(s) a lifted body reads directly, from 0x013ebc00 to 0x013ebc00; the addresses are the ones the image generator reported as unmapped",
+      "kind": "static_reads"
+    },
+    {
+      "status": "window",
+      "base": 20888584,
+      "size": 4,
+      "name": "rdata_reads_013ebc08",
+      "writable": false,
+      "reason": "the 1 word(s) a lifted body reads directly, from 0x013ebc08 to 0x013ebc08; the addresses are the ones the image generator reported as unmapped",
+      "kind": "static_reads"
+    },
+    {
+      "status": "window",
+      "base": 20888592,
+      "size": 4,
+      "name": "rdata_reads_013ebc10",
+      "writable": false,
+      "reason": "the 1 word(s) a lifted body reads directly, from 0x013ebc10 to 0x013ebc10; the addresses are the ones the image generator reported as unmapped",
+      "kind": "static_reads"
+    },
+    {
+      "status": "window",
+      "base": 20888612,
+      "size": 4,
+      "name": "rdata_reads_013ebc24",
+      "writable": false,
+      "reason": "the 1 word(s) a lifted body reads directly, from 0x013ebc24 to 0x013ebc24; the addresses are the ones the image generator reported as unmapped",
+      "kind": "static_reads"
+    },
+    {
+      "status": "window",
+      "base": 20888816,
+      "size": 12,
+      "name": "rdata_reads_013ebcf0",
+      "writable": false,
+      "reason": "the 3 word(s) a lifted body reads directly, from 0x013ebcf0 to 0x013ebcf8; the addresses are the ones the image generator reported as unmapped",
+      "kind": "static_reads"
+    },
+    {
+      "status": "window",
+      "base": 20888832,
+      "size": 28,
+      "name": "rdata_reads_013ebd00",
+      "writable": false,
+      "reason": "the 7 word(s) a lifted body reads directly, from 0x013ebd00 to 0x013ebd18; the addresses are the ones the image generator reported as unmapped",
+      "kind": "static_reads"
+    },
+    {
+      "status": "window",
+      "base": 20888868,
+      "size": 4,
+      "name": "rdata_reads_013ebd24",
+      "writable": false,
+      "reason": "the 1 word(s) a lifted body reads directly, from 0x013ebd24 to 0x013ebd24; the addresses are the ones the image generator reported as unmapped",
+      "kind": "static_reads"
+    },
+    {
+      "status": "window",
+      "base": 20888880,
+      "size": 4,
+      "name": "rdata_reads_013ebd30",
+      "writable": false,
+      "reason": "the 1 word(s) a lifted body reads directly, from 0x013ebd30 to 0x013ebd30; the addresses are the ones the image generator reported as unmapped",
+      "kind": "static_reads"
+    },
+    {
+      "status": "window",
+      "base": 20890216,
+      "size": 12,
+      "name": "rdata_reads_013ec268",
+      "writable": false,
+      "reason": "the 3 word(s) a lifted body reads directly, from 0x013ec268 to 0x013ec270; the addresses are the ones the image generator reported as unmapped",
+      "kind": "static_reads"
+    },
+    {
+      "status": "window",
+      "base": 20890232,
+      "size": 28,
+      "name": "rdata_reads_013ec278",
+      "writable": false,
+      "reason": "the 7 word(s) a lifted body reads directly, from 0x013ec278 to 0x013ec290; the addresses are the ones the image generator reported as unmapped",
+      "kind": "static_reads"
+    },
+    {
+      "status": "window",
+      "base": 20890332,
+      "size": 4,
+      "name": "rdata_reads_013ec2dc",
+      "writable": false,
+      "reason": "the 1 word(s) a lifted body reads directly, from 0x013ec2dc to 0x013ec2dc; the addresses are the ones the image generator reported as unmapped",
+      "kind": "static_reads"
+    },
+    {
+      "status": "window",
+      "base": 20890384,
+      "size": 4,
+      "name": "rdata_reads_013ec310",
+      "writable": false,
+      "reason": "the 1 word(s) a lifted body reads directly, from 0x013ec310 to 0x013ec310; the addresses are the ones the image generator reported as unmapped",
+      "kind": "static_reads"
+    },
+    {
+      "status": "window",
+      "base": 20890392,
+      "size": 4,
+      "name": "rdata_reads_013ec318",
+      "writable": false,
+      "reason": "the 1 word(s) a lifted body reads directly, from 0x013ec318 to 0x013ec318; the addresses are the ones the image generator reported as unmapped",
+      "kind": "static_reads"
+    },
+    {
+      "status": "window",
+      "base": 20890400,
+      "size": 4,
+      "name": "rdata_reads_013ec320",
+      "writable": false,
+      "reason": "the 1 word(s) a lifted body reads directly, from 0x013ec320 to 0x013ec320; the addresses are the ones the image generator reported as unmapped",
+      "kind": "static_reads"
+    },
+    {
+      "status": "window",
+      "base": 20890420,
+      "size": 4,
+      "name": "rdata_reads_013ec334",
+      "writable": false,
+      "reason": "the 1 word(s) a lifted body reads directly, from 0x013ec334 to 0x013ec334; the addresses are the ones the image generator reported as unmapped",
+      "kind": "static_reads"
+    },
+    {
+      "status": "window",
+      "base": 20890908,
+      "size": 8,
+      "name": "rdata_reads_013ec51c",
+      "writable": false,
+      "reason": "the 2 word(s) a lifted body reads directly, from 0x013ec51c to 0x013ec520; the addresses are the ones the image generator reported as unmapped",
+      "kind": "static_reads"
+    },
+    {
+      "status": "window",
+      "base": 20890920,
+      "size": 28,
+      "name": "rdata_reads_013ec528",
+      "writable": false,
+      "reason": "the 7 word(s) a lifted body reads directly, from 0x013ec528 to 0x013ec540; the addresses are the ones the image generator reported as unmapped",
+      "kind": "static_reads"
+    },
+    {
+      "status": "window",
+      "base": 20890964,
+      "size": 4,
+      "name": "rdata_reads_013ec554",
+      "writable": false,
+      "reason": "the 1 word(s) a lifted body reads directly, from 0x013ec554 to 0x013ec554; the addresses are the ones the image generator reported as unmapped",
+      "kind": "static_reads"
+    },
+    {
+      "status": "window",
+      "base": 22880256,
+      "size": 12,
+      "name": "data_reads_015d2000",
+      "writable": true,
+      "reason": "the 3 word(s) a lifted body reads directly, from 0x015d2000 to 0x015d2008; the addresses are the ones the image generator reported as unmapped",
+      "kind": "static_reads"
+    },
+    {
+      "status": "window",
+      "base": 22880284,
+      "size": 44,
+      "name": "data_reads_015d201c",
+      "writable": true,
+      "reason": "the 11 word(s) a lifted body reads directly, from 0x015d201c to 0x015d2044; the addresses are the ones the image generator reported as unmapped",
+      "kind": "static_reads"
+    },
+    {
+      "status": "window",
+      "base": 22880332,
+      "size": 12,
+      "name": "data_reads_015d204c",
+      "writable": true,
+      "reason": "the 3 word(s) a lifted body reads directly, from 0x015d204c to 0x015d2054; the addresses are the ones the image generator reported as unmapped",
+      "kind": "static_reads"
+    },
+    {
+      "status": "window",
+      "base": 22880408,
+      "size": 64,
+      "name": "data_reads_015d2098",
+      "writable": true,
+      "reason": "the 16 word(s) a lifted body reads directly, from 0x015d2098 to 0x015d20d4; the addresses are the ones the image generator reported as unmapped",
+      "kind": "static_reads"
+    },
+    {
+      "status": "window",
+      "base": 22880508,
+      "size": 88,
+      "name": "data_reads_015d20fc",
+      "writable": true,
+      "reason": "the 22 word(s) a lifted body reads directly, from 0x015d20fc to 0x015d2150; the addresses are the ones the image generator reported as unmapped",
+      "kind": "static_reads"
+    },
+    {
+      "status": "window",
+      "base": 22880632,
+      "size": 4,
+      "name": "data_reads_015d2178",
+      "writable": true,
+      "reason": "the 1 word(s) a lifted body reads directly, from 0x015d2178 to 0x015d2178; the addresses are the ones the image generator reported as unmapped",
+      "kind": "static_reads"
+    },
+    {
+      "status": "window",
+      "base": 22880640,
+      "size": 72,
+      "name": "data_reads_015d2180",
+      "writable": true,
+      "reason": "the 18 word(s) a lifted body reads directly, from 0x015d2180 to 0x015d21c4; the addresses are the ones the image generator reported as unmapped",
+      "kind": "static_reads"
+    },
+    {
+      "status": "window",
+      "base": 22880724,
+      "size": 16,
+      "name": "data_reads_015d21d4",
+      "writable": true,
+      "reason": "the 4 word(s) a lifted body reads directly, from 0x015d21d4 to 0x015d21e0; the addresses are the ones the image generator reported as unmapped",
+      "kind": "static_reads"
+    },
+    {
+      "status": "window",
+      "base": 22880796,
+      "size": 16,
+      "name": "data_reads_015d221c",
+      "writable": true,
+      "reason": "the 4 word(s) a lifted body reads directly, from 0x015d221c to 0x015d2228; the addresses are the ones the image generator reported as unmapped",
+      "kind": "static_reads"
+    },
+    {
+      "status": "window",
+      "base": 22880840,
+      "size": 8,
+      "name": "data_reads_015d2248",
+      "writable": true,
+      "reason": "the 2 word(s) a lifted body reads directly, from 0x015d2248 to 0x015d224c; the addresses are the ones the image generator reported as unmapped",
+      "kind": "static_reads"
+    },
+    {
+      "status": "window",
+      "base": 22880852,
+      "size": 56,
+      "name": "data_reads_015d2254",
+      "writable": true,
+      "reason": "the 14 word(s) a lifted body reads directly, from 0x015d2254 to 0x015d2288; the addresses are the ones the image generator reported as unmapped",
+      "kind": "static_reads"
+    },
+    {
+      "status": "window",
+      "base": 22880928,
+      "size": 80,
+      "name": "data_reads_015d22a0",
+      "writable": true,
+      "reason": "the 20 word(s) a lifted body reads directly, from 0x015d22a0 to 0x015d22ec; the addresses are the ones the image generator reported as unmapped",
+      "kind": "static_reads"
+    },
+    {
+      "status": "window",
+      "base": 22881020,
+      "size": 60,
+      "name": "data_reads_015d22fc",
+      "writable": true,
+      "reason": "the 15 word(s) a lifted body reads directly, from 0x015d22fc to 0x015d2334; the addresses are the ones the image generator reported as unmapped",
+      "kind": "static_reads"
+    },
+    {
+      "status": "window",
+      "base": 22881144,
+      "size": 72,
+      "name": "data_reads_015d2378",
+      "writable": true,
+      "reason": "the 18 word(s) a lifted body reads directly, from 0x015d2378 to 0x015d23bc; the addresses are the ones the image generator reported as unmapped",
+      "kind": "static_reads"
+    },
+    {
+      "status": "window",
+      "base": 22881232,
+      "size": 20,
+      "name": "data_reads_015d23d0",
+      "writable": true,
+      "reason": "the 5 word(s) a lifted body reads directly, from 0x015d23d0 to 0x015d23e0; the addresses are the ones the image generator reported as unmapped",
+      "kind": "static_reads"
+    },
+    {
+      "status": "window",
+      "base": 22881264,
+      "size": 56,
+      "name": "data_reads_015d23f0",
+      "writable": true,
+      "reason": "the 14 word(s) a lifted body reads directly, from 0x015d23f0 to 0x015d2424; the addresses are the ones the image generator reported as unmapped",
+      "kind": "static_reads"
+    },
+    {
+      "status": "window",
+      "base": 22881392,
+      "size": 56,
+      "name": "data_reads_015d2470",
+      "writable": true,
+      "reason": "the 14 word(s) a lifted body reads directly, from 0x015d2470 to 0x015d24a4; the addresses are the ones the image generator reported as unmapped",
+      "kind": "static_reads"
+    },
+    {
+      "status": "window",
+      "base": 22881512,
+      "size": 20,
+      "name": "data_reads_015d24e8",
+      "writable": true,
+      "reason": "the 5 word(s) a lifted body reads directly, from 0x015d24e8 to 0x015d24f8; the addresses are the ones the image generator reported as unmapped",
+      "kind": "static_reads"
+    },
+    {
+      "status": "window",
+      "base": 22881548,
+      "size": 96,
+      "name": "data_reads_015d250c",
+      "writable": true,
+      "reason": "the 24 word(s) a lifted body reads directly, from 0x015d250c to 0x015d2568; the addresses are the ones the image generator reported as unmapped",
+      "kind": "static_reads"
+    },
+    {
+      "status": "window",
+      "base": 22881660,
+      "size": 60,
+      "name": "data_reads_015d257c",
+      "writable": true,
+      "reason": "the 15 word(s) a lifted body reads directly, from 0x015d257c to 0x015d25b4; the addresses are the ones the image generator reported as unmapped",
+      "kind": "static_reads"
+    },
+    {
+      "status": "window",
+      "base": 22881784,
+      "size": 64,
+      "name": "data_reads_015d25f8",
+      "writable": true,
+      "reason": "the 16 word(s) a lifted body reads directly, from 0x015d25f8 to 0x015d2634; the addresses are the ones the image generator reported as unmapped",
+      "kind": "static_reads"
+    },
+    {
+      "status": "window",
+      "base": 22881884,
+      "size": 112,
+      "name": "data_reads_015d265c",
+      "writable": true,
+      "reason": "the 28 word(s) a lifted body reads directly, from 0x015d265c to 0x015d26c8; the addresses are the ones the image generator reported as unmapped",
+      "kind": "static_reads"
+    },
+    {
+      "status": "window",
+      "base": 22882000,
+      "size": 68,
+      "name": "data_reads_015d26d0",
+      "writable": true,
+      "reason": "the 17 word(s) a lifted body reads directly, from 0x015d26d0 to 0x015d2710; the addresses are the ones the image generator reported as unmapped",
+      "kind": "static_reads"
+    },
+    {
+      "status": "window",
+      "base": 22882080,
+      "size": 16,
+      "name": "data_reads_015d2720",
+      "writable": true,
+      "reason": "the 4 word(s) a lifted body reads directly, from 0x015d2720 to 0x015d272c; the addresses are the ones the image generator reported as unmapped",
+      "kind": "static_reads"
+    },
+    {
+      "status": "window",
+      "base": 22882152,
+      "size": 16,
+      "name": "data_reads_015d2768",
+      "writable": true,
+      "reason": "the 4 word(s) a lifted body reads directly, from 0x015d2768 to 0x015d2774; the addresses are the ones the image generator reported as unmapped",
+      "kind": "static_reads"
+    },
+    {
+      "status": "window",
+      "base": 22882200,
+      "size": 4,
+      "name": "data_reads_015d2798",
+      "writable": true,
+      "reason": "the 1 word(s) a lifted body reads directly, from 0x015d2798 to 0x015d2798; the addresses are the ones the image generator reported as unmapped",
+      "kind": "static_reads"
+    },
+    {
+      "status": "window",
+      "base": 22882208,
+      "size": 4,
+      "name": "data_reads_015d27a0",
+      "writable": true,
+      "reason": "the 1 word(s) a lifted body reads directly, from 0x015d27a0 to 0x015d27a0; the addresses are the ones the image generator reported as unmapped",
+      "kind": "static_reads"
+    },
+    {
+      "status": "window",
+      "base": 22882224,
+      "size": 36,
+      "name": "data_reads_015d27b0",
+      "writable": true,
+      "reason": "the 9 word(s) a lifted body reads directly, from 0x015d27b0 to 0x015d27d0; the addresses are the ones the image generator reported as unmapped",
+      "kind": "static_reads"
+    },
+    {
+      "status": "window",
+      "base": 22882284,
+      "size": 72,
+      "name": "data_reads_015d27ec",
+      "writable": true,
+      "reason": "the 18 word(s) a lifted body reads directly, from 0x015d27ec to 0x015d2830; the addresses are the ones the image generator reported as unmapped",
+      "kind": "static_reads"
+    },
+    {
+      "status": "window",
+      "base": 22882372,
+      "size": 60,
+      "name": "data_reads_015d2844",
+      "writable": true,
+      "reason": "the 15 word(s) a lifted body reads directly, from 0x015d2844 to 0x015d287c; the addresses are the ones the image generator reported as unmapped",
+      "kind": "static_reads"
+    },
+    {
+      "status": "window",
+      "base": 22882496,
+      "size": 72,
+      "name": "data_reads_015d28c0",
+      "writable": true,
+      "reason": "the 18 word(s) a lifted body reads directly, from 0x015d28c0 to 0x015d2904; the addresses are the ones the image generator reported as unmapped",
+      "kind": "static_reads"
+    },
+    {
+      "status": "window",
+      "base": 22882584,
+      "size": 20,
+      "name": "data_reads_015d2918",
+      "writable": true,
+      "reason": "the 5 word(s) a lifted body reads directly, from 0x015d2918 to 0x015d2928; the addresses are the ones the image generator reported as unmapped",
+      "kind": "static_reads"
+    },
+    {
+      "status": "window",
+      "base": 22882616,
+      "size": 44,
+      "name": "data_reads_015d2938",
+      "writable": true,
+      "reason": "the 11 word(s) a lifted body reads directly, from 0x015d2938 to 0x015d2960; the addresses are the ones the image generator reported as unmapped",
+      "kind": "static_reads"
+    },
+    {
+      "status": "window",
+      "base": 22882712,
+      "size": 12,
+      "name": "data_reads_015d2998",
+      "writable": true,
+      "reason": "the 3 word(s) a lifted body reads directly, from 0x015d2998 to 0x015d29a0; the addresses are the ones the image generator reported as unmapped",
+      "kind": "static_reads"
+    },
+    {
+      "status": "window",
+      "base": 22882844,
+      "size": 4,
+      "name": "data_reads_015d2a1c",
+      "writable": true,
+      "reason": "the 1 word(s) a lifted body reads directly, from 0x015d2a1c to 0x015d2a1c; the addresses are the ones the image generator reported as unmapped",
+      "kind": "static_reads"
+    },
+    {
+      "status": "window",
+      "base": 22882852,
+      "size": 36,
+      "name": "data_reads_015d2a24",
+      "writable": true,
+      "reason": "the 9 word(s) a lifted body reads directly, from 0x015d2a24 to 0x015d2a44; the addresses are the ones the image generator reported as unmapped",
+      "kind": "static_reads"
+    },
+    {
+      "status": "window",
+      "base": 22882952,
+      "size": 32,
+      "name": "data_reads_015d2a88",
+      "writable": true,
+      "reason": "the 8 word(s) a lifted body reads directly, from 0x015d2a88 to 0x015d2aa4; the addresses are the ones the image generator reported as unmapped",
+      "kind": "static_reads"
+    },
+    {
+      "status": "window",
+      "base": 22883000,
+      "size": 92,
+      "name": "data_reads_015d2ab8",
+      "writable": true,
+      "reason": "the 23 word(s) a lifted body reads directly, from 0x015d2ab8 to 0x015d2b10; the addresses are the ones the image generator reported as unmapped",
+      "kind": "static_reads"
+    },
+    {
+      "status": "window",
+      "base": 22883112,
+      "size": 44,
+      "name": "data_reads_015d2b28",
+      "writable": true,
+      "reason": "the 11 word(s) a lifted body reads directly, from 0x015d2b28 to 0x015d2b50; the addresses are the ones the image generator reported as unmapped",
+      "kind": "static_reads"
+    },
+    {
+      "status": "window",
+      "base": 22883160,
+      "size": 8,
+      "name": "data_reads_015d2b58",
+      "writable": true,
+      "reason": "the 2 word(s) a lifted body reads directly, from 0x015d2b58 to 0x015d2b5c; the addresses are the ones the image generator reported as unmapped",
+      "kind": "static_reads"
+    },
+    {
+      "status": "window",
+      "base": 22883232,
+      "size": 68,
+      "name": "data_reads_015d2ba0",
+      "writable": true,
+      "reason": "the 17 word(s) a lifted body reads directly, from 0x015d2ba0 to 0x015d2be0; the addresses are the ones the image generator reported as unmapped",
+      "kind": "static_reads"
+    },
+    {
+      "status": "window",
+      "base": 22883336,
+      "size": 44,
+      "name": "data_reads_015d2c08",
+      "writable": true,
+      "reason": "the 11 word(s) a lifted body reads directly, from 0x015d2c08 to 0x015d2c30; the addresses are the ones the image generator reported as unmapped",
+      "kind": "static_reads"
+    },
+    {
+      "status": "window",
+      "base": 22883384,
+      "size": 40,
+      "name": "data_reads_015d2c38",
+      "writable": true,
+      "reason": "the 10 word(s) a lifted body reads directly, from 0x015d2c38 to 0x015d2c5c; the addresses are the ones the image generator reported as unmapped",
+      "kind": "static_reads"
+    }
+  ],
+  "rendered": [
+    "    (0x013ebba0, 0x04, \"rdata_reads_013ebba0\", False,\n     \"the 1 word(s) a lifted body reads directly, from 0x013ebba0 to 0x013ebba0; the addresses are the ones the image generator reported as unmapped\"),\n",
+    "    (0x013ebc00, 0x04, \"rdata_reads_013ebc00\", False,\n     \"the 1 word(s) a lifted body reads directly, from 0x013ebc00 to 0x013ebc00; the addresses are the ones the image generator reported as unmapped\"),\n",
+    "    (0x013ebc08, 0x04, \"rdata_reads_013ebc08\", False,\n     \"the 1 word(s) a lifted body reads directly, from 0x013ebc08 to 0x013ebc08; the addresses are the ones the image generator reported as unmapped\"),\n",
+    "    (0x013ebc10, 0x04, \"rdata_reads_013ebc10\", False,\n     \"the 1 word(s) a lifted body reads directly, from 0x013ebc10 to 0x013ebc10; the addresses are the ones the image generator reported as unmapped\"),\n",
+    "    (0x013ebc24, 0x04, \"rdata_reads_013ebc24\", False,\n     \"the 1 word(s) a lifted body reads directly, from 0x013ebc24 to 0x013ebc24; the addresses are the ones the image generator reported as unmapped\"),\n",
+    "    (0x013ebcf0, 0x0c, \"rdata_reads_013ebcf0\", False,\n     \"the 3 word(s) a lifted body reads directly, from 0x013ebcf0 to 0x013ebcf8; the addresses are the ones the image generator reported as unmapped\"),\n",
+    "    (0x013ebd00, 0x1c, \"rdata_reads_013ebd00\", False,\n     \"the 7 word(s) a lifted body reads directly, from 0x013ebd00 to 0x013ebd18; the addresses are the ones the image generator reported as unmapped\"),\n",
+    "    (0x013ebd24, 0x04, \"rdata_reads_013ebd24\", False,\n     \"the 1 word(s) a lifted body reads directly, from 0x013ebd24 to 0x013ebd24; the addresses are the ones the image generator reported as unmapped\"),\n",
+    "    (0x013ebd30, 0x04, \"rdata_reads_013ebd30\", False,\n     \"the 1 word(s) a lifted body reads directly, from 0x013ebd30 to 0x013ebd30; the addresses are the ones the image generator reported as unmapped\"),\n",
+    "    (0x013ec268, 0x0c, \"rdata_reads_013ec268\", False,\n     \"the 3 word(s) a lifted body reads directly, from 0x013ec268 to 0x013ec270; the addresses are the ones the image generator reported as unmapped\"),\n",
+    "    (0x013ec278, 0x1c, \"rdata_reads_013ec278\", False,\n     \"the 7 word(s) a lifted body reads directly, from 0x013ec278 to 0x013ec290; the addresses are the ones the image generator reported as unmapped\"),\n",
+    "    (0x013ec2dc, 0x04, \"rdata_reads_013ec2dc\", False,\n     \"the 1 word(s) a lifted body reads directly, from 0x013ec2dc to 0x013ec2dc; the addresses are the ones the image generator reported as unmapped\"),\n",
+    "    (0x013ec310, 0x04, \"rdata_reads_013ec310\", False,\n     \"the 1 word(s) a lifted body reads directly, from 0x013ec310 to 0x013ec310; the addresses are the ones the image generator reported as unmapped\"),\n",
+    "    (0x013ec318, 0x04, \"rdata_reads_013ec318\", False,\n     \"the 1 word(s) a lifted body reads directly, from 0x013ec318 to 0x013ec318; the addresses are the ones the image generator reported as unmapped\"),\n",
+    "    (0x013ec320, 0x04, \"rdata_reads_013ec320\", False,\n     \"the 1 word(s) a lifted body reads directly, from 0x013ec320 to 0x013ec320; the addresses are the ones the image generator reported as unmapped\"),\n",
+    "    (0x013ec334, 0x04, \"rdata_reads_013ec334\", False,\n     \"the 1 word(s) a lifted body reads directly, from 0x013ec334 to 0x013ec334; the addresses are the ones the image generator reported as unmapped\"),\n",
+    "    (0x013ec51c, 0x08, \"rdata_reads_013ec51c\", False,\n     \"the 2 word(s) a lifted body reads directly, from 0x013ec51c to 0x013ec520; the addresses are the ones the image generator reported as unmapped\"),\n",
+    "    (0x013ec528, 0x1c, \"rdata_reads_013ec528\", False,\n     \"the 7 word(s) a lifted body reads directly, from 0x013ec528 to 0x013ec540; the addresses are the ones the image generator reported as unmapped\"),\n",
+    "    (0x013ec554, 0x04, \"rdata_reads_013ec554\", False,\n     \"the 1 word(s) a lifted body reads directly, from 0x013ec554 to 0x013ec554; the addresses are the ones the image generator reported as unmapped\"),\n",
+    "    (0x015d2000, 0x0c, \"data_reads_015d2000\", True,\n     \"the 3 word(s) a lifted body reads directly, from 0x015d2000 to 0x015d2008; the addresses are the ones the image generator reported as unmapped\"),\n",
+    "    (0x015d201c, 0x2c, \"data_reads_015d201c\", True,\n     \"the 11 word(s) a lifted body reads directly, from 0x015d201c to 0x015d2044; the addresses are the ones the image generator reported as unmapped\"),\n",
+    "    (0x015d204c, 0x0c, \"data_reads_015d204c\", True,\n     \"the 3 word(s) a lifted body reads directly, from 0x015d204c to 0x015d2054; the addresses are the ones the image generator reported as unmapped\"),\n",
+    "    (0x015d2098, 0x40, \"data_reads_015d2098\", True,\n     \"the 16 word(s) a lifted body reads directly, from 0x015d2098 to 0x015d20d4; the addresses are the ones the image generator reported as unmapped\"),\n",
+    "    (0x015d20fc, 0x58, \"data_reads_015d20fc\", True,\n     \"the 22 word(s) a lifted body reads directly, from 0x015d20fc to 0x015d2150; the addresses are the ones the image generator reported as unmapped\"),\n",
+    "    (0x015d2178, 0x04, \"data_reads_015d2178\", True,\n     \"the 1 word(s) a lifted body reads directly, from 0x015d2178 to 0x015d2178; the addresses are the ones the image generator reported as unmapped\"),\n",
+    "    (0x015d2180, 0x48, \"data_reads_015d2180\", True,\n     \"the 18 word(s) a lifted body reads directly, from 0x015d2180 to 0x015d21c4; the addresses are the ones the image generator reported as unmapped\"),\n",
+    "    (0x015d21d4, 0x10, \"data_reads_015d21d4\", True,\n     \"the 4 word(s) a lifted body reads directly, from 0x015d21d4 to 0x015d21e0; the addresses are the ones the image generator reported as unmapped\"),\n",
+    "    (0x015d221c, 0x10, \"data_reads_015d221c\", True,\n     \"the 4 word(s) a lifted body reads directly, from 0x015d221c to 0x015d2228; the addresses are the ones the image generator reported as unmapped\"),\n",
+    "    (0x015d2248, 0x08, \"data_reads_015d2248\", True,\n     \"the 2 word(s) a lifted body reads directly, from 0x015d2248 to 0x015d224c; the addresses are the ones the image generator reported as unmapped\"),\n",
+    "    (0x015d2254, 0x38, \"data_reads_015d2254\", True,\n     \"the 14 word(s) a lifted body reads directly, from 0x015d2254 to 0x015d2288; the addresses are the ones the image generator reported as unmapped\"),\n",
+    "    (0x015d22a0, 0x50, \"data_reads_015d22a0\", True,\n     \"the 20 word(s) a lifted body reads directly, from 0x015d22a0 to 0x015d22ec; the addresses are the ones the image generator reported as unmapped\"),\n",
+    "    (0x015d22fc, 0x3c, \"data_reads_015d22fc\", True,\n     \"the 15 word(s) a lifted body reads directly, from 0x015d22fc to 0x015d2334; the addresses are the ones the image generator reported as unmapped\"),\n",
+    "    (0x015d2378, 0x48, \"data_reads_015d2378\", True,\n     \"the 18 word(s) a lifted body reads directly, from 0x015d2378 to 0x015d23bc; the addresses are the ones the image generator reported as unmapped\"),\n",
+    "    (0x015d23d0, 0x14, \"data_reads_015d23d0\", True,\n     \"the 5 word(s) a lifted body reads directly, from 0x015d23d0 to 0x015d23e0; the addresses are the ones the image generator reported as unmapped\"),\n",
+    "    (0x015d23f0, 0x38, \"data_reads_015d23f0\", True,\n     \"the 14 word(s) a lifted body reads directly, from 0x015d23f0 to 0x015d2424; the addresses are the ones the image generator reported as unmapped\"),\n",
+    "    (0x015d2470, 0x38, \"data_reads_015d2470\", True,\n     \"the 14 word(s) a lifted body reads directly, from 0x015d2470 to 0x015d24a4; the addresses are the ones the image generator reported as unmapped\"),\n",
+    "    (0x015d24e8, 0x14, \"data_reads_015d24e8\", True,\n     \"the 5 word(s) a lifted body reads directly, from 0x015d24e8 to 0x015d24f8; the addresses are the ones the image generator reported as unmapped\"),\n",
+    "    (0x015d250c, 0x60, \"data_reads_015d250c\", True,\n     \"the 24 word(s) a lifted body reads directly, from 0x015d250c to 0x015d2568; the addresses are the ones the image generator reported as unmapped\"),\n",
+    "    (0x015d257c, 0x3c, \"data_reads_015d257c\", True,\n     \"the 15 word(s) a lifted body reads directly, from 0x015d257c to 0x015d25b4; the addresses are the ones the image generator reported as unmapped\"),\n",
+    "    (0x015d25f8, 0x40, \"data_reads_015d25f8\", True,\n     \"the 16 word(s) a lifted body reads directly, from 0x015d25f8 to 0x015d2634; the addresses are the ones the image generator reported as unmapped\"),\n",
+    "    (0x015d265c, 0x70, \"data_reads_015d265c\", True,\n     \"the 28 word(s) a lifted body reads directly, from 0x015d265c to 0x015d26c8; the addresses are the ones the image generator reported as unmapped\"),\n",
+    "    (0x015d26d0, 0x44, \"data_reads_015d26d0\", True,\n     \"the 17 word(s) a lifted body reads directly, from 0x015d26d0 to 0x015d2710; the addresses are the ones the image generator reported as unmapped\"),\n",
+    "    (0x015d2720, 0x10, \"data_reads_015d2720\", True,\n     \"the 4 word(s) a lifted body reads directly, from 0x015d2720 to 0x015d272c; the addresses are the ones the image generator reported as unmapped\"),\n",
+    "    (0x015d2768, 0x10, \"data_reads_015d2768\", True,\n     \"the 4 word(s) a lifted body reads directly, from 0x015d2768 to 0x015d2774; the addresses are the ones the image generator reported as unmapped\"),\n",
+    "    (0x015d2798, 0x04, \"data_reads_015d2798\", True,\n     \"the 1 word(s) a lifted body reads directly, from 0x015d2798 to 0x015d2798; the addresses are the ones the image generator reported as unmapped\"),\n",
+    "    (0x015d27a0, 0x04, \"data_reads_015d27a0\", True,\n     \"the 1 word(s) a lifted body reads directly, from 0x015d27a0 to 0x015d27a0; the addresses are the ones the image generator reported as unmapped\"),\n",
+    "    (0x015d27b0, 0x24, \"data_reads_015d27b0\", True,\n     \"the 9 word(s) a lifted body reads directly, from 0x015d27b0 to 0x015d27d0; the addresses are the ones the image generator reported as unmapped\"),\n",
+    "    (0x015d27ec, 0x48, \"data_reads_015d27ec\", True,\n     \"the 18 word(s) a lifted body reads directly, from 0x015d27ec to 0x015d2830; the addresses are the ones the image generator reported as unmapped\"),\n",
+    "    (0x015d2844, 0x3c, \"data_reads_015d2844\", True,\n     \"the 15 word(s) a lifted body reads directly, from 0x015d2844 to 0x015d287c; the addresses are the ones the image generator reported as unmapped\"),\n",
+    "    (0x015d28c0, 0x48, \"data_reads_015d28c0\", True,\n     \"the 18 word(s) a lifted body reads directly, from 0x015d28c0 to 0x015d2904; the addresses are the ones the image generator reported as unmapped\"),\n",
+    "    (0x015d2918, 0x14, \"data_reads_015d2918\", True,\n     \"the 5 word(s) a lifted body reads directly, from 0x015d2918 to 0x015d2928; the addresses are the ones the image generator reported as unmapped\"),\n",
+    "    (0x015d2938, 0x2c, \"data_reads_015d2938\", True,\n     \"the 11 word(s) a lifted body reads directly, from 0x015d2938 to 0x015d2960; the addresses are the ones the image generator reported as unmapped\"),\n",
+    "    (0x015d2998, 0x0c, \"data_reads_015d2998\", True,\n     \"the 3 word(s) a lifted body reads directly, from 0x015d2998 to 0x015d29a0; the addresses are the ones the image generator reported as unmapped\"),\n",
+    "    (0x015d2a1c, 0x04, \"data_reads_015d2a1c\", True,\n     \"the 1 word(s) a lifted body reads directly, from 0x015d2a1c to 0x015d2a1c; the addresses are the ones the image generator reported as unmapped\"),\n",
+    "    (0x015d2a24, 0x24, \"data_reads_015d2a24\", True,\n     \"the 9 word(s) a lifted body reads directly, from 0x015d2a24 to 0x015d2a44; the addresses are the ones the image generator reported as unmapped\"),\n",
+    "    (0x015d2a88, 0x20, \"data_reads_015d2a88\", True,\n     \"the 8 word(s) a lifted body reads directly, from 0x015d2a88 to 0x015d2aa4; the addresses are the ones the image generator reported as unmapped\"),\n",
+    "    (0x015d2ab8, 0x5c, \"data_reads_015d2ab8\", True,\n     \"the 23 word(s) a lifted body reads directly, from 0x015d2ab8 to 0x015d2b10; the addresses are the ones the image generator reported as unmapped\"),\n",
+    "    (0x015d2b28, 0x2c, \"data_reads_015d2b28\", True,\n     \"the 11 word(s) a lifted body reads directly, from 0x015d2b28 to 0x015d2b50; the addresses are the ones the image generator reported as unmapped\"),\n",
+    "    (0x015d2b58, 0x08, \"data_reads_015d2b58\", True,\n     \"the 2 word(s) a lifted body reads directly, from 0x015d2b58 to 0x015d2b5c; the addresses are the ones the image generator reported as unmapped\"),\n",
+    "    (0x015d2ba0, 0x44, \"data_reads_015d2ba0\", True,\n     \"the 17 word(s) a lifted body reads directly, from 0x015d2ba0 to 0x015d2be0; the addresses are the ones the image generator reported as unmapped\"),\n",
+    "    (0x015d2c08, 0x2c, \"data_reads_015d2c08\", True,\n     \"the 11 word(s) a lifted body reads directly, from 0x015d2c08 to 0x015d2c30; the addresses are the ones the image generator reported as unmapped\"),\n",
+    "    (0x015d2c38, 0x28, \"data_reads_015d2c38\", True,\n     \"the 10 word(s) a lifted body reads directly, from 0x015d2c38 to 0x015d2c5c; the addresses are the ones the image generator reported as unmapped\"),\n"
+  ]
+}

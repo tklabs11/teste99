@@ -14,6 +14,7 @@ BatchLiftStatus spore_lift_011e1304(BatchLiftMemory& memory, BatchLiftState& sta
         if (t0_call_status != BatchLiftStatus::returned) return t0_call_status;
         if (state.eip != 0x011e1309u) return BatchLiftStatus::invalid_control_flow;
     // 0x011e1309: a354e77101 MOV
+        batch_guest_pc = 0x011e1309u;
         t1 = state.regs[0];
         if (!memory.store32(0x0171e754u, t1)) return BatchLiftStatus::invalid_memory;
     // 0x011e130e: 33c0 XOR

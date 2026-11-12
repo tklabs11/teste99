@@ -1,0 +1,9 @@
+translated 10 routines (193 instructions), 10 imports, 2 thunk call sites
+lote gerado: 768 inicializadores, 1044 corpos, 22509 instruções, 55 imports, pendentes 1, bloqueio de engine ['0x011e073e']
+generated guest image: 124 regions (66 from the PE, 58 zero-filled), 141692 bytes, 1451 closure addresses covered, app_type_flag=0
+generated stage cpp-walk-initializers: 56 CRT prefix records to 0x011e0f98 (32 executed), seh_prolog=False, lock_block=True
+SKIP original_x86_real_win32 stage=cpp-walk-initializers reason=the_real_crt_walk_initializes_the_process
+PASS crt_cpp_walk stop=0x011e0f98 failed_at=0x00935cc7 executed=107 esp_delta=-136 ebp=entry-4 cookie=consistent imports=5092 initializers=768 ran=9 last_ran=0x01300310 walk=stopped_at_0x00000000 args=argc1,argv_guest,envp_empty sections=4 tls=2 guard=single_instance node=0x5e000010 count=4 mutex=SingleMgrMutex00001234 encoded=5e000010 neutralized=0x011e073e/1024/2/0 buf=0x5e000088 n_sizes=1 fault=write@0x00000008/4 pc=0x00935cc9 near=0x00000000+0x0
+PASS arm64_build stage=cpp-walk-initializers target=aarch64-linux-android29
+PASS x86_vs_arm64 PASS crt_cpp_walk stop=0x011e0f98 failed_at=0x00935cc7 executed=107 esp_delta=-136 ebp=entry-4 cookie=consistent imports=5092 initializers=768 ran=9 last_ran=0x01300310 walk=stopped_at_0x00000000 args=argc1,argv_guest,envp_empty sections=4 tls=2 guard=single_instance node=0x5e000010 count=4 mutex=SingleMgrMutex00001234 encoded=5e000010 neutralized=0x011e073e/1024/2/0 buf=0x5e000088 n_sizes=1 fault=write@0x00000008/4 pc=0x00935cc9 near=0x00000000+0x0
+PASS arm64_device_run stage=cpp-walk-initializers serial=PJMZAEJRX4YLFIDI

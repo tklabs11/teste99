@@ -1,0 +1,24 @@
+{
+  "batch_index": 1,
+  "batch_size": 5,
+  "table_slice": [
+    "0x00923700",
+    "0x011e06d0"
+  ],
+  "next_table_entry": null,
+  "roots": 5,
+  "initializers_in_batch": 5,
+  "helper_roots": 0,
+  "instructions": 43,
+  "imports": [],
+  "canonicalised_targets": {},
+  "truncated_exports": [],
+  "indirect_calls": {
+    "0x00923700": [
+      "CALL EAX"
+    ],
+    "0x00923740": [
+      "CALL EAX"
+    ]
+  }
+}

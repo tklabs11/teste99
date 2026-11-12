@@ -11,6 +11,7 @@ BatchLiftStatus spore_lift_013000d0(BatchLiftMemory& memory, BatchLiftState& sta
     std::uint32_t t4a = 0;
 
     // 0x013000d0: 68007c6601 PUSH
+        batch_guest_pc = 0x013000d0u;
         t0a = 0x01667c00u;
         state.regs[4] = static_cast<std::uint32_t>(state.regs[4] - 4u);
         if (!memory.store32(state.regs[4], t0a)) return BatchLiftStatus::invalid_memory;
@@ -19,6 +20,7 @@ BatchLiftStatus spore_lift_013000d0(BatchLiftMemory& memory, BatchLiftState& sta
         if (t1_call_status != BatchLiftStatus::returned) return t1_call_status;
         if (state.eip != 0x013000dbu) return BatchLiftStatus::invalid_control_flow;
     // 0x013000db: 68400d3c01 PUSH
+        batch_guest_pc = 0x013000dbu;
         t2a = 0x013c0d40u;
         state.regs[4] = static_cast<std::uint32_t>(state.regs[4] - 4u);
         if (!memory.store32(state.regs[4], t2a)) return BatchLiftStatus::invalid_memory;
@@ -28,6 +30,7 @@ BatchLiftStatus spore_lift_013000d0(BatchLiftMemory& memory, BatchLiftState& sta
         if (t3_call_status != BatchLiftStatus::returned) return t3_call_status;
         if (state.eip != 0x013000e5u) return BatchLiftStatus::invalid_control_flow;
     // 0x013000e5: 59 POP
+        batch_guest_pc = 0x013000e5u;
         if (!memory.load32(state.regs[4], t4a)) return BatchLiftStatus::invalid_memory;
         state.regs[4] = static_cast<std::uint32_t>(state.regs[4] + 4u);
         state.regs[1] = t4a;
