@@ -73,7 +73,8 @@ O que esses campos significam:
 render, sem gameplay. Não exagere isso em nenhum relatório futuro.
 
 Estado do repositório no momento deste documento: `main` = `f57fcac update 26`,
-árvore limpa, **tudo enviado para <https://github.com/tklabs11/spore_android>**.
+árvore limpa, **tudo enviado para <https://github.com/tklabs11/teste99>** (o repo se
+chamava `spore_android` e foi renomeado para `teste99`; o nome antigo redireciona).
 
 ### O próximo degrau já está medido e cotado
 
@@ -124,7 +125,7 @@ está **commitado e no GitHub** (6 816 arquivos, `main` = `origin/main`). Depois
 formatar basta:
 
 ```powershell
-git clone https://github.com/tklabs11/spore_android "C:\Users\wesll\AndroidStudioProjects\SporeAndroid"
+git clone https://github.com/tklabs11/teste99 "C:\Users\wesll\AndroidStudioProjects\SporeAndroid"
 ```
 
 Confira que voltou o commit certo: `git log --oneline -1` deve mostrar `f57fcac`
