@@ -496,3 +496,18 @@ não estavam contaminados; se não for, o que mudou é a diferença a investigar
 **Conclusão: formatar só o C: não basta.** Um `.exe` infectado que sobreviva no D: e
 seja executado depois re-infecta tudo. Apague/refaça o D: também, ou no mínimo apague
 todo `.venv`, `node_modules`, `dist`, `build` e o `$AV_ASW`, e rode a varredura de novo.
+
+### O que já foi apagado do D: (2026-11-12, ~1 GB liberado)
+
+- Os **7 sinalizados** (`t64.exe`, `f2py.exe`, `hf.exe`, `idna.exe`,
+  `onnxruntime_test.exe`, `pyav.exe` nos `.venv` de `lyric_studio` e `samanta`).
+- Os **4 que o histórico marcou como Expiro/Floxif** e seguiam existindo:
+  `D:\documents\DavyjonesAI\node_modules\electron\dist\electron.exe`,
+  `D:\documents\ml\backend\.venv\Scripts\python.exe`,
+  `D:\tktech\iphonexr\venv\...\t32.exe` e `w32.exe`.
+- O **cofre do Avast** `D:\$AV_ASW` (11 itens em quarentena, ~814 MB). Precisou de
+  shell elevado: o dono era `BUILTIN\Administradores`.
+
+Re-varredura depois das exclusões: **1 959 executáveis, 0 sinalizados**. Continua
+valendo o aviso: 0 sinalizado não é prova de limpeza com dois infecciosos
+polimórficos, então o caminho seguro segue sendo refazer o D:.
