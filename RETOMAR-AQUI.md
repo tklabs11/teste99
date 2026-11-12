@@ -511,3 +511,52 @@ todo `.venv`, `node_modules`, `dist`, `build` e o `$AV_ASW`, e rode a varredura 
 Re-varredura depois das exclusões: **1 959 executáveis, 0 sinalizados**. Continua
 valendo o aviso: 0 sinalizado não é prova de limpeza com dois infecciosos
 polimórficos, então o caminho seguro segue sendo refazer o D:.
+
+### Por que a infecção VOLTOU depois de formatar (descoberto em 12/11, 01:00)
+
+O dono já havia formatado o C: uma vez, e a infecção reapareceu. O histórico do
+Defender mostra o motivo — **as primeiras detecções depois daquela formatação foram
+todas no D:**:
+
+```
+02/11 15:59  Virus:Win32/Floxif.H   D:\tktech\iphonexr\venv\...\distlib\t32.exe
+02/11 15:59  Virus:Win32/Floxif.H   D:\tktech\iphonexr\venv\...\distlib\w32.exe
+02/11 15:59  Trojan:Win32/Sabsik.FL.A!ml  D:\varios projects\ghidra_12.2_PUBLIC\docs\...\WallaceSrc.exe
+02/11 15:59  Trojan:Win32/Wacatac.H!ml    D:\varios projects\ghidra_12.2_PUBLIC\docs\...\WallaceVersion2.exe
+```
+
+Ou seja: **o reservatório era o D:, que nunca foi limpo.** Depois de reinstalar, usar
+aqueles projetos (venv de `tktech`, a cópia do Ghidra em `varios projects`) re-infectou
+a instalação nova. Não foi o disco C:.
+
+O que foi verificado limpo nessa investigação: a **mídia de instalação** (E: `ESD-USB`,
+227 executáveis, 0 sinalizados), **nenhuma exclusão** no Defender
+(`Exclusions\Paths`/`Extensions`/`Processes` = 0 entradas), **nenhum autostart falso**
+(as Run keys são SecurityHealth, Realtek, Java Update, OneDrive, EA, FDM, SCSKiller e
+navegadores) e nenhuma tarefa agendada suspeita.
+
+### Mapa dos discos (para o plano de limpeza)
+
+| disco | modelo | tamanho | estilo | conteúdo |
+| --- | --- | --- | --- | --- |
+| 0 | ST3500312CS (SATA) | 465,8 GB | MBR | **D: (TK TECH)** — disco físico separado |
+| 1 | FORCE le 200 (SATA) | 238,5 GB | GPT | EFI 1 GB + **237 GB Linux (`0fc63daf…`)**, ocultos, sem letra |
+| 2 | KINGSTON SNV2S1000G (NVMe) | 931,5 GB | GPT | **C:** + EFI + MSR + Recovery (Windows) |
+| 3 | Generic Flash Disk (USB) | 14,6 GB | MBR | E: `ESD-USB` (mídia do Windows, limpa) |
+
+Como o D: é um **disco separado**, dá para zerá-lo sem tocar no Windows:
+
+```text
+diskpart
+  list disk
+  select disk 0        <-- confirme que é o ST3500312CS / 465 GB (D:)
+  clean
+  create partition primary
+  format fs=ntfs quick label="TK TECH"
+  assign letter=D
+  exit
+```
+
+Depois: reinstalar o Windows pela mídia E: (verificada limpa), e **nunca** restaurar
+`.exe`/`.dll`/`.venv`/`node_modules` de backup antigo — só texto. A partição Linux de
+237 GB do disco 1 também pode guardar `.exe` infectado; se não for usada, apague também.
